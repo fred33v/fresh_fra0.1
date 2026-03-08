@@ -1,0 +1,78 @@
+// Hook Template for Risk Aware
+// Copy this template when creating new custom hooks
+
+import { useState, useEffect, useCallback } from 'react';
+// import { useQuery, useMutation } from '@tanstack/react-query';
+// import { supabase } from '@/integrations/supabase/client';
+
+interface UseHookNameOptions {
+  // Configuration options
+  enabled?: boolean;
+}
+
+interface UseHookNameReturn {
+  // Return type definition
+  data: unknown;
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
+}
+
+/**
+ * useHookName - Brief description of hook purpose
+ *
+ * @param options - Configuration options
+ * @returns Hook state and methods
+ *
+ * @example
+ * const { data, isLoading, error } = useHookName({ enabled: true });
+ */
+export function useHookName(options: UseHookNameOptions = {}): UseHookNameReturn {
+  const { enabled = true } = options;
+
+  const [data, setData] = useState<unknown>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Fetch logic here
+      // const result = await supabase.from('table').select('*');
+      // setData(result.data);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Unknown error'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return {
+    data,
+    isLoading,
+    error,
+    refetch,
+  };
+}
+
+/*
+Checklist for new hooks:
+- [ ] TypeScript types for options and return value
+- [ ] Proper cleanup in useEffect if needed
+- [ ] Dependencies array correct in useEffect/useCallback
+- [ ] Error handling implemented
+- [ ] Loading state managed
+- [ ] Consider using React Query for data fetching
+*/

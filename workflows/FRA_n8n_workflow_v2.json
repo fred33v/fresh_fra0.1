@@ -1,0 +1,128 @@
+{
+  "name": "FRA Platform v2 - Full Mandatory Workflow",
+  "nodes": [
+    {
+      "name": "Webhook Intake",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fra-intake-v2",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "name": "Validate & Governance Check",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "\nconst j = items[0].json;\n\n// Mandatory fields check\nconst required = ['org_name','contact_email','board_accountable_person','senior_officer'];\nrequired.forEach(f=>{\n if(!j[f]) throw new Error('Missing mandatory field: '+f);\n});\n\n// Basic enrichment\nj.submitted_at = new Date().toISOString();\n\n// Flag UK Nexus if described\nif (j.jurisdictions && j.jurisdictions.toLowerCase().includes('uk')) {\n    j.uk_nexus = true;\n} else {\n    j.uk_nexus = false;\n}\n\n// Priority score placeholder\nlet score = 0;\nif (j.headcount > 500) score += 2;\nif (j.controls_summary && j.controls_summary.length < 80) score += 1;\nj.priority_score = score;\n\nreturn items;\n"
+      }
+    },
+    {
+      "name": "Store Intake JSON",
+      "type": "n8n-nodes-base.s3",
+      "parameters": {
+        "operation": "upload",
+        "bucket": "fra-evidence",
+        "key": "intakes/{{$json[\"org_name\"]}}_{{Date.now()}}.json",
+        "binaryData": false,
+        "dataPropertyName": "data"
+      }
+    },
+    {
+      "name": "Generate FRA Draft",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "\nconst j = items[0].json;\nconst html = `\n<h1>FRA Draft for ${j.org_name}</h1>\n<p>Priority score: ${j.priority_score}</p>\n<p>Board accountable person: ${j.board_accountable_person}</p>\n<p>Senior officer: ${j.senior_officer}</p>\n<p>UK Nexus: ${j.uk_nexus}</p>\n`;\nitems[0].binary = { fra:{ data: Buffer.from(html).toString('base64'), fileName:'FRA.html', mimeType:'text/html'} };\nreturn items;\n"
+      }
+    },
+    {
+      "name": "Upload FRA HTML",
+      "type": "n8n-nodes-base.s3",
+      "parameters": {
+        "operation": "upload",
+        "bucket": "fra-evidence",
+        "key": "reports/FRA_{{Date.now()}}.html",
+        "binaryData": true,
+        "binaryPropertyName": "fra"
+      }
+    },
+    {
+      "name": "Send Exec Email",
+      "type": "n8n-nodes-base.smtp",
+      "parameters": {
+        "fromEmail": "fra-team@example.com",
+        "toEmail": "={{$json['contact_email']}}",
+        "subject": "Your FRA Draft is Ready",
+        "text": "Your Fraud Risk Assessment draft is attached.",
+        "attachments": "={{[{fileName:$binary.fra.fileName,fileData:$binary.fra.data}]}}"
+      }
+    },
+    {
+      "name": "Insert Dashboard Row",
+      "type": "n8n-nodes-base.postgres",
+      "parameters": {
+        "operation": "insert",
+        "table": "fra_intakes",
+        "columns": "org_name,priority_score,submitted_at",
+        "values": "={{[$json.org_name,$json.priority_score,$json.submitted_at]}}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Intake": {
+      "main": [
+        [
+          {
+            "node": "Validate & Governance Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Governance Check": {
+      "main": [
+        [
+          {
+            "node": "Store Intake JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate FRA Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate FRA Draft": {
+      "main": [
+        [
+          {
+            "node": "Upload FRA HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload FRA HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Exec Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert Dashboard Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

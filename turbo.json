@@ -1,0 +1,65 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "HOST",
+    "DATABASE_URL",
+    "DB_POOL_MAX",
+    "DB_IDLE_TIMEOUT_MS",
+    "DB_CONNECT_TIMEOUT_MS",
+    "DB_STATEMENT_TIMEOUT_MS",
+    "JWT_SECRET",
+    "JWT_REFRESH_SECRET",
+    "JWT_EXPIRES_IN",
+    "JWT_REFRESH_EXPIRES_IN",
+    "MAX_BODY_BYTES",
+    "CORS_ORIGINS",
+    "RATE_LIMIT_WINDOW_MS",
+    "RATE_LIMIT_MAX",
+    "STRIPE_WEBHOOK_SECRET",
+    "S3_BUCKET",
+    "S3_REGION",
+    "AWS_REGION",
+    "S3_UPLOAD_PREFIX",
+    "S3_DOWNLOAD_PREFIX",
+    "S3_URL_EXPIRES_SECONDS",
+    "S3_MAX_UPLOAD_BYTES",
+    "S3_ALLOWED_CONTENT_TYPES",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "VITE_API_URL"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "build/**", ".expo/**"],
+      "cache": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "cache": true
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": true
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
+    },
+    "migrate": {
+      "cache": false
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "project": "risk-aware-workshop",
+  "team": "Risk Aware AI Work Team",
+  "agency": "UK Government Agency",
+  "language": "en-GB",
+  "domain": "fraud-risk-compliance",
+  "permissions": {
+    "allowedTools": ["Read", "Edit", "Write", "Bash", "Glob", "Grep"],
+    "requireApproval": ["database-migrations", "deployment", "security-changes"]
+  },
+  "conventions": {
+    "spelling": "British English",
+    "dateFormat": "DD/MM/YYYY",
+    "codeStyle": "TypeScript strict mode"
+  }
+}

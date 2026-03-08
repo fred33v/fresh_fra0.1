@@ -1,0 +1,43 @@
+// Component Template for Risk Aware
+// Copy this template when creating new components
+
+import { FC } from 'react';
+// Import shadcn/ui components as needed
+// import { Button } from '@/components/ui/button';
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface ComponentNameProps {
+  // Define props with TypeScript types
+  title: string;
+  onAction?: () => void;
+}
+
+/**
+ * ComponentName - Brief description of component purpose
+ *
+ * @example
+ * <ComponentName title="Example" onAction={() => console.log('clicked')} />
+ */
+export const ComponentName: FC<ComponentNameProps> = ({
+  title,
+  onAction
+}) => {
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      {/* Component content */}
+    </div>
+  );
+};
+
+export default ComponentName;
+
+/*
+Checklist for new components:
+- [ ] TypeScript props interface defined
+- [ ] Accessible (keyboard nav, ARIA labels if needed)
+- [ ] Uses Tailwind CSS for styling
+- [ ] Uses shadcn/ui primitives where applicable
+- [ ] British English in any UI text
+- [ ] Responsive design considered
+*/

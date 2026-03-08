@@ -1,0 +1,45 @@
+# ============================================================
+# Stop FRA Backend - systemd service (7.6)
+# Install to: /etc/systemd/system/stopfra-backend.service
+# Enable:     sudo systemctl enable --now stopfra-backend
+# ============================================================
+
+[Unit]
+Description=Stop FRA Backend API
+Documentation=https://github.com/stopfra/backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stopfra
+Group=stopfra
+WorkingDirectory=/opt/stopfra/backend
+ExecStart=/opt/stopfra/backend/start.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stopfra-backend
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/stopfra/backend/logs
+PrivateTmp=true
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=3001
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=512M
+CPUQuota=80%
+
+# Watchdog - restart if unresponsive for 30s
+WatchdogSec=30
+
+[Install]
+WantedBy=multi-user.target

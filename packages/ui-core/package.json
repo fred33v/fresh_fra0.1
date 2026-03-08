@@ -1,0 +1,58 @@
+{
+  "name": "@stopfra/ui-core",
+  "version": "1.0.0",
+  "description": "Shared UI design tokens, types, and utilities for Stop FRA apps",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tokens": {
+      "types": "./dist/tokens/index.d.ts",
+      "import": "./dist/tokens/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./accessibility": {
+      "types": "./dist/accessibility/index.d.ts",
+      "import": "./dist/accessibility/index.js"
+    },
+    "./constants": {
+      "types": "./dist/constants/index.d.ts",
+      "import": "./dist/constants/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "eslint": "^9.32.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {},
+  "keywords": [
+    "ui",
+    "design-tokens",
+    "react",
+    "react-native",
+    "stopfra"
+  ],
+  "license": "UNLICENSED"
+}

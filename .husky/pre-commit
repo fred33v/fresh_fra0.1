@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged for staged files
+npx lint-staged
+
+# Run type checking
+echo "Running type check..."
+pnpm run typecheck || exit 1
+
+echo "Pre-commit checks passed!"

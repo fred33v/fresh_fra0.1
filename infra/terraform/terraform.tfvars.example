@@ -1,0 +1,39 @@
+# ============================================================
+# Stop FRA - Terraform Variables (EXAMPLE)
+# Copy to terraform.tfvars and fill in real values
+# NEVER commit terraform.tfvars to version control
+# ============================================================
+
+aws_region   = "eu-west-2"
+environment  = "production"
+project_name = "stopfra"
+
+# --- Database (Neon) ---
+# Get your connection string from https://console.neon.tech
+neon_database_url = "postgresql://stopfra_admin:CHANGE_ME@ep-xxx-yyy-123.eu-west-2.aws.neon.tech/stopfra?sslmode=require"
+
+# --- EC2 ---
+ec2_instance_type = "t3.small"
+ec2_key_name      = "stopfra-prod-key"
+
+# --- Domain ---
+domain_name          = "fraud-risk.co.uk"
+api_subdomain        = "api"
+dashboard_subdomain  = "app"
+
+# --- Upstash Redis ---
+# Create at https://console.upstash.com
+upstash_redis_rest_url   = "https://eu2-XXXX.upstash.io"
+upstash_redis_rest_token = "CHANGE_ME"
+
+# --- JWT Secrets ---
+# Generate with: openssl rand -base64 64
+jwt_secret         = "CHANGE_ME"
+jwt_refresh_secret = "CHANGE_ME"
+
+# --- S3 ---
+s3_upload_prefix         = "uploads/"
+s3_download_prefix       = "downloads/"
+s3_url_expires_seconds   = 3600
+s3_max_upload_bytes      = 10485760
+s3_allowed_content_types = "application/pdf,image/png,image/jpeg"
