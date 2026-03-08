@@ -49,6 +49,37 @@ export interface Package {
   isActive: boolean;
 }
 
+/** Purchase record for a package, tracking order and payment status. */
+export interface Purchase {
+  id: string;
+  organisationId: string;
+  packageId: number;
+  paymentIntentId: string;
+  status: 'pending' | 'completed' | 'cancelled' | 'failed';
+  amount: number;
+  currency: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/** Payment intent for Stripe integration. */
+export interface PaymentIntent {
+  id: string;
+  clientSecret: string;
+  status: 'requires_payment_method' | 'requires_confirmation' | 'succeeded' | 'processing' | 'requires_action' | 'canceled';
+  amount: number;
+  currency: string;
+  createdAt: string;
+}
+
+/** Webhook payload from assessment submission event. */
+export interface WebhookPayload {
+  assessmentId: string;
+  organisationId: string;
+  source?: string;
+  timestamp: string;
+}
+
 /** Payment status for a purchase. One of 'pending', 'processing', 'completed', 'failed', or 'refunded'. */
 export type PaymentStatus =
   | 'pending'

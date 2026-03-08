@@ -87,3 +87,131 @@ export interface AssessmentProgress {
   currentModule?: AssessmentModule;
   percentComplete: number;
 }
+
+/** Frequency response scale for assessment questions. One of 'always', 'usually', 'sometimes', 'rarely', or 'never'. */
+export type Frequency = 'always' | 'usually' | 'sometimes' | 'rarely' | 'never';
+
+/** Yes/No/Unsure response for assessment questions. */
+export type YesNoUnsure = 'yes' | 'no' | 'unsure';
+
+/** Numeric scale value for control/maturity assessments (1-5). */
+export type ScaleValue = 1 | 2 | 3 | 4 | 5;
+
+/** Currency value in British pounds. */
+export type CurrencyValue = number;
+
+// Module 1: Risk Appetite Assessment
+export interface RiskAppetiteModule {
+  tolerance: ScaleValue;
+  fraudSeriousness: 'critical' | 'serious' | 'moderate' | 'minor';
+  reputationImportance: ScaleValue;
+}
+
+// Module 2: Fraud Triangle
+export interface FraudTriangleModule {
+  pressure: 'high' | 'medium' | 'low' | 'none';
+  opportunity: 'high' | 'medium' | 'low' | 'none';
+  rationalization: ScaleValue;
+  estimatedLossExposure: CurrencyValue;
+}
+
+// Module 3: People & Culture
+export interface PeopleCultureModule {
+  fraudAwarenessFrequency: Frequency;
+  whistleblowingConfidence: ScaleValue;
+  codeOfConductCommunication: ScaleValue;
+  fraudCasesDetected: YesNoUnsure;
+  caseDescription?: string;
+  fraudCaseCount?: number;
+}
+
+// Module 4: Controls & Technology
+export interface ControlsTechnologyModule {
+  segregationOfDutiesMaturity: ScaleValue;
+  systemAccessControls: ScaleValue;
+  dataMonitoringMaturity: ScaleValue;
+  implementationPercentage: number;
+  softwareLicenseCount?: number;
+}
+
+// Module 5: Procurement
+export interface ProcurementModule {
+  supplierDueDiligenceMaturity: ScaleValue;
+  monthlySpend: CurrencyValue;
+  recentFraud: YesNoUnsure;
+  fraudDescription?: string;
+  controlMaturity: ScaleValue;
+  supplierCount?: number;
+}
+
+// Module 6: Payroll & HR
+export interface PayrollHRModule {
+  totalEmployeeCount: number;
+  payrollFrequency: Frequency;
+  unauthorizedChangesDetected: YesNoUnsure;
+  changeDescription?: string;
+  controlMaturity: ScaleValue;
+}
+
+// Module 7: Revenue & Income
+export interface RevenueModule {
+  monthlyRevenueVolume: CurrencyValue;
+  unpaidInvoicesPercentage: number;
+  writeOffsOccurred: YesNoUnsure;
+  writeOffDescription?: string;
+  collectionEffectiveness: ScaleValue;
+}
+
+// Module 8: Cash & Banking
+export interface CashBankingModule {
+  dailyCashVolume: CurrencyValue;
+  bankAccountCount: number;
+  fraudIncidents: YesNoUnsure;
+  fraudDescription?: string;
+  controlEffectiveness: ScaleValue;
+}
+
+// Module 9: IT Systems & Cybersecurity
+export interface ITSystemsModule {
+  cybersecurityMaturity: ScaleValue;
+  securityIncidentCount: number;
+  criticalSystemsIdentified: boolean;
+  backupTestingFrequency: ScaleValue;
+  mfaAdoption: ScaleValue;
+}
+
+// Module 10: Monitoring & Evaluation
+export interface MonitoringEvaluationModule {
+  incidentsDetectedFrequency: Frequency;
+  internalAuditFrequency: Frequency;
+  anomalyMonitoringMaturity: ScaleValue;
+  anomalyCount?: number;
+  investigationCompletionRate: ScaleValue;
+}
+
+// Module 11: Fraud Response Plan
+export interface FraudResponsePlanModule {
+  responsePlanExists: boolean;
+  communicationProtocolMaturity: ScaleValue;
+  detectedLossValue: CurrencyValue;
+  responseTimeHours?: number;
+  recoveryRate: ScaleValue;
+}
+
+// Module 12: Training & Awareness
+export interface TrainingAwarenessModule {
+  trainingCompletionPercentage: number;
+  staffCount: number;
+  trainingFrequency: Frequency;
+  complianceCertificationExists: boolean;
+  knowledgeAssessmentScore?: number;
+}
+
+// Module 13: Compliance Mapping
+export interface ComplianceMappingModule {
+  govs013Compliance: ScaleValue;
+  eccta2023Alignment: ScaleValue;
+  failureToPreventsReadiness: ScaleValue;
+  auditTrailRetentionYears: number;
+  regulatoryDocumentsUp toDate: boolean;
+}

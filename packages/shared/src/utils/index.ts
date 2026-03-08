@@ -93,3 +93,94 @@ export function sanitizeString(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;');
 }
+
+/**
+ * Validate password strength requirements.
+ * @param password - The password to validate.
+ * @returns Object with isValid flag and strength details (8+ chars, uppercase, lowercase, number, special char).
+ */
+export function validatePasswordStrength(password: string): {
+  isValid: boolean;
+  score: number;
+  requirements: {
+    minLength: boolean;
+    hasUppercase: boolean;
+    hasLowercase: boolean;
+    hasNumber: boolean;
+    hasSpecialChar: boolean;
+  };
+} {
+  const requirements = {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  };
+
+  const score = Object.values(requirements).filter(Boolean).length;
+  const isValid = Object.values(requirements).every(Boolean);
+
+  return { isValid, score, requirements };
+}
+
+/**
+ * Generate a SHA-256 hash of a string (for non-cryptographic uses).
+ * Uses WebCrypto API available in Node 15+ and modern browsers.
+ * @param str - The string to hash.
+ * @returns A promise that resolves to the hexadecimal hash string.
+ */
+export async function hashString(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Decode and parse a JWT token (for basic info extraction only, does NOT verify signature).
+ * WARNING: This does NOT verify the signature. Use only for extracting claims before verification.
+ * @param token - The JWT token string.
+ * @returns Object with header, payload, and signature, or null if invalid format.
+ */
+export function parseJWT(token: string): {
+  header: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  signature: string;
+} | null {
+  try {
+    const [headerB64, payloadB64, signature] = token.split('.');
+    if (!headerB64 || !payloadB64 || !signature) return null;
+
+    const header = JSON.parse(atob(headerB64));
+    const payload = JSON.parse(atob(payloadB64));
+
+    return { header, payload, signature };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format a currency value to GBP string (£).
+ * @param amount - The amount in pounds.
+ * @param decimals - Number of decimal places (default 2).
+ * @returns The formatted currency string (e.g., '£1,234.50').
+ */
+export function formatCurrencyGBP(amount: number, decimals = 2): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(amount);
+}
+
+/**
+ * Generate a UUID v4 using crypto.randomUUID().
+ * @returns A UUID v4 string.
+ */
+export function generateUUID(): string {
+  return crypto.randomUUID();
+}

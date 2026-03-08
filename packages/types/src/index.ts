@@ -9,3 +9,6 @@ export * from './api';
 
 // Workshop types
 export * from './workshop';
+
+// Budget Guide types
+export * from './budget-guide';

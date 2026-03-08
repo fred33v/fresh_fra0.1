@@ -225,3 +225,144 @@ describe('sanitizeString', () => {
     expect(sanitizeString('hello world')).toBe('hello world');
   });
 });
+
+describe('validatePasswordStrength', () => {
+  it('rejects weak passwords', () => {
+    const result = validatePasswordStrength('abc');
+    expect(result.isValid).toBe(false);
+    expect(result.requirements.minLength).toBe(false);
+  });
+
+  it('validates strong passwords with all requirements', () => {
+    const result = validatePasswordStrength('SecurePass123!');
+    expect(result.isValid).toBe(true);
+    expect(result.requirements.minLength).toBe(true);
+    expect(result.requirements.hasUppercase).toBe(true);
+    expect(result.requirements.hasLowercase).toBe(true);
+    expect(result.requirements.hasNumber).toBe(true);
+    expect(result.requirements.hasSpecialChar).toBe(true);
+    expect(result.score).toBe(5);
+  });
+
+  it('detects missing uppercase', () => {
+    const result = validatePasswordStrength('securepass123!');
+    expect(result.isValid).toBe(false);
+    expect(result.requirements.hasUppercase).toBe(false);
+  });
+
+  it('detects missing lowercase', () => {
+    const result = validatePasswordStrength('SECUREPASS123!');
+    expect(result.isValid).toBe(false);
+    expect(result.requirements.hasLowercase).toBe(false);
+  });
+
+  it('detects missing number', () => {
+    const result = validatePasswordStrength('SecurePass!');
+    expect(result.isValid).toBe(false);
+    expect(result.requirements.hasNumber).toBe(false);
+  });
+
+  it('detects missing special character', () => {
+    const result = validatePasswordStrength('SecurePass123');
+    expect(result.isValid).toBe(false);
+    expect(result.requirements.hasSpecialChar).toBe(false);
+  });
+
+  it('calculates score correctly for partial requirements', () => {
+    const result = validatePasswordStrength('Password123');
+    expect(result.score).toBe(4); // Has all except special char
+  });
+});
+
+describe('hashString', () => {
+  it('generates consistent hash for same input', async () => {
+    const hash1 = await hashString('test-string');
+    const hash2 = await hashString('test-string');
+    expect(hash1).toBe(hash2);
+  });
+
+  it('generates different hash for different input', async () => {
+    const hash1 = await hashString('string1');
+    const hash2 = await hashString('string2');
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('returns hex string (64 chars for SHA-256)', async () => {
+    const hash = await hashString('test');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('handles empty string', async () => {
+    const hash = await hashString('');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe('parseJWT', () => {
+  it('parses valid JWT token format', () => {
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    const result = parseJWT(token);
+    
+    expect(result).not.toBeNull();
+    expect(result?.header).toBeDefined();
+    expect(result?.payload).toBeDefined();
+    expect(result?.signature).toBeDefined();
+  });
+
+  it('extracts payload claims correctly', () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIiwiZXhwIjoxNjMyNDUyMDAwfQ.signature';
+    const result = parseJWT(token);
+    
+    expect(result?.payload.sub).toBe('user123');
+    expect(result?.payload.exp).toBe(1632452000);
+  });
+
+  it('returns null for invalid token format', () => {
+    expect(parseJWT('invalid')).toBeNull();
+    expect(parseJWT('two.parts')).toBeNull();
+    expect(parseJWT('')).toBeNull();
+  });
+
+  it('returns null for malformed parts', () => {
+    expect(parseJWT('!!!.!!!.!!!')).toBeNull();
+  });
+});
+
+describe('formatCurrencyGBP', () => {
+  it('formats integer amounts', () => {
+    expect(formatCurrencyGBP(100)).toBe('£100.00');
+    expect(formatCurrencyGBP(1000)).toBe('£1,000.00');
+  });
+
+  it('formats decimal amounts', () => {
+    expect(formatCurrencyGBP(1234.56)).toBe('£1,234.56');
+    expect(formatCurrencyGBP(0.99)).toBe('£0.99');
+  });
+
+  it('respects decimal places parameter', () => {
+    expect(formatCurrencyGBP(100, 0)).toBe('£100');
+    expect(formatCurrencyGBP(100.456, 1)).toBe('£100.5');
+    expect(formatCurrencyGBP(100.456, 3)).toBe('£100.456');
+  });
+
+  it('handles zero', () => {
+    expect(formatCurrencyGBP(0)).toBe('£0.00');
+  });
+
+  it('handles large amounts', () => {
+    expect(formatCurrencyGBP(1000000)).toBe('£1,000,000.00');
+  });
+});
+
+describe('generateUUID', () => {
+  it('generates valid UUID v4 format', () => {
+    const uuid = generateUUID();
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(uuid).toMatch(uuidRegex);
+  });
+
+  it('generates unique UUIDs', () => {
+    const uuids = new Set(Array.from({ length: 100 }, () => generateUUID()));
+    expect(uuids.size).toBe(100);
+  });
+});

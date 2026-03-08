@@ -84,3 +84,36 @@ export interface AuthResponse {
   token: string;
   expiresAt: string;
 }
+
+/** Request payload for user signup with optional organisation details. */
+export interface SignupRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  organisationName?: string;
+  organisationSector?: OrgSector;
+  organisationSize?: OrgSize;
+  jobTitle?: string;
+}
+
+/** Request payload for password reset via email token. */
+export interface PasswordResetRequest {
+  email: string;
+}
+
+/** Request payload for confirming password reset with new password. */
+export interface PasswordResetConfirm {
+  token: string;
+  newPassword: string;
+}
+
+/** Token refresh request for obtaining new access token. */
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+/** Logout request to invalidate current tokens. */
+export interface LogoutRequest {
+  refreshToken?: string;
+}
