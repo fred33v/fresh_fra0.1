@@ -15,6 +15,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Workshop = lazy(() => import("./pages/Workshop"));
 const Assessment = lazy(() => import("./pages/Assessment"));
 const AssessmentResults = lazy(() => import("./pages/AssessmentResults"));
+const BudgetGuide = lazy(() => import("./pages/BudgetGuide"));
 const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
@@ -60,6 +61,7 @@ const App = () => (
                 <Route path="/workshop" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
                 <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
                 <Route path="/assessment/:assessmentId/results" element={<ProtectedRoute><AssessmentResults /></ProtectedRoute>} />
+                <Route path="/budget-guide/:assessmentId" element={<ProtectedRoute><BudgetGuide /></ProtectedRoute>} />
                 <Route path="/resources" element={<ProtectedRoute><Resources /></ProtectedRoute>} />
                 <Route path="/certificate" element={<ProtectedRoute><Certificate /></ProtectedRoute>} />
                 <Route path="/action-plan" element={<ProtectedRoute><ActionPlan /></ProtectedRoute>} />
