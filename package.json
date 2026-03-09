@@ -21,6 +21,7 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "prettier": "^3.2.0",
@@ -31,8 +32,12 @@
     "node": ">=20.0.0"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix"],
-    "*.{json,md,yml}": ["prettier --write"]
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "*.{json,md,yml}": [
+      "prettier --write"
+    ]
   },
   "packageManager": "pnpm@9.15.4",
   "pnpm": {
