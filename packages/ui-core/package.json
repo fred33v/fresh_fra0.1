@@ -52,7 +52,20 @@
     "design-tokens",
     "react",
     "react-native",
-    "stopfra"
+    "stopfra",
+    "fraud-risk",
+    "design-system",
+    "accessibility"
   ],
-  "license": "UNLICENSED"
+  "author": "Stop FRA Team",
+  "license": "MIT",
+  "homepage": "https://github.com/stopfra/start-fra#readme",
+  "bugs": {
+    "url": "https://github.com/stopfra/start-fra/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stopfra/start-fra.git",
+    "directory": "packages/ui-core"
+  }
 }

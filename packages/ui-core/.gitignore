@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.pnpm-debug.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Distribution & Build
+dist/
+build/
+.tsc/
+*.tsbuildinfo
+
+# IDE & Editor
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+*.iml
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test & Coverage
+coverage/
+.nyc_output/
+*.lcov
+.c8rc.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Temporary
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# OS
+Thumbs.db
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# Misc
+next-env.d.ts
+.cacache/
+.cache/
