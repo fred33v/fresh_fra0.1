@@ -152,7 +152,7 @@ export default function Index() {
                   </Link>
                 ) : (
                   <Link
-                    to="/auth?mode=signup"
+                    to="/package/professional"
                     className="inline-flex items-center justify-center gap-2 rounded bg-[#00703c] px-6 py-3 text-lg font-bold text-white shadow-[0_2px_0_#002d18] hover:bg-[#005a30] no-underline"
                   >
                     Get Started
@@ -517,7 +517,7 @@ export default function Index() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                to={user ? '/workshop' : '/auth?mode=signup'}
+                to={user ? '/workshop' : '/package/professional'}
                 className="inline-flex items-center justify-center gap-2 rounded bg-[#00703c] px-8 py-3 text-lg font-bold text-white shadow-[0_2px_0_#002d18] hover:bg-[#005a30] no-underline"
               >
                 Start Workshop Now
