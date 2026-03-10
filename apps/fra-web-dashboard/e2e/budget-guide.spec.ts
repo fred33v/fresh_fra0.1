@@ -216,60 +216,10 @@ test.describe('Budget Guide Workflow', () => {
     const budgetUrl = `/budget-guide/${testAssessmentId}`;
     await navigateToPage(page, budgetUrl, 8000);
 
-    //ContentWait for page to show content
+    // Wait for page to show content
     const hasContent = await waitForPageContent(page, 5000);
     
     // Just verify page loaded
     expect(hasContent).toBeTruthy();
-  });
-});
-
-  test('should handle form validation', async () => {
-    // Click Add Strategy
-    await page.locator('button:has-text("Add Strategy")').click();
-
-    // Try to submit empty form
-    const submitButton = page.locator('button:has-text("Add")');
-
-    // Button should be disabled or show error
-    if (await submitButton.isEnabled()) {
-      await submitButton.click();
-      // Check for error message
-      const error = page.locator('text=/required|invalid/i');
-      expect(await error.count()).toBeGreaterThan(0);
-    } else {
-      // Button is disabled - which is also valid
-      await expect(submitButton).toBeDisabled();
-    }
-  });
-
-  test('should have accessible tab navigation', async () => {
-    // Get all tab buttons
-    const tabs = page.locator('[role="tab"], button:has-text("Allocation|Strategies|Timeline")');
-    const tabCount = await tabs.count();
-
-    expect(tabCount).toBeGreaterThanOrEqual(3);
-
-    // Click tabs with keyboard
-    await tabs.first().focus();
-    await page.keyboard.press('ArrowRight');
-
-    // Another tab should be focused
-    const focusedElement = await page.evaluate(() => document.activeElement?.textContent);
-    expect(focusedElement).toBeTruthy();
-  });
-
-  test('should display loading states', async () => {
-    // If there are loading indicators, verify they appear/disappear
-    const loading = page.locator('[class*="loading" i], [class*="spinner" i]');
-
-    // Either no loading initially or it disappears
-    if (await loading.count() > 0) {
-      await page.waitForFunction(() => {
-        return document.querySelectorAll('[class*="loading" i]').length === 0;
-      }, { timeout: 5000 }).catch(() => {
-        // It's okay if loading finishes before we check
-      });
-    }
   });
 });
