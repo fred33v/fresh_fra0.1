@@ -20,6 +20,7 @@ const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
 const Facilitator = lazy(() => import("./pages/Facilitator"));
+const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
 const PackageEnterprise = lazy(() => import("./pages/PackageEnterprise"));
 const Checkout = lazy(() => import("./pages/Checkout"));
@@ -65,6 +66,7 @@ const App = () => (
                 <Route path="/resources" element={<ProtectedRoute><Resources /></ProtectedRoute>} />
                 <Route path="/certificate" element={<ProtectedRoute><Certificate /></ProtectedRoute>} />
                 <Route path="/action-plan" element={<ProtectedRoute><ActionPlan /></ProtectedRoute>} />
+                <Route path="/package/starter" element={<PackageStarter />} />
                 <Route path="/package/professional" element={<PackageProfessional />} />
                 <Route path="/package/enterprise" element={<PackageEnterprise />} />
                 <Route path="/checkout" element={<Checkout />} />

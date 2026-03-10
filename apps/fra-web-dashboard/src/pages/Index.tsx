@@ -320,7 +320,7 @@ export default function Index() {
                   ))}
                 </ul>
                 <Link
-                  to="/auth?mode=signup"
+                  to="/package/starter"
                   className="inline-flex items-center justify-center gap-2 rounded bg-[#f3f2f1] border-2 border-[#0b0c0c] px-4 py-3 text-sm font-bold text-[#0b0c0c] hover:bg-[#dbdad9] no-underline"
                 >
                   Start Assessment

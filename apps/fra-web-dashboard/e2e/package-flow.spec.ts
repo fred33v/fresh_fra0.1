@@ -171,4 +171,111 @@ test.describe('Package Selection Flow', () => {
 
     console.log('✅ Complete flow verified: Home → Get Started → Package Selection → Ready for Checkout');
   });
+
+  test('Starter package page exists and renders', async ({ page }) => {
+    await navigateToPage(page, '/package/starter', 5000);
+
+    const hasContent = await waitForPageContent(page, 3000);
+    expect(hasContent).toBeTruthy();
+
+    // Verify Starter-specific content
+    const content = await page.textContent('body');
+    expect(content).toContain('Starter');
+    expect(content).toContain('£795');
+    console.log('✓ Starter package page renders with pricing');
+  });
+
+  test('Starter package shows "Start Assessment" CTA button', async ({ page }) => {
+    await navigateToPage(page, '/package/starter', 5000);
+
+    const hasContent = await waitForPageContent(page, 3000);
+    expect(hasContent).toBeTruthy();
+
+    // Find the "Start Assessment" button
+    const ctaButton = await page.locator('a, button').filter({ hasText: /Start Assessment/ }).first();
+    const isVisible = await ctaButton.isVisible({ timeout: 2000 }).catch(() => false);
+    
+    expect(isVisible).toBeTruthy();
+    console.log('✓ Starter package has "Start Assessment" CTA button');
+  });
+
+  test('Starter package shows one-time pricing', async ({ page }) => {
+    await navigateToPage(page, '/package/starter', 5000);
+
+    const hasContent = await waitForPageContent(page, 3000);
+    expect(hasContent).toBeTruthy();
+
+    const content = await page.textContent('body');
+    expect(content).toContain('£795');
+    expect(content).toContain('one-time');
+    console.log('✓ Starter package displays £795 one-time pricing');
+  });
+
+  test('Starter package lists all included features', async ({ page }) => {
+    await navigateToPage(page, '/package/starter', 5000);
+
+    const hasContent = await waitForPageContent(page, 3000);
+    expect(hasContent).toBeTruthy();
+
+    const content = await page.textContent('body');
+    
+    // Starter should include these features
+    expect(content).toContain('assessment');
+    expect(content).toContain('PDF');
+    expect(content).toContain('ECCTA');
+    console.log('✓ Starter package lists all features');
+  });
+
+  test('Home Starter package card button leads to Starter package page', async ({ page }) => {
+    await navigateToPage(page, '/', 5000);
+
+    const hasContent = await waitForPageContent(page, 3000);
+    expect(hasContent).toBeTruthy();
+
+    // Find the Starter package card's "Start Assessment" button
+    const allButtons = await page.locator('a, button').filter({ hasText: /Start Assessment/ });
+    const count = await allButtons.count();
+    expect(count).toBeGreaterThan(0);
+
+    // Get the first "Start Assessment" button (should be Starter package)
+    const starterButton = allButtons.first();
+    const href = await starterButton.getAttribute('href');
+    
+    // Should route to Starter package page
+    expect(href).toBe('/package/starter');
+    console.log('✓ Home Starter button correctly routes to /package/starter');
+  });
+
+  test('Complete flow: Home → Starter Package → Start Assessment', async ({ page }) => {
+    // Step 1: Start on home
+    await navigateToPage(page, '/', 5000);
+    expect(await waitForPageContent(page, 3000)).toBeTruthy();
+    console.log('✓ Step 1: Home page loaded');
+
+    // Step 2: Find Starter package button
+    const allButtons = await page.locator('a, button').filter({ hasText: /Start Assessment/ });
+    const starterButton = allButtons.first();
+    const href = await starterButton.getAttribute('href');
+    console.log('✓ Step 2: Starter button found, href:', href);
+
+    // Step 3: Navigate to Starter package page
+    expect(href).toBe('/package/starter');
+    await navigateToPage(page, href || '/package/starter', 5000);
+    expect(await waitForPageContent(page, 3000)).toBeTruthy();
+    console.log('✓ Step 3: Starter package page loaded');
+
+    // Step 4: Verify pricing (£795 one-time)
+    const priceText = await page.textContent('body');
+    expect(priceText).toContain('£795');
+    expect(priceText).toContain('one-time');
+    console.log('✓ Step 4: Starter pricing visible (£795 one-time)');
+
+    // Step 5: Verify CTA button exists
+    const ctaButton = await page.locator('a, button').filter({ hasText: /Start Assessment/ }).first();
+    const isVisible = await ctaButton.isVisible({ timeout: 2000 }).catch(() => false);
+    expect(isVisible).toBeTruthy();
+    console.log('✓ Step 5: CTA button visible');
+
+    console.log('✅ Complete Starter flow verified: Home → Starter Package Selection → Ready for Assessment');
+  });
 });
