@@ -165,7 +165,9 @@ export default function Checkout() {
 
                   <div className="flex flex-col gap-3">
                     <Button className="w-full" asChild>
-                      <Link to="/dashboard">Go to Dashboard</Link>
+                      <Link to={packageName === 'Starter' ? '/assessment' : '/dashboard'}>
+                        {packageName === 'Starter' ? 'Start Your Assessment' : 'Go to Dashboard'}
+                      </Link>
                     </Button>
                     <Button variant="outline" className="w-full" asChild>
                       <Link to="/">Back to Home</Link>

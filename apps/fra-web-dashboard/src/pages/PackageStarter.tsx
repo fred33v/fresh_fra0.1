@@ -17,9 +17,25 @@ export default function PackageStarter() {
   const { user } = useAuth();
 
   const starterFeatures = [
-    { icon: ClipboardCheck, text: 'Single fraud risk assessment across 13 key areas' },
-    { icon: FileText, text: 'Professional PDF health check report' },
-    { icon: Shield, text: 'ECCTA 2023 compliance snapshot' },
+    { icon: ClipboardCheck, text: 'Complete fraud risk assessment across 13 key areas' },
+    { icon: FileText, text: 'Professional PDF health check report with risk scoring' },
+    { icon: Shield, text: 'ECCTA 2023 compliance snapshot and recommendations' },
+  ];
+
+  const assessmentModules = [
+    'Governance & Oversight',
+    'Staff Awareness & Training',
+    'Financial Controls',
+    'Data Protection & Privacy',
+    'Incident Management',
+    'Third-Party Risk',
+    'Systems & Technology',
+    'Fraud Detection Tools',
+    'Whistleblowing Procedures',
+    'Procurement Controls',
+    'Asset Management',
+    'Case Management',
+    'Culture & Tone',
   ];
 
   const idealFor = [
@@ -27,6 +43,7 @@ export default function PackageStarter() {
     'One-time compliance checks',
     'Budget-conscious organizations',
     'Initial fraud risk visibility',
+    'Entry-level risk assessment',
   ];
 
   return (
@@ -123,19 +140,112 @@ export default function PackageStarter() {
         </div>
       </section>
 
+      {/* Assessment Modules */}
+      <section className="py-16 lg:py-24 bg-muted/50">
+        <div className="container">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+              Complete Assessment of 13 Key Areas
+            </h2>
+            <p className="text-lg text-primary-foreground/80 text-center mb-12 max-w-2xl mx-auto">
+              Our comprehensive assessment covers all critical fraud risk areas, helping you build a complete picture of your organization's vulnerabilities and readiness.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {assessmentModules.map((module) => (
+                <div key={module} className="flex items-start gap-3 p-4 rounded-lg border border-primary-foreground/10 bg-background">
+                  <CheckCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" aria-hidden="true" />
+                  <span className="text-primary-foreground font-medium">{module}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Ideal For */}
       <section className="py-16 lg:py-24 bg-muted/50">
         <div className="container">
           <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
-            Ideal For
+            Why Choose Starter?
           </h2>
-          <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
             {idealFor.map((item) => (
               <div key={item} className="flex items-start gap-3 p-4 rounded-lg border border-primary-foreground/10">
                 <CheckCircle2 className="h-6 w-6 text-accent shrink-0 mt-0.5" aria-hidden="true" />
                 <span className="text-primary-foreground">{item}</span>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Package Comparison */}
+      <section className="py-16 lg:py-24">
+        <div className="container">
+          <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+            Package Comparison
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-primary-foreground/20">
+                  <th className="text-left py-4 px-4 font-bold text-primary-foreground">Feature</th>
+                  <th className="text-center py-4 px-4 font-bold text-accent">Starter</th>
+                  <th className="text-center py-4 px-4 font-semibold text-primary-foreground/60">Professional</th>
+                  <th className="text-center py-4 px-4 font-semibold text-primary-foreground/60">Enterprise</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">Fraud Risk Assessment</td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">PDF Report</td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">ECCTA Compliance</td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">Staff Training</td>
+                  <td className="text-center py-4 px-4 text-muted-foreground">—</td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">Employee Key-Passes</td>
+                  <td className="text-center py-4 px-4">1</td>
+                  <td className="text-center py-4 px-4">50</td>
+                  <td className="text-center py-4 px-4">Unlimited</td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">Reassessment</td>
+                  <td className="text-center py-4 px-4 text-muted-foreground">One-time</td>
+                  <td className="text-center py-4 px-4">Quarterly</td>
+                  <td className="text-center py-4 px-4">Continuous</td>
+                </tr>
+                <tr className="border-b border-primary-foreground/10">
+                  <td className="py-4 px-4 text-primary-foreground">Email Support</td>
+                  <td className="text-center py-4 px-4 text-muted-foreground">—</td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
+                </tr>
+                <tr>
+                  <td className="py-4 px-4 text-primary-foreground font-bold">Price</td>
+                  <td className="text-center py-4 px-4 font-bold text-accent">£795</td>
+                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">£1,799/year</td>
+                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">£4,995/year</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
