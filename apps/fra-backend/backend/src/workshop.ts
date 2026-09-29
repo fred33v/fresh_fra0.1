@@ -15,6 +15,7 @@ import { getRedis } from './redis.js';
 import { rateLimit, getClientIp } from './middleware.js';
 import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
+import { requirePackage } from './entitlements.js';
 
 function requireUUID(c: Context, name: string): string | Response {
   const value = c.req.param(name);
@@ -125,6 +126,32 @@ async function getAuthWithSseToken(c: Context): Promise<AuthContext | null> {
 // ── Workshop Hono App ────────────────────────────────────────
 
 const workshop = new Hono();
+
+// ── Package gate: training is part of Professional and Enterprise ──
+// Profile/roles stay open (used during onboarding); the SSE stream is covered
+// because its token is only issued by the gated /sse-token route.
+const UNGATED_WORKSHOP_PATHS = [/\/profile$/, /\/roles$/, /\/events$/];
+
+workshop.use('/*', async (c, next) => {
+  if (UNGATED_WORKSHOP_PATHS.some((re) => re.test(c.req.path))) return next();
+
+  const auth = getAuthBase(c);
+  if (!auth) return next(); // route handlers return 401
+
+  // Admins and facilitators run the workshops, so they are not package-gated
+  if (auth.role === 'admin') return next();
+  if (hasDatabase()) {
+    const roles = await getDbPool().query(
+      "SELECT 1 FROM workshop_roles WHERE user_id = $1 AND role = 'facilitator' LIMIT 1",
+      [auth.userId]
+    );
+    if (roles.rowCount) return next();
+  }
+
+  const denied = await requirePackage(c, auth, 'pkg_training');
+  if (denied) return denied;
+  return next();
+});
 
 // ── Profile endpoints ────────────────────────────────────────
 

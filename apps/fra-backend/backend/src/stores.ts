@@ -1,4 +1,4 @@
-import type { User, Assessment, Organisation, Purchase, Keypass } from './types.js';
+import type { User, Assessment, Organisation, Purchase, Keypass, ApiKey, RiskRegisterEntry, WebhookEndpoint, ComplianceIncident, SeniorManager, AuditEvent } from './types.js';
 
 // In-memory fallbacks (used only when DATABASE_URL is not set, e.g. tests)
 export const usersByEmail = new Map<string, User>();
@@ -52,3 +52,14 @@ function cleanupExpiredEntries() {
 // Run cleanup every 5 minutes
 const cleanupInterval = setInterval(cleanupExpiredEntries, 5 * 60 * 1000);
 cleanupInterval.unref?.();
+
+// ── Enterprise integrations (in-memory fallbacks) ────────────────
+export const apiKeysById = new Map<string, ApiKey>();
+export const riskRegisterById = new Map<string, RiskRegisterEntry>();
+export const webhookEndpointsById = new Map<string, WebhookEndpoint>();
+export const incidentsById = new Map<string, ComplianceIncident>();
+export const seniorManagersById = new Map<string, SeniorManager>();
+
+// Bounded audit log for no-database mode (the database keeps the full history)
+export const auditEvents: AuditEvent[] = [];
+export const AUDIT_EVENTS_MAX = 5000;

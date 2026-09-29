@@ -6,3 +6,4 @@ export { rowToKeypass, dbInsertKeypass, dbInsertKeypassBatch, dbGetKeypassByCode
 export { dbInsertPurchase, dbGetPurchaseById, dbUpdatePurchaseStatus, dbListPurchasesByOrganisation, dbListPackages, dbGetPackageById } from './purchases.js';
 export { auditLog } from './audit.js';
 export { setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken } from './password-reset.js';
+export * from './enterprise.js';

@@ -1,21 +1,22 @@
 import { Hono } from 'hono';
 import bcrypt from 'bcryptjs';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
-import { keypassGenerateSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, FALLBACK_PACKAGES, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
+import { keypassGenerateSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
 import type { User, Keypass } from '../types.js';
-import { usersByEmail, organisationsById, keypassesByCode, purchasesById } from '../stores.js';
+import { usersByEmail, organisationsById, keypassesByCode } from '../stores.js';
 import { getClientIp, rateLimit } from '../middleware.js';
 import { generateKeypassCode } from '../s3.js';
 import {
   dbGetUserByEmail, dbInsertUser,
   dbInsertKeypassBatch, dbGetKeypassByCode, dbUpdateKeypassStatus, dbClaimKeypass, dbListKeypassesByOrganisation, dbGetKeypassStatsByOrganisation,
-  dbGetOrganisationById, dbGetPackageById,
-  dbListPurchasesByOrganisation,
+  dbGetOrganisationById,
   dbUpsertRefreshToken,
   auditLog,
 } from '../db/index.js';
 import type { KeypassStatus } from '../types.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
+import { getActiveKeypassAllowance, listOrgPurchases } from '../entitlements.js';
+import { emitOrgEvent } from '../webhooks-out.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('keypasses');
@@ -23,23 +24,8 @@ const logger = createLogger('keypasses');
 // ── Quota helper ────────────────────────────────────────────────
 
 async function getOrgKeypassQuota(orgId: string): Promise<{ allowance: number; used: number }> {
-  // Determine max keypass allowance from the org's best succeeded purchase
-  let allowance = 0;
-
-  if (hasDatabase()) {
-    const purchases = await dbListPurchasesByOrganisation(orgId);
-    for (const p of purchases) {
-      if (p.status !== 'succeeded') continue;
-      const pkg = await dbGetPackageById(p.packageId);
-      if (pkg && pkg.keypassAllowance > allowance) allowance = pkg.keypassAllowance;
-    }
-  } else {
-    const purchases = Array.from(purchasesById.values()).filter((p) => p.organisationId === orgId && p.status === 'succeeded');
-    for (const p of purchases) {
-      const pkg = FALLBACK_PACKAGES.find((fp) => fp.id === p.packageId);
-      if (pkg && pkg.keypassAllowance > allowance) allowance = pkg.keypassAllowance;
-    }
-  }
+  // Allowance comes from the org's active (unexpired) packages; -1 = unlimited
+  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId));
 
   // Count existing keypasses (all statuses except revoked/expired count towards quota)
   const allKeypasses = hasDatabase()
@@ -103,7 +89,7 @@ keypasses.post('/keypasses/generate', async (c) => {
   if (quota.allowance === 0) {
     return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
   }
-  const remaining = quota.allowance - quota.used;
+  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
   if (parsed.data.quantity > remaining) {
     return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
   }
@@ -137,7 +123,7 @@ keypasses.post('/keypasses/allocate', async (c) => {
   if (quota.allowance === 0) {
     return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
   }
-  const remaining = quota.allowance - quota.used;
+  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
   if (parsed.data.quantity > remaining) {
     return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
   }
@@ -225,6 +211,8 @@ keypasses.post('/keypasses/use', async (c) => {
     }
   }
 
+  if (!hasDatabase()) kp.usedByUserId = user.id;
+
   if (hasDatabase()) {
     const claimed = await dbClaimKeypass(code, now, user.id);
     if (!claimed) return jsonError(c, 409, 'ALREADY_USED', 'Keypass has already been used');
@@ -249,6 +237,9 @@ keypasses.post('/keypasses/use', async (c) => {
     organisationId: user.organisationId, resourceType: 'keypass', resourceId: code,
     ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
+  });
+  void emitOrgEvent(user.organisationId, 'keypass.used', {
+    userId: user.id, email: user.email, keypass: `****${code.slice(-4)}`, usedAt: now,
   });
 
   return c.json({
@@ -409,8 +400,9 @@ keypasses.get('/keypasses/organisation/:orgId/quota', async (c) => {
     data: {
       organisationId: orgId,
       allowance: quota.allowance,
+      unlimited: quota.allowance < 0,
       used: quota.used,
-      remaining: Math.max(0, quota.allowance - quota.used),
+      remaining: quota.allowance < 0 ? null : Math.max(0, quota.allowance - quota.used),
     },
   });
 });

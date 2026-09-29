@@ -29,7 +29,7 @@ vi.mock('framer-motion', () => ({
 
 // ── Helpers ────────────────────────────────────────────────
 
-function renderCheckout(searchParams = '?package=Professional&price=499') {
+function renderCheckout(searchParams = '?package=Professional') {
   return render(
     <MemoryRouter initialEntries={[`/checkout${searchParams}`]}>
       <Routes>
@@ -73,33 +73,16 @@ describe('Checkout', () => {
     });
 
     it('redirects when package name is invalid', () => {
-      renderCheckout('?package=InvalidPkg&price=499');
+      renderCheckout('?package=InvalidPkg');
 
       expect(screen.getByTestId('home-redirect')).toBeInTheDocument();
     });
 
-    it('redirects when price param is missing', () => {
-      renderCheckout('?package=Professional');
+    it('uses the catalogue price and ignores a price in the URL', () => {
+      renderCheckout('?package=Professional&price=1');
 
-      expect(screen.getByTestId('home-redirect')).toBeInTheDocument();
-    });
-
-    it('redirects when price is zero', () => {
-      renderCheckout('?package=Professional&price=0');
-
-      expect(screen.getByTestId('home-redirect')).toBeInTheDocument();
-    });
-
-    it('redirects when price is negative', () => {
-      renderCheckout('?package=Professional&price=-100');
-
-      expect(screen.getByTestId('home-redirect')).toBeInTheDocument();
-    });
-
-    it('redirects when price is NaN', () => {
-      renderCheckout('?package=Professional&price=abc');
-
-      expect(screen.getByTestId('home-redirect')).toBeInTheDocument();
+      expect(screen.getByText('£1799.00')).toBeInTheDocument();
+      expect(screen.queryByText('£1.00')).not.toBeInTheDocument();
     });
   });
 
@@ -107,21 +90,22 @@ describe('Checkout', () => {
 
   describe('valid package rendering', () => {
     it('accepts Professional package', () => {
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
       expect(screen.getByText('Professional')).toBeInTheDocument();
     });
 
     it('accepts Enterprise package', () => {
-      renderCheckout('?package=Enterprise&price=999');
+      renderCheckout('?package=Enterprise');
 
       expect(screen.getByText('Enterprise')).toBeInTheDocument();
     });
 
-    it('accepts Health-Check package', () => {
-      renderCheckout('?package=Health-Check&price=199');
+    it('treats the old Health-Check name as Starter', () => {
+      renderCheckout('?package=Health-Check');
 
-      expect(screen.getByText('Health-Check')).toBeInTheDocument();
+      expect(screen.getByText('Starter')).toBeInTheDocument();
+      expect(screen.getByText('£795.00')).toBeInTheDocument();
     });
   });
 
@@ -129,7 +113,7 @@ describe('Checkout', () => {
 
   describe('order summary', () => {
     it('shows package name and subscription description', () => {
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
       expect(screen.getByText('Order Summary')).toBeInTheDocument();
       expect(screen.getByText('Professional')).toBeInTheDocument();
@@ -137,24 +121,24 @@ describe('Checkout', () => {
     });
 
     it('shows Enterprise subscription description', () => {
-      renderCheckout('?package=Enterprise&price=999');
+      renderCheckout('?package=Enterprise');
 
       expect(screen.getByText('Full Dashboard - Annual Subscription')).toBeInTheDocument();
     });
 
     it('shows price breakdown with VAT', () => {
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
-      // Subtotal £499.00
-      expect(screen.getByText('£499.00')).toBeInTheDocument();
-      // VAT (20%) = £99.80
-      expect(screen.getByText('£99.80')).toBeInTheDocument();
-      // Total = £598.80
-      expect(screen.getByText('£598.80')).toBeInTheDocument();
+      // Subtotal £1,799 from the catalogue
+      expect(screen.getByText('£1799.00')).toBeInTheDocument();
+      // VAT (20%) = £359.80
+      expect(screen.getByText('£359.80')).toBeInTheDocument();
+      // Total = £2,158.80
+      expect(screen.getByText('£2158.80')).toBeInTheDocument();
     });
 
     it('shows compliance badge', () => {
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
       expect(screen.getByText('GovS-013 & ECCTA 2023 Compliant')).toBeInTheDocument();
     });
@@ -173,9 +157,9 @@ describe('Checkout', () => {
     });
 
     it('shows pay button with total amount', () => {
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
-      expect(screen.getByRole('button', { name: /Pay £598\.80/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Pay £2158\.80/ })).toBeInTheDocument();
     });
 
     it('shows breadcrumb navigation', () => {
@@ -355,7 +339,7 @@ describe('Checkout', () => {
 
     it('shows success screen after payment completes', async () => {
       const user = userEvent.setup();
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
       await fillValidForm(user);
       await user.click(screen.getByRole('button', { name: /Pay/ }));
@@ -368,7 +352,7 @@ describe('Checkout', () => {
 
     it('shows correct total on success screen', async () => {
       const user = userEvent.setup();
-      renderCheckout('?package=Professional&price=499');
+      renderCheckout('?package=Professional');
 
       await fillValidForm(user);
       await user.click(screen.getByRole('button', { name: /Pay/ }));
@@ -376,7 +360,7 @@ describe('Checkout', () => {
       await waitFor(() => {
         expect(screen.getByText('Confirmed')).toBeInTheDocument();
       }, { timeout: 3000 });
-      expect(screen.getByText('£598.80')).toBeInTheDocument();
+      expect(screen.getByText('£2158.80')).toBeInTheDocument();
     }, 10000);
 
     it('shows navigation links on success screen', async () => {

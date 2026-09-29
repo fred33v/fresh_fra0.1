@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import EmployerDashboard from '@/pages/EmployerDashboard';
@@ -15,6 +15,14 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('@/hooks/useAuth');
+
+vi.mock('@/hooks/useEntitlements', () => ({
+  useEntitlements: () => ({ entitlements: null, isLoading: false }),
+}));
+
+vi.mock('@/components/enterprise/KeypassManager', () => ({
+  KeypassManager: () => <div data-testid="keypass-manager" />,
+}));
 
 vi.mock('@/lib/api', () => ({
   api: { get: vi.fn() },
@@ -247,7 +255,7 @@ describe('EmployerDashboard', () => {
       renderDashboard();
 
       await waitFor(() => {
-        expect(screen.getByText(/requires the Full package/)).toBeInTheDocument();
+        expect(screen.getByText(/part of the Enterprise package/)).toBeInTheDocument();
       });
     });
 
@@ -352,9 +360,10 @@ describe('EmployerDashboard', () => {
       await waitFor(() => {
         expect(screen.getByText('Alice Smith')).toBeInTheDocument();
       });
-      expect(screen.getByText('alice@test.com')).toBeInTheDocument();
-      expect(screen.getByText('Bob Jones')).toBeInTheDocument();
-      expect(screen.getByText('bob@test.com')).toBeInTheDocument();
+      const table = screen.getByRole('table');
+      expect(within(table).getByText('alice@test.com')).toBeInTheDocument();
+      expect(within(table).getByText('Bob Jones')).toBeInTheDocument();
+      expect(within(table).getByText('bob@test.com')).toBeInTheDocument();
     });
 
     it('shows departments', async () => {
@@ -435,6 +444,49 @@ describe('EmployerDashboard', () => {
     });
   });
 
+  // ── High-risk alert and paging ─────────────────
+
+  describe('high-risk alert', () => {
+    it('lists high-risk employees with their top risk and filters the table on request', async () => {
+      mockedApi.get.mockResolvedValue([
+        makeEmployee({ userId: 'e1', userName: 'Alice Smith', status: 'completed', riskLevel: 'low' }),
+        { ...makeEmployee({ userId: 'e2', userName: 'Bob Jones', status: 'completed', riskLevel: 'high' }), topRisk: 'Cyber fraud', highRiskCount: 2 },
+      ]);
+      const user = userEvent.setup();
+      renderDashboard();
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('1 employee reported high fraud risk');
+      expect(alert).toHaveTextContent('Bob Jones (Cyber fraud)');
+
+      await user.click(within(alert).getByRole('button', { name: /show high-risk employees/i }));
+      const table = screen.getByRole('table');
+      expect(within(table).queryByText('Alice Smith')).not.toBeInTheDocument();
+      expect(within(table).getByText('Bob Jones')).toBeInTheDocument();
+    });
+
+    it('does not show the alert when nobody is high risk', async () => {
+      mockedApi.get.mockResolvedValue([makeEmployee({ riskLevel: 'low', status: 'completed' })]);
+      renderDashboard();
+      await screen.findByRole('table');
+      expect(screen.queryByText(/reported high fraud risk/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('paging', () => {
+    it('loads every page of employees', async () => {
+      const page1 = Array.from({ length: 200 }, (_, i) => makeEmployee({ userId: `p1-${i}`, userName: `Person ${i}`, email: `p${i}@test.com` }));
+      mockedApi.get.mockImplementation(async (url: string) => {
+        if (url.includes('page=1&')) return page1;
+        if (url.includes('page=2&')) return [makeEmployee({ userId: 'last', userName: 'Last Person', email: 'last@test.com' })];
+        return [];
+      });
+      renderDashboard();
+      expect(await screen.findByText('Last Person')).toBeInTheDocument();
+      expect(screen.getByText(/Employees \(201\)/)).toBeInTheDocument();
+    });
+  });
+
   // ── Search ─────────────────────────────────────
 
   describe('search', () => {
@@ -492,7 +544,7 @@ describe('EmployerDashboard', () => {
   describe('employee detail expansion', () => {
     beforeEach(() => {
       mockedApi.get.mockImplementation(async (url: string) => {
-        if (url === '/api/v1/analytics/employees') {
+        if (url.startsWith('/api/v1/analytics/employees?')) {
           return [makeEmployee({ userId: 'emp-1', status: 'completed' })];
         }
         if (url.includes('/analytics/employees/emp-1')) {
@@ -530,7 +582,7 @@ describe('EmployerDashboard', () => {
       await user.click(screen.getByText('Alice Smith'));
 
       await waitFor(() => {
-        expect(screen.getByText('1 key-pass associated')).toBeInTheDocument();
+        expect(screen.getByText(/Joined with key-pass \*\*\*\*-001 on 01\/05\/2025/)).toBeInTheDocument();
       });
     });
 
@@ -555,7 +607,7 @@ describe('EmployerDashboard', () => {
 
     it('shows error and retry when detail fetch fails', async () => {
       mockedApi.get.mockImplementation(async (url: string) => {
-        if (url === '/api/v1/analytics/employees') {
+        if (url.startsWith('/api/v1/analytics/employees?')) {
           return [makeEmployee({ userId: 'emp-1', status: 'completed' })];
         }
         throw new Error('Server error');

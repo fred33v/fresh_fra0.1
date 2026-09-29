@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { PackageGate } from "@/components/PackageGate";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
 
@@ -25,6 +26,9 @@ const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
 const PackageEnterprise = lazy(() => import("./pages/PackageEnterprise"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const EmployerDashboard = lazy(() => import("./pages/EmployerDashboard"));
+const RiskRegister = lazy(() => import("./pages/RiskRegister"));
+const Integrations = lazy(() => import("./pages/Integrations"));
+const Compliance = lazy(() => import("./pages/Compliance"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -59,19 +63,22 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/workshop" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
+                <Route path="/workshop" element={<ProtectedRoute><PackageGate feature="training"><Workshop /></PackageGate></ProtectedRoute>} />
                 <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
                 <Route path="/assessment/:assessmentId/results" element={<ProtectedRoute><AssessmentResults /></ProtectedRoute>} />
                 <Route path="/budget-guide/:assessmentId" element={<ProtectedRoute><BudgetGuide /></ProtectedRoute>} />
                 <Route path="/resources" element={<ProtectedRoute><Resources /></ProtectedRoute>} />
-                <Route path="/certificate" element={<ProtectedRoute><Certificate /></ProtectedRoute>} />
-                <Route path="/action-plan" element={<ProtectedRoute><ActionPlan /></ProtectedRoute>} />
+                <Route path="/certificate" element={<ProtectedRoute><PackageGate feature="certificates"><Certificate /></PackageGate></ProtectedRoute>} />
+                <Route path="/action-plan" element={<ProtectedRoute><PackageGate feature="training"><ActionPlan /></PackageGate></ProtectedRoute>} />
                 <Route path="/package/starter" element={<PackageStarter />} />
                 <Route path="/package/professional" element={<PackageProfessional />} />
                 <Route path="/package/enterprise" element={<PackageEnterprise />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/facilitator" element={<ProtectedRoute requiredRole="facilitator"><Facilitator /></ProtectedRoute>} />
                 <Route path="/employer" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><EmployerDashboard /></ProtectedRoute>} />
+                <Route path="/risk-register" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><RiskRegister /></PackageGate></ProtectedRoute>} />
+                <Route path="/compliance" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Compliance /></PackageGate></ProtectedRoute>} />
+                <Route path="/integrations" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Integrations /></PackageGate></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

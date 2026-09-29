@@ -20,7 +20,7 @@
 ### Testing & QA
 - **Unit Testing:** ✅ Complete (Vitest)
 - **Integration Testing:** ✅ Complete (28 test files)
-- **E2E Framework:** ✅ Ready (48 scenarios)
+- **E2E Framework:** ✅ Ready (Playwright: 59 passed, 3 skipped)
 - **Accessibility Framework:** ✅ Ready (14+ tests)
 - **Performance Testing:** ✅ Ready (Lighthouse)
 
@@ -149,8 +149,8 @@ Phase 3: Launch            (Mar 2026)
 
 ### **Immediate (4 Hours)**
 1. ✅ Review FINAL_PRODUCTION_READINESS_REPORT.md
-2. Run `pnpm run test:e2e` (verify 48/48 passing)
-3. Run `pnpm run test:e2e e2e/accessibility.spec.ts`
+2. Run `pnpm --filter @stopfra/web-dashboard test:e2e` (verified in this workspace: 59 passed, 3 skipped)
+3. Run the accessibility Playwright spec from the same package context if needed
 4. Run `lighthouse http://localhost:8080 --view`
 5. Test production build: `pnpm build && pnpm preview`
 

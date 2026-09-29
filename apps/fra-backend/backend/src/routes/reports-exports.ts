@@ -7,6 +7,7 @@ import { dbGetAssessmentById, dbListAssessmentsByOrganisation, auditLog } from '
 import { rateLimit, getClientIp } from '../middleware.js';
 import { generateAssessmentPdf } from '../pdf-generator.js';
 import { createLogger } from '../logger.js';
+import { requireAnyPaidPurchase } from '../entitlements.js';
 
 const logger = createLogger('reports-exports');
 
@@ -15,7 +16,7 @@ const reportsExports = new Hono();
 /**
  * GET /assessments/:id/export-pdf
  * Export an assessment as a PDF file
- * Available to all packages including pkg_basic
+ * Available to any organisation that has paid for a package (including pkg_basic)
  */
 reportsExports.get('/assessments/:id/export-pdf', async (c) => {
   const limited = await rateLimit('reports:export-pdf', { windowMs: 60_000, max: 20 })(c);
@@ -26,6 +27,10 @@ reportsExports.get('/assessments/:id/export-pdf', async (c) => {
 
   const id = requireUUIDParam(c, 'id');
   if (id instanceof Response) return id;
+
+  // Paid customers keep access to their reports even after a subscription lapses
+  const denied = await requireAnyPaidPurchase(c, auth);
+  if (denied) return denied;
 
   // Fetch assessment
   let assessment: Assessment | null = null;
@@ -71,7 +76,7 @@ reportsExports.get('/assessments/:id/export-pdf', async (c) => {
       userAgent: c.req.header('user-agent'),
     });
 
-    return c.body(pdfBuffer, 200, { 'Content-Type': 'application/pdf' });
+    return c.body(new Uint8Array(pdfBuffer), 200, { 'Content-Type': 'application/pdf' });
   } catch (error) {
     logger.error('PDF export failed', {
       assessmentId: id,

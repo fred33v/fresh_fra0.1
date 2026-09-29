@@ -109,9 +109,9 @@ function CurrencyQuestion({ question, value, onChange }: QuestionRendererProps) 
  * Uses a slider or button grid depending on scale range
  */
 function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
-  const min = question.metadata?.min || 1;
-  const max = question.metadata?.max || 5;
-  const step = question.metadata?.step || 1;
+  const min = question.metadata?.min ?? 1;
+  const max = question.metadata?.max ?? 5;
+  const step = question.metadata?.step ?? 1;
   const labels = question.metadata?.scaleLabels || [];
 
   // Use slider for larger ranges
@@ -120,11 +120,11 @@ function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
       <div className="space-y-4 py-4">
         <div className="flex justify-between text-sm text-muted-foreground">
           <span>{min}</span>
-          <span className="text-lg font-semibold text-primary">{value || '—'}</span>
+          <span className="text-lg font-semibold text-primary">{value ?? '—'}</span>
           <span>{max}</span>
         </div>
         <Slider
-          value={[value || min]}
+          value={[value ?? min]}
           onValueChange={(vals) => onChange(vals[0])}
           min={min}
           max={max}

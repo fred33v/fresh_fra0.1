@@ -6,6 +6,7 @@ export function rowToKeypass(row: DbKeypassRow): Keypass {
     code: row.code, organisationId: row.organisation_id, status: row.status as KeypassStatus,
     createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString(),
     usedAt: row.used_at ? new Date(row.used_at).toISOString() : undefined,
+    usedByUserId: row.used_by_user_id ?? undefined,
   };
 }
 

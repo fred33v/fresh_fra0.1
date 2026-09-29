@@ -78,7 +78,7 @@ test.describe('Package Selection Flow', () => {
     console.log('✓ Professional page displays pricing');
 
     // Verify it shows features
-    expect(priceText).toContain('Training') || expect(priceText).toContain('training');
+    expect(priceText?.toLowerCase()).toContain('training');
     console.log('✓ Professional page displays features');
   });
 

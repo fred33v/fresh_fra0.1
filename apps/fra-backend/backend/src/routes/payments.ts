@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Hono } from 'hono';
-import { getAuth, hasDatabase, jsonError, requireAuth } from '../helpers.js';
+import { blocksRepurchase, getAuth, hasDatabase, jsonError, requireAuth } from '../helpers.js';
+import { getEntitlementSummary } from '../entitlements.js';
 import { createLogger } from '../logger.js';
 import {
   paymentCreateIntentSchema, purchasesCreateSchema, purchasesConfirmSchema,
@@ -145,10 +146,11 @@ payments.post('/purchases', async (c) => {
     ? await dbListPurchasesByOrganisation(auth.organisationId)
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === auth.organisationId);
 
-  const existingActive = orgPurchases.find(
-    (p) => p.packageId === parsed.data.packageId && (p.status === 'succeeded' || p.status === 'requires_confirmation')
+  // Subscriptions can be renewed in the last 30 days of their term; one-time packages cannot be re-bought
+  const pendingSamePackage = orgPurchases.some(
+    (p) => p.packageId === parsed.data.packageId && p.status === 'requires_confirmation'
   );
-  if (existingActive) {
+  if (pendingSamePackage || blocksRepurchase(orgPurchases, parsed.data.packageId)) {
     return jsonError(c, 409, 'DUPLICATE_PURCHASE', 'An active purchase for this package already exists');
   }
 
@@ -227,10 +229,7 @@ payments.post('/purchases/:id/confirm', async (c) => {
     ? await dbListPurchasesByOrganisation(auth.organisationId)
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === auth.organisationId);
 
-  const alreadySucceeded = orgPurchases.find(
-    (p) => p.packageId === purchase.packageId && p.status === 'succeeded'
-  );
-  if (alreadySucceeded) {
+  if (blocksRepurchase(orgPurchases, purchase.packageId)) {
     return jsonError(c, 409, 'DUPLICATE_PURCHASE', 'An active purchase for this package already exists');
   }
 
@@ -263,6 +262,13 @@ payments.post('/purchases/:id/confirm', async (c) => {
       status: 'succeeded', paymentIntentId: parsed.data.paymentIntentId ?? null,
     },
   });
+});
+
+payments.get('/entitlements', async (c) => {
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+
+  return c.json({ success: true, data: await getEntitlementSummary(auth) });
 });
 
 payments.get('/purchases/:id', async (c) => {

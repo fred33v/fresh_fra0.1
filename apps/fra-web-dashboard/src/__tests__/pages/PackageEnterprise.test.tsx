@@ -108,7 +108,7 @@ describe('PackageEnterprise', () => {
       renderPage();
 
       const links = screen.getAllByRole('link', { name: /Choose Enterprise/ });
-      expect(links[0]).toHaveAttribute('href', '/checkout?package=Enterprise&price=4995');
+      expect(links[0]).toHaveAttribute('href', '/checkout?package=Enterprise');
     });
 
     it('CTA "Get Started Now" links to signup when not authenticated', () => {
@@ -124,7 +124,7 @@ describe('PackageEnterprise', () => {
       renderPage();
 
       const link = screen.getByRole('link', { name: /Get Started Now/ });
-      expect(link).toHaveAttribute('href', '/checkout?package=Enterprise&price=4995');
+      expect(link).toHaveAttribute('href', '/checkout?package=Enterprise');
     });
 
     it('Compare All Packages links to /', () => {
@@ -171,7 +171,7 @@ describe('PackageEnterprise', () => {
     it('shows ideal-for items', () => {
       renderPage();
 
-      expect(screen.getByText(/Large organisations with 100\+ employees/)).toBeInTheDocument();
+      expect(screen.getByText(/Organisations with 100\+ employees/)).toBeInTheDocument();
       expect(screen.getByText(/Public sector and NHS bodies/)).toBeInTheDocument();
       expect(screen.getByText(/real-time compliance oversight/)).toBeInTheDocument();
       expect(screen.getByText(/API integration with existing GRC/)).toBeInTheDocument();

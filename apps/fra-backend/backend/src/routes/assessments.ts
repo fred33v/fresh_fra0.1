@@ -8,6 +8,27 @@ import {
   auditLog,
 } from '../db/index.js';
 import { rateLimit, getClientIp } from '../middleware.js';
+import { getAssessmentAllowance } from '../entitlements.js';
+import { ASSESSMENT_MODULES, buildAssessmentResults } from '../assessment-modules.js';
+import { emitOrgEvent } from '../webhooks-out.js';
+import { scoreAssessment } from '../assessment-risk.js';
+
+// Answers stay out of webhook payloads; integrations fetch detail via the API if needed
+function notifySubmitted(a: Assessment) {
+  const risk = scoreAssessment(a);
+  const assessment = {
+    id: a.id, title: a.title, status: a.status, createdByUserId: a.createdByUserId,
+    submittedAt: a.submittedAt, answerCount: Object.keys(a.answers).length,
+    riskLevel: risk.level, riskCounts: risk.counts,
+  };
+  void emitOrgEvent(a.organisationId, 'assessment.submitted', { assessment });
+  if (risk.level === 'high') {
+    void emitOrgEvent(a.organisationId, 'assessment.high_risk', {
+      assessment,
+      highRisks: risk.risks.filter((r) => r.priority === 'high').map(({ title, area, residualScore }) => ({ title, area, residualScore })),
+    });
+  }
+}
 
 const assessments = new Hono();
 
@@ -73,6 +94,10 @@ assessments.post('/assessments', async (c) => {
   const parsed = assessmentCreateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid assessment payload');
 
+  const allowance = await getAssessmentAllowance(auth);
+  if (allowance.limit === 0) return jsonError(c, 403, 'PACKAGE_REQUIRED', 'A paid package is required to start an assessment');
+  if (!allowance.allowed) return jsonError(c, 403, 'ASSESSMENT_LIMIT_REACHED', allowance.reason ?? 'Assessment limit reached');
+
   const now = new Date().toISOString();
   const assessment: Assessment = {
     id: crypto.randomUUID(),
@@ -99,6 +124,17 @@ assessments.post('/assessments', async (c) => {
   });
 
   return c.json({ success: true, data: assessment }, 201);
+});
+
+// Registered before /assessments/:id so "modules" is not treated as an ID
+assessments.get('/assessments/modules', async (c) => {
+  const limited = await rateLimit('assessments:modules', { windowMs: 60_000, max: 60 })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+
+  return c.json({ success: true, data: ASSESSMENT_MODULES });
 });
 
 assessments.get('/assessments/:id', async (c) => {
@@ -171,6 +207,7 @@ assessments.patch('/assessments/:id', async (c) => {
     };
 
     assessmentsById.set(id, updated);
+    if (newStatus === 'submitted' && assessment.status !== 'submitted') notifySubmitted(updated);
     return c.json({ success: true, data: updated });
   }
 
@@ -204,6 +241,7 @@ assessments.patch('/assessments/:id', async (c) => {
     details: { title: updated.title, status: updated.status }, ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
   });
+  if (newStatus === 'submitted' && existing.status !== 'submitted') notifySubmitted(updated);
 
   return c.json({ success: true, data: updated });
 });
@@ -248,6 +286,7 @@ assessments.post('/assessments/:id/submit', async (c) => {
       ipAddress: getClientIp(c),
       userAgent: c.req.header('user-agent'),
     });
+    notifySubmitted(updated);
 
     return c.json({ success: true, data: updated });
   }
@@ -279,8 +318,30 @@ assessments.post('/assessments/:id/submit', async (c) => {
     ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
   });
+  notifySubmitted(updated);
 
   return c.json({ success: true, data: updated });
+});
+
+assessments.get('/assessments/:id/results', async (c) => {
+  const limited = await rateLimit('assessments:results', { windowMs: 60_000, max: 60 })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+
+  const assessment = hasDatabase() ? await dbGetAssessmentById(id) : assessmentsById.get(id);
+  if (!assessment || assessment.organisationId !== auth.organisationId) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
+  }
+  if (assessment.status !== 'submitted' && assessment.status !== 'completed') {
+    return jsonError(c, 409, 'NOT_SUBMITTED', 'Results are available once the assessment has been submitted');
+  }
+
+  return c.json({ success: true, data: buildAssessmentResults(assessment.id, assessment.answers) });
 });
 
 export default assessments;

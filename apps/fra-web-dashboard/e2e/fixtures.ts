@@ -1,7 +1,9 @@
 /**
  * E2E Test Fixtures
- * 
- * Provides authenticated page contexts and test data for E2E tests
+ *
+ * Provides authenticated page contexts and test data for E2E tests.
+ * The fixture intentionally avoids requiring real auth during Playwright runs
+ * and stands up a deterministic test assessment id.
  */
 
 import { test as base, expect, Page } from '@playwright/test';
@@ -16,11 +18,6 @@ export type TestFixtures = {
   };
 };
 
-/**
- * Create authenticated page fixture
- * - Skips auth for tests by storing auth state
- * - Provides pre-authenticated page for testing protected routes
- */
 export const test = base.extend<TestFixtures>({
   testData: async ({}, use) => {
     const testData = {
@@ -31,38 +28,29 @@ export const test = base.extend<TestFixtures>({
     await use(testData);
   },
 
-  testAssessmentId: async ({ page }, use) => {
-    // Create or use a known assessment ID for testing
-    // For now, use a mock ID that the app can handle
+  testAssessmentId: async ({}, use) => {
+    // Use one deterministic assessment id in the fixture so every route test is
+    // anchored to the same synthetic route object instead of guessing one.
     const assessmentId = 'test-assessment-001';
     await use(assessmentId);
   },
 
-  authenticatedPage: async ({ page, testData, browser }, use) => {
-    // Skip real authentication - mock local storage instead
-    // This allows tests to run without a real backend
-    
-    // Mock authentication in localStorage to simulate logged-in state
-    await page.goto('http://localhost:8080');
-    
-    // Set mock auth tokens and user data
-    await page.evaluate(({ email, orgId }) => {
-      // Mock localStorage for authenticated state
-      localStorage.setItem(
-        'auth_token',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwib3JnYW5pemF0aW9uSWQiOiIkb3JnSWQiLCJpYXQiOjE1MTYyMzkwMjJ9'
-      );
-      
+  authenticatedPage: async ({ page, testData }, use) => {
+    // Seed a stable authentication shell before the first page navigation.
+    // This lets protected pages inherit a token state without depending on a
+    // live login or a localStorage write that happens after navigation starts.
+    await page.addInitScript(({ email, orgId }) => {
+      localStorage.setItem('fra_access_token', 'mock-access-token-for-e2e');
+      localStorage.setItem('fra_refresh_token', 'mock-refresh-token-for-e2e');
       localStorage.setItem(
         'user',
         JSON.stringify({
           id: 'user-001',
-          email: email,
+          email,
           organizationId: orgId,
           name: 'Test User',
         })
       );
-      
       localStorage.setItem(
         'organization',
         JSON.stringify({
@@ -71,25 +59,13 @@ export const test = base.extend<TestFixtures>({
           plan: 'professional',
         })
       );
-      
-      // Trigger storage event for app to recognize auth
       window.dispatchEvent(
         new StorageEvent('storage', {
-          key: 'auth_token',
-          newValue: 'authenticated',
+          key: 'fra_access_token',
+          newValue: 'mock-access-token-for-e2e',
         })
       );
     }, { email: testData.email, orgId: testData.organizationId });
-
-    // Navigate to home page and wait for app initialization
-    await page.goto('http://localhost:8080');
-    
-    // Wait for app to load and recognize authenticated state
-    try {
-      await page.waitForSelector('body', { timeout: 5000 });
-    } catch (e) {
-      // Page loaded but selectors may not exist yet
-    }
 
     await use(page);
   },

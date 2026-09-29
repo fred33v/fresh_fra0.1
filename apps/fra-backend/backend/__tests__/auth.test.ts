@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders } from './helpers';
 
 // Helper to create a user and return tokens (keeps res/json shape for auth-specific tests)

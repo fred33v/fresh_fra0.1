@@ -22,6 +22,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { getPackage, checkoutPath, formatPrice } from '@/data/packages';
+
+const PKG = getPackage('pkg_full')!;
 
 export default function PackageEnterprise() {
   const { user } = useAuth();
@@ -33,16 +36,16 @@ export default function PackageEnterprise() {
   ];
 
   const enterpriseFeatures = [
-    { icon: LayoutDashboard, title: 'Real-Time Monitoring Dashboard', desc: 'Live view of assessments, risk scores, and compliance status across your entire organisation — updated in real time.' },
+    { icon: LayoutDashboard, title: 'Real-Time Monitoring Dashboard', desc: 'Live view of assessments, risk levels and compliance status across your organisation — refreshes automatically every 30 seconds.' },
     { icon: Users, title: 'Unlimited Employee Key-Passes', desc: 'No cap on how many staff can complete assessments. Scale fraud awareness across every department.' },
     { icon: BarChart3, title: 'Risk Register & Action Tracking', desc: 'Inherent and residual risk scoring with priority bands, owner assignment, and progress monitoring.' },
-    { icon: Key, title: 'API Access', desc: 'Integrate fraud risk data with your existing GRC tools, SIEM platforms, or internal dashboards via RESTful API.' },
+    { icon: Key, title: 'API Access', desc: 'Read-only API keys and signed webhooks connect fraud risk data to your GRC tools, SIEM platforms and internal dashboards. CSV export included.' },
     { icon: Headphones, title: 'Priority Support', desc: 'Dedicated assistance with onboarding, compliance queries, and ongoing platform support.' },
     { icon: FileText, title: 'Compliance Reports', desc: 'GovS-013 and ECCTA 2023 compliance reports ready for auditors, regulators, and board-level reporting.' },
   ];
 
   const idealFor = [
-    'Large organisations with 100+ employees',
+    PKG.audience,
     'Public sector and NHS bodies',
     'Organisations requiring real-time compliance oversight',
     'Teams needing API integration with existing GRC tools',
@@ -80,13 +83,13 @@ export default function PackageEnterprise() {
 
               <div className="flex items-center gap-3 mb-8 justify-center lg:justify-start">
                 <p className="text-2xl font-bold text-amber-400">
-                  £4,995<span className="text-base font-medium text-primary-foreground/60">/year + VAT</span>
+                  {formatPrice(PKG)}<span className="text-base font-medium text-primary-foreground/60">/year + VAT</span>
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Button size="lg" className="bg-amber-500 text-white hover:bg-amber-600" asChild>
-                  <Link to={user ? '/checkout?package=Enterprise&price=4995' : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
                     Choose Enterprise
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
@@ -131,7 +134,7 @@ export default function PackageEnterprise() {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 mt-6">
                 {[
-                  { value: '£4,995', label: 'Per Year', sublabel: 'Annual subscription' },
+                  { value: formatPrice(PKG), label: 'Per Year', sublabel: 'Annual subscription' },
                   { value: '∞', label: 'Key-Passes', sublabel: 'Unlimited access' },
                   { value: 'Live', label: 'Dashboard', sublabel: 'Real-time data' },
                 ].map((stat, index) => (
@@ -358,11 +361,11 @@ export default function PackageEnterprise() {
                 Real-time dashboard + unlimited key-passes + API access + priority support.
               </p>
               <p className="text-2xl font-bold text-amber-400 mb-8">
-                £4,995/year + VAT
+                {formatPrice(PKG)}/year + VAT
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-amber-500 text-white hover:bg-amber-600" asChild>
-                  <Link to={user ? '/checkout?package=Enterprise&price=4995' : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
                     Get Started Now
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
@@ -374,7 +377,7 @@ export default function PackageEnterprise() {
                 </Button>
               </div>
               <p className="text-sm text-primary-foreground/50 mt-6">
-                Need a smaller team solution? Check out our Professional package at £1,799/year.
+                Need a smaller team solution? Check out our Professional package at {formatPrice(getPackage('pkg_training')!)}/year.
               </p>
             </CardContent>
           </Card>

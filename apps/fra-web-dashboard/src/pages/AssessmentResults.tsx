@@ -38,43 +38,34 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { AssessmentResults as AssessmentResultsData } from '@/types/assessment';
 
-interface RiskScore {
-  overall: number;
-  rating: 'low' | 'medium' | 'high' | 'critical';
-  moduleScores: Array<{
-    moduleId: string;
-    moduleName: string;
-    score: number;
-    rating: string;
-  }>;
-  factors: Array<{
-    factor: string;
-    score: number;
-    impact: 'high' | 'medium' | 'low';
-  }>;
-}
+type Impact = 'high' | 'medium' | 'low';
+
+const SEVERITY_IMPACT: Record<AssessmentResultsData['topRisks'][number]['severity'], Impact> = {
+  Critical: 'high',
+  High: 'high',
+  Medium: 'medium',
+  Low: 'low',
+};
 
 export default function AssessmentResults() {
   const { assessmentId } = useParams();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
+  const [results, setResults] = useState<AssessmentResultsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type RiskScoreResponse = any;
 
   useEffect(() => {
     const fetchResults = async () => {
       if (!assessmentId || !user) return;
 
       try {
-        const data = await api.get<RiskScoreResponse>(
-          `/api/v1/assessment/${assessmentId}/results`
+        const data = await api.get<AssessmentResultsData>(
+          `/api/v1/assessments/${assessmentId}/results`
         );
-        setRiskScore(data);
+        setResults(data);
       } catch (err: unknown) {
         const errorMsg = (err instanceof Error ? err.message : 'Failed to load results');
         setError(errorMsg);
@@ -99,7 +90,7 @@ export default function AssessmentResults() {
     );
   }
 
-  if (error || !riskScore) {
+  if (error || !results) {
     return (
       <Layout>
         <div className="container py-8">
@@ -112,6 +103,9 @@ export default function AssessmentResults() {
       </Layout>
     );
   }
+
+  const rating = results.riskLevel.toLowerCase();
+  const topRisks = results.topRisks.map((r) => ({ ...r, impact: SEVERITY_IMPACT[r.severity] }));
 
   const getRiskColor = (rating: string) => {
     switch (rating.toLowerCase()) {
@@ -156,7 +150,7 @@ export default function AssessmentResults() {
           animate={{ opacity: 1, scale: 1 }}
           className="mb-8"
         >
-          <Card className={`border-2 ${getRiskBgColor(riskScore.rating)}`}>
+          <Card className={`border-2 ${getRiskBgColor(rating)}`}>
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <Shield className="h-6 w-6" />
@@ -185,13 +179,13 @@ export default function AssessmentResults() {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="8"
-                        strokeDasharray={`${(riskScore.overall / 100) * 553} 553`}
-                        className={`transition-all duration-1000 ${getRiskColor(riskScore.rating)}`}
+                        strokeDasharray={`${(results.overallScore / 100) * 553} 553`}
+                        className={`transition-all duration-1000 ${getRiskColor(rating)}`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <div className={`text-5xl font-bold ${getRiskColor(riskScore.rating)}`}>
-                        {riskScore.overall}
+                      <div className={`text-5xl font-bold ${getRiskColor(rating)}`}>
+                        {results.overallScore}
                       </div>
                       <div className="text-sm text-muted-foreground">out of 100</div>
                     </div>
@@ -202,22 +196,22 @@ export default function AssessmentResults() {
                 <div className="flex flex-col justify-center space-y-4">
                   <div>
                     <Badge
-                      className={`text-lg px-4 py-2 capitalize ${getRiskColor(riskScore.rating)} ${getRiskBgColor(riskScore.rating)}`}
+                      className={`text-lg px-4 py-2 capitalize ${getRiskColor(rating)} ${getRiskBgColor(rating)}`}
                     >
-                      {riskScore.rating} Risk
+                      {rating} Risk
                     </Badge>
                   </div>
 
                   <div className="space-y-2">
                     <h3 className="font-semibold">What this means:</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {riskScore.rating === 'low' &&
+                      {rating === 'low' &&
                         'Your organization demonstrates strong fraud prevention controls. Continue monitoring and regular staff training.'}
-                      {riskScore.rating === 'medium' &&
+                      {rating === 'medium' &&
                         'Your organization has some fraud prevention measures in place, but there are opportunities for improvement.'}
-                      {riskScore.rating === 'high' &&
+                      {rating === 'high' &&
                         'Your organization has significant fraud risks that require immediate attention and remediation.'}
-                      {riskScore.rating === 'critical' &&
+                      {rating === 'critical' &&
                         'Your organization faces critical fraud risks. Urgent action is needed to strengthen controls.'}
                     </p>
                   </div>
@@ -261,12 +255,12 @@ export default function AssessmentResults() {
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
-                  data={riskScore.moduleScores}
+                  data={results.modules}
                   margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
-                    dataKey="moduleName"
+                    dataKey="title"
                     angle={-45}
                     textAnchor="end"
                     height={100}
@@ -294,16 +288,16 @@ export default function AssessmentResults() {
               <div className="mt-6 space-y-2">
                 <h4 className="font-semibold text-sm">Areas requiring attention:</h4>
                 <div className="space-y-2">
-                  {riskScore.moduleScores
+                  {results.modules
                     .filter(m => m.score >= 60)
                     .map(module => (
                       <div
-                        key={module.moduleId}
+                        key={module.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                       >
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="h-4 w-4 text-warning" />
-                          <span className="text-sm font-medium">{module.moduleName}</span>
+                          <span className="text-sm font-medium">{module.title}</span>
                         </div>
                         <Badge variant="secondary">{module.score}</Badge>
                       </div>
@@ -332,7 +326,10 @@ export default function AssessmentResults() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {riskScore.factors.map((factor, idx) => (
+                {topRisks.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No specific risk factors were identified from your answers.</p>
+                )}
+                {topRisks.map((factor, idx) => (
                   <motion.div
                     key={idx}
                     initial={{ opacity: 0, x: -10 }}
@@ -349,10 +346,11 @@ export default function AssessmentResults() {
                           : 'bg-info/20'
                       }`}
                     >
-                      <span className="text-xs font-semibold">{factor.score}</span>
+                      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">{factor.factor}</p>
+                      <p className="font-medium text-sm">{factor.risk}</p>
+                      <p className="text-xs text-muted-foreground">{factor.moduleTitle}</p>
                       <Badge
                         variant="outline"
                         className={`mt-1 capitalize ${ 
@@ -363,7 +361,7 @@ export default function AssessmentResults() {
                             : 'border-info text-info'
                         }`}
                       >
-                        {factor.impact} Impact
+                        {factor.severity} severity
                       </Badge>
                     </div>
                   </motion.div>

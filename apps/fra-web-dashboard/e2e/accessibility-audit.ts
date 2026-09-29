@@ -12,7 +12,45 @@
  * Tests focus on critical accessibility issues
  */
 
-import { Page, Locator } from '@playwright/test';
+import { Page } from '@playwright/test';
+
+const SAFE_ARIA_SELECTOR = [
+  '[aria-label]',
+  '[aria-labelledby]',
+  '[aria-describedby]',
+  '[aria-hidden]',
+  '[aria-live]',
+  '[aria-atomic]',
+  '[aria-relevant]',
+  '[aria-busy]',
+  '[aria-roledescription]',
+  '[aria-pressed]',
+  '[aria-checked]',
+  '[aria-selected]',
+  '[aria-expanded]',
+  '[aria-current]',
+  '[aria-level]',
+  '[aria-posinset]',
+  '[aria-setsize]',
+  '[aria-placeholder]',
+  '[aria-valuenow]',
+  '[aria-valuemin]',
+  '[aria-valuemax]',
+  '[aria-valuetext]',
+  '[aria-keyshortcuts]',
+  '[aria-owns]',
+  '[aria-controls]',
+  '[role]',
+].join(', ');
+
+const SAFE_FOCUS_SELECTOR = [
+  'a[href]',
+  'button',
+  'input:not([type="hidden"])',
+  'select',
+  'textarea',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 
 /**
  * Check color contrast (Simplified)
@@ -169,10 +207,10 @@ export async function checkFormLabels(page: Page): Promise<{
   });
 
   const { total, labeled } = labelResults;
-  const labelPercentage = total === 0 ? 100 : (labeled / total) * 100;
 
   if (total === 0) {
-    // No form inputs found - not a failure, just pass
+    // No form inputs found on the page. Treat that as an accessibility-neutral
+    // pass instead of evaluating a non-existent denominator.
     return {
       pass: true,
       total: 0,
@@ -181,6 +219,8 @@ export async function checkFormLabels(page: Page): Promise<{
     };
   }
 
+  const labelPercentage = (labeled / total) * 100;
+
   if (labelPercentage < 80) {
     issues.push(
       `Only ${labelPercentage.toFixed(0)}% of form inputs have labels (target: 80%)`
@@ -188,7 +228,7 @@ export async function checkFormLabels(page: Page): Promise<{
   }
 
   return {
-    pass: labelPercentage >= 80 || total === 0,
+    pass: labelPercentage >= 80,
     total,
     labeled,
     issues,
@@ -245,14 +285,12 @@ export async function checkAriaAttributes(page: Page): Promise<{
   elements: number;
   ariaIssues: string[];
 }> {
-  // Use evaluate to find elements with aria-* attributes dynamically
-  const ariaElementCount = await page.evaluate(() => {
-    return document.querySelectorAll('[aria-label], [aria-labelledby], [aria-describedby], [aria-hidden], [aria-live], [aria-atomic], [aria-relevant], [aria-busy], [aria-roledescription], [aria-pressed], [aria-checked], [aria-selected], [aria-expanded], [aria-current], [aria-level], [aria-posinset], [aria-setsize], [aria-placeholder], [aria-valuenow], [aria-valuemin], [aria-valuemax], [aria-valuetext], [aria-keyshortcuts], [aria-owns], [aria-controls], [role]').length;
-  });
+  // Use explicit selector tokens only; do not use a wildcard or comparison selector here.
+  const ariaElementCount = await page.evaluate((ariaSelector) => {
+    return document.querySelectorAll(ariaSelector).length;
+  }, SAFE_ARIA_SELECTOR);
 
-  const ariaElements = await page.locator(
-    '[aria-label], [aria-labelledby], [aria-describedby], [aria-hidden], [aria-live], [aria-atomic], [aria-relevant], [aria-busy], [aria-roledescription], [aria-pressed], [aria-checked], [aria-selected], [aria-expanded], [aria-current], [aria-level], [aria-posinset], [aria-setsize], [aria-placeholder], [aria-valuenow], [aria-valuemin], [aria-valuemax], [aria-valuetext], [aria-keyshortcuts], [aria-owns], [aria-controls], [role]'
-  ).all();
+  const ariaElements = await page.locator(SAFE_ARIA_SELECTOR).all();
   const issues: string[] = [];
 
   for (const element of ariaElements) {
@@ -316,21 +354,19 @@ export async function checkKeyboardNavigation(page: Page): Promise<{
 }> {
   const issues: string[] = [];
 
-  // Check for keyboard traps by tabbing through page
+  // Use a safe selector list with no wildcard or unsupported compare expression.
   let focusableCount = 0;
-  const focusableElements = await page.locator(
-    'a, button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
-  );
+  const focusableElements = await page.locator(SAFE_FOCUS_SELECTOR);
   focusableCount = await focusableElements.count();
 
-  // Check for elements with positive tabindex (can cause confusion)
+  // Check for elements with positive tabindex. Restrict the query to the actual
+  // tabindex attribute and use a simple parse guard instead of a brittle compare syntax.
   const positiveTabindexCount = await page.evaluate(() => {
-    return document.querySelectorAll('[tabindex]').length > 0
-      ? Array.from(document.querySelectorAll('[tabindex]')).filter((el) => {
-          const tabindex = parseInt((el as HTMLElement).getAttribute('tabindex') || '0');
-          return tabindex > 0;
-        }).length
-      : 0;
+    const elements = Array.from(document.querySelectorAll('[tabindex]')) as HTMLElement[];
+    return elements.filter((el) => {
+      const value = Number.parseInt(el.getAttribute('tabindex') || '0', 10);
+      return Number.isFinite(value) && value > 0;
+    }).length;
   });
 
   if (positiveTabindexCount > 0) {

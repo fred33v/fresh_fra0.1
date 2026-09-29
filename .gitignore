@@ -13,6 +13,11 @@ out/
 
 # Environment files
 .env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
 .env.local
 .env.*.local
 .env.development
@@ -63,6 +68,15 @@ web-build/
 # Debug
 *.pem
 debug.log
+
+# Secrets — never commit SSH keys
+ssh-keygen*
+id_rsa*
+id_ed25519*
+
+# Claude Code worktrees and one-off reports
+.claude/worktrees/
+chromewebdata_*.report.html
 
 # Temporary files
 *.tmp

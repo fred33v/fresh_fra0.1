@@ -1,6 +1,7 @@
 import { getDbPool } from '../db.js';
 import { hasDatabase } from '../helpers.js';
 import { createLogger } from '../logger.js';
+import { auditEvents, AUDIT_EVENTS_MAX } from '../stores.js';
 
 const logger = createLogger('audit');
 
@@ -15,7 +16,15 @@ export async function auditLog(event: {
   ipAddress?: string;
   userAgent?: string;
 }): Promise<void> {
-  if (!hasDatabase()) return; // skip in test / no-db mode
+  if (!hasDatabase()) {
+    auditEvents.push({
+      id: crypto.randomUUID(), eventType: event.eventType, actorId: event.actorId, actorEmail: event.actorEmail,
+      organisationId: event.organisationId, resourceType: event.resourceType, resourceId: event.resourceId,
+      details: event.details ?? {}, ipAddress: event.ipAddress, createdAt: new Date().toISOString(),
+    });
+    if (auditEvents.length > AUDIT_EVENTS_MAX) auditEvents.shift();
+    return;
+  }
   try {
     const pool = getDbPool();
     await pool.query(

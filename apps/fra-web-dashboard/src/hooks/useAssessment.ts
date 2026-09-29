@@ -1,24 +1,26 @@
 /**
  * useAssessment Hook
- * 
+ *
  * Manages the fraud risk assessment workflow:
- * - Create new assessment
- * - Track user answers to 13 modules
- * - Calculate risk scores
- * - Submit for analysis
- * 
+ * - Resume the user's open assessment, or create a new one
+ * - Track user answers to each module
+ * - Submit for scoring and load the results
+ *
  * Backend endpoints used:
- * - POST /api/v1/assessment/create
- * - PATCH /api/v1/assessment/:id
- * - GET /api/v1/assessment/:id
+ * - GET   /api/v1/assessments/modules
+ * - GET   /api/v1/assessments
+ * - POST  /api/v1/assessments   (403 PACKAGE_REQUIRED / ASSESSMENT_LIMIT_REACHED)
+ * - PATCH /api/v1/assessments/:id
+ * - POST  /api/v1/assessments/:id/submit
+ * - GET   /api/v1/assessments/:id/results
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
 import { toast } from 'sonner';
-import type { AssessmentType, RiskScore } from '@stopfra/types';
+import type { AssessmentModule, AssessmentRecord, AssessmentResults } from '@/types/assessment';
 
 const logger = createLogger('useAssessment');
 
@@ -28,64 +30,66 @@ const logger = createLogger('useAssessment');
  */
 type AssessmentAnswers = Record<string, unknown>;
 
-/**
- * Module data returned from backend
- */
-interface AssessmentModule {
-  id: string;
-  title: string;
-  description: string;
-  category: 'governance' | 'people' | 'process' | 'systems' | 'culture';
-  questions: Array<{
-    id: string;
-    text: string;
-    type: 'frequency' | 'currency' | 'scale' | 'yesno';
-    weight?: number;
-  }>;
+const OPEN_STATUSES = new Set<AssessmentRecord['status']>(['draft', 'in_progress']);
+
+function describeError(err: unknown, fallback: string): { code: string | null; message: string } {
+  if (err instanceof ApiError) return { code: err.code, message: err.message || fallback };
+  if (err instanceof Error) return { code: null, message: err.message || fallback };
+  return { code: null, message: fallback };
 }
 
 export function useAssessment() {
   const { user, profile } = useAuth();
-  const [assessment, setAssessment] = useState<AssessmentType | null>(null);
+  const [assessment, setAssessment] = useState<AssessmentRecord | null>(null);
   const [answers, setAnswers] = useState<AssessmentAnswers>({});
-  const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
+  const [results, setResults] = useState<AssessmentResults | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
   const [modules, setModules] = useState<AssessmentModule[]>([]);
+  // Guards against a double start (e.g. StrictMode effects) creating two assessments,
+  // which would consume the Starter package's single allowance
+  const startingRef = useRef(false);
 
   /**
-   * Initialize new assessment
+   * Resume the user's open assessment, or create a new one if there is none
    */
   const startAssessment = useCallback(async () => {
-    if (!user || !profile) return;
+    if (!user || !profile || startingRef.current) return;
+    startingRef.current = true;
 
     setIsLoading(true);
     setError(null);
+    setErrorCode(null);
 
     try {
-      const data = await api.post<AssessmentType>('/api/v1/assessment/create', {
-        organisationId: profile.organisation_id,
-      });
+      const [modulesData, existing] = await Promise.all([
+        api.get<AssessmentModule[]>('/api/v1/assessments/modules'),
+        api.get<AssessmentRecord[]>('/api/v1/assessments?pageSize=200'),
+      ]);
 
+      const open = existing
+        .filter(a => a.createdByUserId === user.userId && OPEN_STATUSES.has(a.status))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+
+      const data = open ?? await api.post<AssessmentRecord>('/api/v1/assessments', {});
+
+      setModules(modulesData);
       setAssessment(data);
-      setAnswers({});
+      setAnswers(data.answers ?? {});
       setCurrentModuleIndex(0);
 
-      // Fetch assessment modules after creation
-      const modulesData = await api.get<AssessmentModule[]>(
-        `/api/v1/assessment/${data.id}/modules`
-      );
-      setModules(modulesData);
-
-      toast.success('Assessment started');
+      toast.success(open ? 'Assessment resumed' : 'Assessment started');
     } catch (err: unknown) {
-      const errorMsg = (err as ApiError).message || 'Failed to start assessment';
+      const { code, message } = describeError(err, 'Failed to start assessment');
       logger.error('Error starting assessment', err);
-      setError(errorMsg);
-      toast.error(errorMsg);
+      setError(message);
+      setErrorCode(code);
+      toast.error(message);
     } finally {
       setIsLoading(false);
+      startingRef.current = false;
     }
   }, [user, profile]);
 
@@ -101,7 +105,7 @@ export function useAssessment() {
       setAnswers(newAnswers);
 
       try {
-        await api.patch(`/api/v1/assessment/${assessment.id}`, {
+        await api.patch(`/api/v1/assessments/${assessment.id}`, {
           answers: newAnswers,
         });
       } catch (err: unknown) {
@@ -140,29 +144,33 @@ export function useAssessment() {
   }, [modules.length]);
 
   /**
-   * Submit completed assessment for scoring
+   * Submit completed assessment for scoring.
+   * Returns the results on success so the caller can navigate to them.
    */
-  const submitAssessment = useCallback(async () => {
-    if (!assessment) return;
+  const submitAssessment = useCallback(async (): Promise<AssessmentResults | null> => {
+    if (!assessment) return null;
 
     setIsLoading(true);
     setError(null);
+    setErrorCode(null);
 
     try {
-      const result = await api.post<{ riskScore: RiskScore }>(
-        `/api/v1/assessment/${assessment.id}/submit`,
-        {
-          answers,
-        }
-      );
+      // Submit does not take answers, so persist the latest set first in case an autosave failed
+      await api.patch(`/api/v1/assessments/${assessment.id}`, { answers });
+      const submitted = await api.post<AssessmentRecord>(`/api/v1/assessments/${assessment.id}/submit`);
+      setAssessment(submitted);
 
-      setRiskScore(result.riskScore);
+      const scored = await api.get<AssessmentResults>(`/api/v1/assessments/${assessment.id}/results`);
+      setResults(scored);
       toast.success('Assessment submitted successfully');
+      return scored;
     } catch (err: unknown) {
-      const errorMsg = (err as ApiError).message || 'Failed to submit assessment';
+      const { code, message } = describeError(err, 'Failed to submit assessment');
       logger.error('Error submitting assessment', err);
-      setError(errorMsg);
-      toast.error(errorMsg);
+      setError(message);
+      setErrorCode(code);
+      toast.error(message);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -171,8 +179,8 @@ export function useAssessment() {
   /**
    * Calculate progress percentage
    */
-  const progressPercent = modules.length > 0 
-    ? ((currentModuleIndex + 1) / modules.length) * 100 
+  const progressPercent = modules.length > 0
+    ? ((currentModuleIndex + 1) / modules.length) * 100
     : 0;
 
   /**
@@ -188,14 +196,16 @@ export function useAssessment() {
     // State
     assessment,
     answers,
-    riskScore,
+    results,
+    riskScore: results?.overallScore ?? null,
     isLoading,
     error,
+    errorCode,
     currentModule: modules[currentModuleIndex],
     modules,
     currentModuleIndex,
     progressPercent,
-    
+
     // Actions
     startAssessment,
     updateAnswer,

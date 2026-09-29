@@ -112,7 +112,7 @@ describe('PackageProfessional', () => {
       renderPage();
 
       const links = screen.getAllByRole('link', { name: /Choose Professional/ });
-      expect(links[0]).toHaveAttribute('href', '/checkout?package=Professional&price=1799');
+      expect(links[0]).toHaveAttribute('href', '/checkout?package=Professional');
     });
 
     it('CTA "Get Started Now" links to signup when not authenticated', () => {
@@ -128,7 +128,7 @@ describe('PackageProfessional', () => {
       renderPage();
 
       const link = screen.getByRole('link', { name: /Get Started Now/ });
-      expect(link).toHaveAttribute('href', '/checkout?package=Professional&price=1799');
+      expect(link).toHaveAttribute('href', '/checkout?package=Professional');
     });
 
     it('View Resources link points to /resources', () => {
@@ -182,7 +182,7 @@ describe('PackageProfessional', () => {
     it('shows ideal-for items', () => {
       renderPage();
 
-      expect(screen.getByText(/SMEs with 10–100 employees/)).toBeInTheDocument();
+      expect(screen.getByText(/SMEs, charities and public-sector teams with 10–100 employees/)).toBeInTheDocument();
       expect(screen.getByText(/staff training evidence for ECCTA/)).toBeInTheDocument();
     });
 

@@ -41,12 +41,12 @@ Educational workshop platform for UK organizations to understand and mitigate fr
 ## 2. Environment Configuration
 
 ### Current Setup
-The project uses Supabase for backend services. Environment variables are configured in `.env`:
+The project uses Supabase for backend services. Environment variables should be supplied from a local `.env` file that is never committed and should be copied from the provided example template:
 
 ```env
-VITE_SUPABASE_PROJECT_ID=aekheoxxnbuaxgpzisgk
-VITE_SUPABASE_URL=https://aekheoxxnbuaxgpzisgk.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=[configured]
+VITE_SUPABASE_PROJECT_ID=your-project-id
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
 ### Required Environment Variables
@@ -57,9 +57,9 @@ VITE_SUPABASE_PROJECT_ID=your_project_id
 ```
 
 ### Important Notes
-- ⚠️ `.env` file is NOT in `.gitignore` - ensure sensitive credentials are protected
-- Separate credentials needed for dev/staging/production environments
-- Supabase project access must be granted to jan_26 team
+- `.env` files are excluded from Git and must never be stored in the repository
+- Store separate credentials for dev, staging, and production environments
+- Supabase project access must be granted to the delivery team through verified secret rotation and environment ownership checks
 
 ---
 

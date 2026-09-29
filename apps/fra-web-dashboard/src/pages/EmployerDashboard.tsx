@@ -6,7 +6,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('EmployerDashboard');
+const LIVE_REFRESH_MS = 30_000;
+const EMPLOYEE_PAGE_SIZE = 200;
 import { Layout } from '@/components/layout/Layout';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { KeypassManager } from '@/components/enterprise/KeypassManager';
+import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -63,6 +69,17 @@ interface EmployeeRow {
   assessmentCount: number;
   latestAssessmentStatus: string | null;
   riskLevel: 'high' | 'medium' | 'low' | null;
+  highRiskCount?: number;
+  topRisk?: string | null;
+}
+
+interface ScoredRisk {
+  id: string;
+  title: string;
+  area: string;
+  residualScore: number;
+  priority: 'high' | 'medium' | 'low';
+  suggestedOwner: string;
 }
 
 interface EmployeeDetail {
@@ -76,6 +93,7 @@ interface EmployeeDetail {
     answers: Record<string, unknown>;
     createdAt: string;
     submittedAt: string | null;
+    risk?: { level: 'high' | 'medium' | 'low' | null; risks: ScoredRisk[] };
   }[];
   keypasses: {
     code: string;
@@ -99,37 +117,56 @@ export default function EmployerDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const expandedUserRef = useRef<string | null>(null);
+  const [tab, setTab] = useState('employees');
+  const { entitlements } = useEntitlements();
 
   const isEmployerOrAdmin = user?.role === 'employer' || user?.role === 'admin';
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
+  // silent = background refresh: no spinner, and a failed poll keeps the last good data on screen
+  const fetchData = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setError(null);
+    }
     try {
-      const empData = await api.get<EmployeeRow[]>('/api/v1/analytics/employees');
-      setEmployees(empData);
+      // Page through the full workforce; the API returns at most 200 rows per page
+      const all: EmployeeRow[] = [];
+      for (let page = 1; page <= 50; page++) {
+        const batch = await api.get<EmployeeRow[]>(`/api/v1/analytics/employees?page=${page}&pageSize=${EMPLOYEE_PAGE_SIZE}`);
+        all.push(...batch);
+        if (batch.length < EMPLOYEE_PAGE_SIZE) break;
+      }
+      setEmployees(all);
     } catch (err: unknown) {
+      if (silent) {
+        logger.warn('Background dashboard refresh failed', err);
+        return;
+      }
       if (err instanceof ApiError && err.code === 'PACKAGE_REQUIRED') {
-        setError('The employer dashboard requires the Full package. Please upgrade to access employee analytics.');
+        setError('The organisation dashboard is part of the Enterprise package. Upgrade to see employee analytics.');
       } else {
         const message = err instanceof Error ? err.message : 'Failed to load dashboard data';
         setError(message);
       }
       logger.error('Failed to fetch employer dashboard data', err);
     }
-    setIsLoading(false);
+    if (!silent) setIsLoading(false);
   };
 
   useEffect(() => {
-    if (isEmployerOrAdmin) {
-      fetchData();
-    }
+    if (!isEmployerOrAdmin) return;
+    fetchData();
+    // Live monitoring: refresh every 30s while the tab is visible
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    }, LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
   }, [isEmployerOrAdmin]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((e) => {
       if (statusFilter !== 'all' && e.status !== statusFilter) return false;
-      if (riskFilter !== 'all' && e.riskLevel !== riskFilter) return false;
+      if (riskFilter === 'none' ? e.riskLevel !== null : riskFilter !== 'all' && e.riskLevel !== riskFilter) return false;
       if (departmentFilter !== 'all' && (e.department || 'General') !== departmentFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -138,6 +175,13 @@ export default function EmployerDashboard() {
       return true;
     });
   }, [employees, statusFilter, riskFilter, departmentFilter, searchQuery]);
+
+  const highRiskEmployees = useMemo(
+    () => employees.filter((e) => e.riskLevel === 'high').sort((a, b) => (b.highRiskCount ?? 0) - (a.highRiskCount ?? 0)),
+    [employees]
+  );
+
+  const userNames = useMemo(() => Object.fromEntries(employees.map((e) => [e.userId, e.userName])), [employees]);
 
   const departments = useMemo(() => {
     const depts = new Set(employees.map(e => e.department || 'General'));
@@ -239,10 +283,23 @@ export default function EmployerDashboard() {
             <h1 className="text-3xl font-bold tracking-tight mb-1">Organisation Dashboard</h1>
             <p className="text-muted-foreground">Employee fraud risk awareness overview</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/compliance')}>
+              <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
+              Compliance
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/risk-register')}>
+              <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+              Risk register
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/integrations')}>
+              Integrations
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => fetchData()} disabled={isLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -251,7 +308,7 @@ export default function EmployerDashboard() {
               <CardContent className="pt-6 text-center">
                 <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
                 <p className="text-destructive font-medium mb-4">{error}</p>
-                <Button variant="outline" size="sm" onClick={fetchData}>
+                <Button variant="outline" size="sm" onClick={() => fetchData()}>
                   Try Again
                 </Button>
               </CardContent>
@@ -278,7 +335,41 @@ export default function EmployerDashboard() {
             </Card>
           </div>
         ) : !error && (
-          <>
+          <Tabs value={tab} onValueChange={setTab}>
+            <div className="space-y-4 mb-6">
+              <SubscriptionCard entitlements={entitlements} />
+              {highRiskEmployees.length > 0 && (
+                <Card className="border-destructive/40 bg-destructive/5" role="alert">
+                  <CardContent className="pt-6 flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+                      <div>
+                        <p className="font-medium text-destructive">
+                          {highRiskEmployees.length} employee{highRiskEmployees.length === 1 ? '' : 's'} reported high fraud risk
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {highRiskEmployees.slice(0, 3).map((e) => `${e.userName}${e.topRisk ? ` (${e.topRisk})` : ''}`).join(', ')}
+                          {highRiskEmployees.length > 3 ? ` and ${highRiskEmployees.length - 3} more` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { setTab('employees'); setRiskFilter('high'); }}>
+                      Show high-risk employees
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+              <TabsList>
+                <TabsTrigger value="employees">Employees</TabsTrigger>
+                <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="keypasses">
+              <KeypassManager organisationId={user.organisationId} userNames={userNames} />
+            </TabsContent>
+
+            <TabsContent value="employees">
             {/* Summary Cards */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -420,6 +511,7 @@ export default function EmployerDashboard() {
                         <SelectItem value="high">High Risk</SelectItem>
                         <SelectItem value="medium">Medium Risk</SelectItem>
                         <SelectItem value="low">Low Risk</SelectItem>
+                        <SelectItem value="none">Not assessed</SelectItem>
                       </SelectContent>
                     </Select>
                     {departments.length > 1 && (
@@ -456,7 +548,8 @@ export default function EmployerDashboard() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const csvEscape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+                        // Prefix formula characters so names like "=HYPERLINK(...)" are not run by Excel
+                        const csvEscape = (v: string) => `"${v.replace(/^([=+\-@\t\r])/, "'$1").replace(/"/g, '""')}"`;
                         const header = 'Name,Email,Department,Status,Risk Level,Assessments,Completed';
                         const rows = filteredEmployees.map(e => [
                           csvEscape(e.userName),
@@ -532,6 +625,9 @@ export default function EmployerDashboard() {
                                   </TableCell>
                                   <TableCell>
                                     <RiskBadge riskLevel={employee.riskLevel} />
+                                    {employee.topRisk && (
+                                      <span className="block text-xs text-muted-foreground mt-1">{employee.topRisk}</span>
+                                    )}
                                   </TableCell>
                                   <TableCell>{employee.assessmentCount}</TableCell>
                                   <TableCell className="text-muted-foreground">
@@ -566,7 +662,8 @@ export default function EmployerDashboard() {
                 </CardContent>
               </Card>
             </motion.div>
-          </>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </Layout>
@@ -617,6 +714,19 @@ function EmployeeDetailPanel({ detail, loading, error, onRetry }: { detail: Empl
               </div>
               <Badge variant="secondary" className="text-xs">{assessment.status}</Badge>
             </div>
+            {assessment.risk?.risks && assessment.risk.risks.length > 0 && (
+              <ul className="mb-3 space-y-1.5" aria-label="Identified risks">
+                {assessment.risk.risks.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
+                    <RiskBadge riskLevel={r.priority} />
+                    <span className="font-medium">{r.title}</span>
+                    <span className="text-muted-foreground">
+                      {r.area} · residual {r.residualScore} · suggested owner: {r.suggestedOwner}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
                 <span className="text-muted-foreground block text-xs">Answers</span>
@@ -646,7 +756,8 @@ function EmployeeDetailPanel({ detail, loading, error, onRetry }: { detail: Empl
       })}
       {detail.keypasses.length > 0 && (
         <div className="text-xs text-muted-foreground">
-          {detail.keypasses.length} key-pass{detail.keypasses.length !== 1 ? 'es' : ''} associated
+          Joined with key-pass{detail.keypasses.length !== 1 ? 'es' : ''}{' '}
+          {detail.keypasses.map((k) => `****${k.code.slice(-4)}${k.usedAt ? ` on ${new Date(k.usedAt).toLocaleDateString('en-GB')}` : ''}`).join(', ')}
         </div>
       )}
     </div>

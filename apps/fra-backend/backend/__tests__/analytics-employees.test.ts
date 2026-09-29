@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
 
 describe('GET /analytics/employees', () => {
@@ -57,15 +58,15 @@ describe('GET /analytics/employees', () => {
     const created = (await createRes.json()) as any;
     const assessmentId = created.data.id;
 
-    // Save answers (6 answers = medium risk based on RISK_THRESHOLDS.MEDIUM_ANSWER_COUNT = 5)
-    const answers: Record<string, string> = {};
-    for (let i = 0; i < 6; i++) {
-      answers[`q${i}`] = `answer${i}`;
-    }
-    await app.request(`http://localhost/api/v1/assessments/${assessmentId}/answers`, {
-      method: 'PUT',
+    // Structured answers as saved by the assessment apps: weak procurement and IT controls
+    await app.request(`http://localhost/api/v1/assessments/${assessmentId}`, {
+      method: 'PATCH',
       headers: authHeaders(accessToken),
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers: {
+        fraudTriangle: { controlStrength: 'some-gaps' },
+        procurement: { q1: 'never' },
+        itSystems: { q1: 'rarely' },
+      } }),
     });
 
     // Submit the assessment
@@ -83,7 +84,23 @@ describe('GET /analytics/employees', () => {
     expect(self).toBeDefined();
     expect(self.status).toBe('completed');
     expect(self.assessmentCount).toBeGreaterThanOrEqual(1);
-    expect(['high', 'medium', 'low']).toContain(self.riskLevel);
+    // Scored from the answers (impact × likelihood), not from how many questions were answered
+    expect(self.riskLevel).toBe('high');
+    expect(self.highRiskCount).toBe(2);
+    expect(self.topRisk).toBe('Cyber fraud');
+  });
+
+  it('leaves risk unscored when answers are not in the assessment format', async () => {
+    const { accessToken, organisationId, userId } = await createAuthenticatedUser();
+    seedPurchase(organisationId, userId, 'pkg_full');
+    const created = (await (await app.request('http://localhost/api/v1/assessments', {
+      method: 'POST', headers: authHeaders(accessToken),
+      body: JSON.stringify({ title: 'Free text', answers: { q1: 'a', q2: 'b', q3: 'c', q4: 'd', q5: 'e', q6: 'f' } }),
+    })).json()) as any;
+    await app.request(`http://localhost/api/v1/assessments/${created.data.id}/submit`, { method: 'POST', headers: authHeaders(accessToken) });
+
+    const body = (await (await app.request('http://localhost/api/v1/analytics/employees', { headers: authHeaders(accessToken) })).json()) as any;
+    expect(body.data.find((e: any) => e.userId === userId).riskLevel).toBeNull();
   });
 
   it('supports pagination', async () => {

@@ -22,6 +22,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useState } from 'react';
+import { PACKAGES, billingLabel, checkoutPath, formatPrice } from '@/data/packages';
+
+const [STARTER, PROFESSIONAL, ENTERPRISE] = PACKAGES;
 
 export default function Index() {
   const { user } = useAuth();
@@ -70,7 +73,7 @@ export default function Index() {
       title: 'That\'s Too Expensive',
       summary: 'Show ROI and risk avoidance to justify value before price.',
       description:
-        'One prevented fraud incident can easily outweigh subscription costs. Starter is only £795 one-time; Professional is under £150/month for the full compliance programme.',
+        `One prevented fraud incident can easily outweigh subscription costs. Starter is only ${formatPrice(STARTER)} one-time; Professional is under £150/month for the full compliance programme.`,
       icon: TrendingUp,
     },
     {
@@ -98,7 +101,7 @@ export default function Index() {
       title: 'Do I Really Need This Feature?',
       summary: 'Recommend the minimal package based on scale and needs.',
       description:
-        'Starter for <50 employees, Professional for 50-250, Enterprise for 250+ with unlimited key-passes and APIs.',
+        `Starter for sole traders and micro-businesses, Professional for teams of 10–100, Enterprise for 100+ with unlimited key-passes and API access.`,
       icon: Users,
     },
     {
@@ -350,19 +353,14 @@ export default function Index() {
                 </span>
                 <h3 className="text-2xl font-bold text-[#0b0c0c] mb-1">Starter</h3>
                 <p className="text-sm text-[#505a5f] mb-4">
-                  Ideal for a one-time fraud risk health-check
+                  {STARTER.tagline}
                 </p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-[#0b0c0c]">£795</span>
-                  <span className="ml-1 text-sm text-[#505a5f]">one-time</span>
+                  <span className="text-4xl font-bold text-[#0b0c0c]">{formatPrice(STARTER)}</span>
+                  <span className="ml-1 text-sm text-[#505a5f]">{billingLabel(STARTER)}</span>
                 </div>
                 <ul className="space-y-3 mb-8 flex-1">
-                  {[
-                    'Single fraud risk assessment',
-                    'Comprehensive PDF report',
-                    'ECCTA compliance snapshot',
-                    '1 key-pass included',
-                  ].map((item) => (
+                  {STARTER.features.map((item) => (
                     <li key={item} className="flex items-start gap-2">
                       <CheckCircle2 className="h-5 w-5 text-[#00703c] shrink-0 mt-0.5" aria-hidden="true" />
                       <span className="text-sm text-[#0b0c0c]">{item}</span>
@@ -399,20 +397,14 @@ export default function Index() {
                 </span>
                 <h3 className="text-2xl font-bold text-[#0b0c0c] mb-1">Professional</h3>
                 <p className="text-sm text-[#505a5f] mb-4">
-                  Ongoing protection with training & support
+                  {PROFESSIONAL.tagline}
                 </p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-[#0b0c0c]">£1,799</span>
-                  <span className="ml-1 text-sm text-[#505a5f]">/ year</span>
+                  <span className="text-4xl font-bold text-[#0b0c0c]">{formatPrice(PROFESSIONAL)}</span>
+                  <span className="ml-1 text-sm text-[#505a5f]">{billingLabel(PROFESSIONAL)}</span>
                 </div>
                 <ul className="space-y-3 mb-8 flex-1">
-                  {[
-                    'Everything in Starter',
-                    'Fraud awareness training workshop',
-                    '50 key-passes included',
-                    'Quarterly reassessment',
-                    'Email support',
-                  ].map((item) => (
+                  {PROFESSIONAL.features.map((item) => (
                     <li key={item} className="flex items-start gap-2">
                       <CheckCircle2 className="h-5 w-5 text-[#00703c] shrink-0 mt-0.5" aria-hidden="true" />
                       <span className="text-sm text-[#0b0c0c]">{item}</span>
@@ -420,7 +412,7 @@ export default function Index() {
                   ))}
                 </ul>
                 <Link
-                  to={user ? '/checkout?package=Professional&price=1799' : '/auth?mode=signup'}
+                  to={user ? checkoutPath(PROFESSIONAL) : '/auth?mode=signup'}
                   className="inline-flex items-center justify-center gap-2 rounded bg-[#00703c] px-4 py-3 text-sm font-bold text-white shadow-[0_2px_0_#002d18] hover:bg-[#005a30] no-underline"
                 >
                   Choose Professional
@@ -443,21 +435,14 @@ export default function Index() {
                 </span>
                 <h3 className="text-2xl font-bold text-[#0b0c0c] mb-1">Enterprise</h3>
                 <p className="text-sm text-[#505a5f] mb-4">
-                  Full-scale fraud risk management for large organisations
+                  {ENTERPRISE.tagline}
                 </p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-[#0b0c0c]">£4,995</span>
-                  <span className="ml-1 text-sm text-[#505a5f]">/ year</span>
+                  <span className="text-4xl font-bold text-[#0b0c0c]">{formatPrice(ENTERPRISE)}</span>
+                  <span className="ml-1 text-sm text-[#505a5f]">{billingLabel(ENTERPRISE)}</span>
                 </div>
                 <ul className="space-y-3 mb-8 flex-1">
-                  {[
-                    'Everything in Professional',
-                    'Full management dashboard',
-                    'Unlimited key-passes',
-                    'Organisation risk register',
-                    'API access',
-                    'Priority support',
-                  ].map((item) => (
+                  {ENTERPRISE.features.map((item) => (
                     <li key={item} className="flex items-start gap-2">
                       <CheckCircle2 className="h-5 w-5 text-[#00703c] shrink-0 mt-0.5" aria-hidden="true" />
                       <span className="text-sm text-[#0b0c0c]">{item}</span>
@@ -465,7 +450,7 @@ export default function Index() {
                   ))}
                 </ul>
                 <Link
-                  to={user ? '/checkout?package=Enterprise&price=4995' : '/auth?mode=signup'}
+                  to={user ? checkoutPath(ENTERPRISE) : '/auth?mode=signup'}
                   className="inline-flex items-center justify-center gap-2 rounded bg-[#f47738] px-4 py-3 text-sm font-bold text-white shadow-[0_2px_0_#6e3619] hover:bg-[#e0621e] no-underline"
                 >
                   Choose Enterprise

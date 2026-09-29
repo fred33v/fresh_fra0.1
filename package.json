@@ -12,9 +12,11 @@
     "build": "turbo run build",
     "build:web": "pnpm --filter @stopfra/web-dashboard build",
     "build:backend": "pnpm --filter @stopfra/backend build",
+    "preview": "pnpm --filter @stopfra/web-dashboard preview",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint -- --fix",
     "test": "turbo run test",
+    "test:e2e": "pnpm --filter @stopfra/web-dashboard test:e2e",
     "test:backend": "pnpm --filter @stopfra/backend test",
     "db:migrate": "pnpm --filter @stopfra/backend migrate",
     "clean": "rm -rf node_modules apps/*/node_modules apps/fra-backend/backend/node_modules",
@@ -48,7 +50,8 @@
     },
     "overrides": {
       "@isaacs/brace-expansion": ">=5.0.1",
-      "esbuild": ">=0.25.0"
+      "esbuild": ">=0.25.0",
+      "@remix-run/router": ">=7.7.0"
     }
   }
 }

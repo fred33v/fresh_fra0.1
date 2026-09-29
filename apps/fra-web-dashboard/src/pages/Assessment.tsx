@@ -11,6 +11,7 @@
  */
 
 import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useAssessment } from '@/hooks/useAssessment';
@@ -19,16 +20,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, Lock } from 'lucide-react';
 import { QuestionRenderer } from '@/components/assessment/QuestionRenderer';
+import { PACKAGE_ERROR_CODES } from '@/types/assessment';
 
 export default function Assessment() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const {
     assessment,
     answers,
     isLoading,
     error,
+    errorCode,
     currentModule,
     modules,
     currentModuleIndex,
@@ -43,17 +47,22 @@ export default function Assessment() {
   } = useAssessment();
 
   /**
-   * Start assessment on component mount
+   * Start assessment on component mount; errors wait for an explicit retry
    */
   useEffect(() => {
-    if (!assessment && !isLoading) {
+    if (!assessment && !isLoading && !error) {
       startAssessment();
     }
-  }, [assessment, isLoading, startAssessment]);
+  }, [assessment, isLoading, error, startAssessment]);
+
+  const handleSubmit = async () => {
+    const results = await submitAssessment();
+    if (results) navigate(`/assessment/${results.assessmentId}/results`);
+  };
 
   if (!user || !profile) return null;
 
-  if (isLoading && !assessment) {
+  if (!assessment && !error) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -66,7 +75,35 @@ export default function Assessment() {
     );
   }
 
-  if (error) {
+  if (error && !assessment && errorCode && (PACKAGE_ERROR_CODES as readonly string[]).includes(errorCode)) {
+    return (
+      <Layout>
+        <div className="container max-w-xl py-16">
+          <Card>
+            <CardHeader>
+              <Lock className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
+              <CardTitle>
+                {errorCode === 'ASSESSMENT_LIMIT_REACHED' ? 'Assessment limit reached' : 'A package is required'}
+              </CardTitle>
+              <CardDescription>{error}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-3">
+              <Button asChild>
+                <Link to={errorCode === 'ASSESSMENT_LIMIT_REACHED' ? '/package/professional' : '/package/starter'}>
+                  {errorCode === 'ASSESSMENT_LIMIT_REACHED' ? 'Upgrade your package' : 'See packages'}
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/dashboard">Back to dashboard</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error && !assessment) {
     return (
       <Layout>
         <div className="container py-8">
@@ -224,7 +261,7 @@ export default function Assessment() {
 
                   {isLastModule ? (
                     <Button
-                      onClick={() => submitAssessment()}
+                      onClick={handleSubmit}
                       disabled={!canSubmit || isLoading}
                     >
                       {isLoading ? (

@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 import { Hono } from 'hono';
 import { hasDatabase, hasPackageEntitlement, jsonError, requireAuth } from '../helpers.js';
-import { RISK_THRESHOLDS, RATE_LIMITS, parsePagination, paginate, requireUUIDParam } from '../types.js';
+import { RATE_LIMITS, parsePagination, paginate, requireUUIDParam } from '../types.js';
 import type { AssessmentStatus, EmployeeDashboardRow } from '../types.js';
 import { assessmentsById, purchasesById, keypassesByCode, usersByEmail } from '../stores.js';
 import { dbListAssessmentsByOrganisation, dbListPurchasesByOrganisation, dbListKeypassesByOrganisation, dbListKeypassesByUser, dbGetEmployeeDashboardData, dbGetUserById, auditLog } from '../db/index.js';
 import { rateLimit, getClientIp } from '../middleware.js';
+import { requireAnyPaidPurchase } from '../entitlements.js';
+import { csvResponse, wantsCsv } from '../csv.js';
+import { latestSubmittedByUser, scoreAssessment } from '../assessment-risk.js';
 
 const analytics = new Hono();
 
@@ -109,6 +112,9 @@ analytics.get('/reports/generate', async (c) => {
 
   // Allow all packages (basic, training, full) to generate reports
   // PDF export with full details available to all packages via /assessments/:id/export-pdf
+  const denied = await requireAnyPaidPurchase(c, auth);
+  if (denied) return denied;
+
   const orgAssessments = hasDatabase()
     ? await dbListAssessmentsByOrganisation(auth.organisationId)
     : Array.from(assessmentsById.values()).filter((a) => a.organisationId === auth.organisationId);
@@ -127,9 +133,7 @@ analytics.get('/reports/generate', async (c) => {
   // Derive risk indicators from completed assessments
   const assessmentSummaries = completedAssessments.map((a) => {
     const answerCount = Object.keys(a.answers).length;
-    let riskLevel: 'low' | 'medium' | 'high' = 'low';
-    if (answerCount >= RISK_THRESHOLDS.HIGH_ANSWER_COUNT) riskLevel = 'high';
-    else if (answerCount >= RISK_THRESHOLDS.MEDIUM_ANSWER_COUNT) riskLevel = 'medium';
+    const riskLevel = scoreAssessment(a).level;
 
     return {
       id: a.id,
@@ -297,18 +301,16 @@ analytics.get('/analytics/employees', async (c) => {
     startedAt: string | null; completedAt: string | null;
     assessmentCount: number; latestAssessmentStatus: string | null;
     riskLevel: 'high' | 'medium' | 'low' | null;
+    highRiskCount?: number;
+    topRisk?: string | null;
   }>();
 
   for (const row of rows) {
     const existing = userMap.get(row.id);
     if (!existing) {
       let status: 'completed' | 'in-progress' | 'not-started' = 'not-started';
-      let riskLevel: 'high' | 'medium' | 'low' | null = null;
       if (row.assessmentStatus === 'completed' || row.assessmentStatus === 'submitted') {
         status = 'completed';
-        if (row.answerCount >= RISK_THRESHOLDS.HIGH_ANSWER_COUNT) riskLevel = 'high';
-        else if (row.answerCount >= RISK_THRESHOLDS.MEDIUM_ANSWER_COUNT) riskLevel = 'medium';
-        else riskLevel = 'low';
       } else if (row.assessmentStatus === 'draft' || row.assessmentStatus === 'in_progress') {
         status = 'in-progress';
       }
@@ -324,7 +326,7 @@ analytics.get('/analytics/employees', async (c) => {
         completedAt: row.assessmentCompleted,
         assessmentCount: row.assessmentId ? 1 : 0,
         latestAssessmentStatus: row.assessmentStatus,
-        riskLevel,
+        riskLevel: null,
       });
     } else {
       // Multiple assessments: update with latest
@@ -332,9 +334,6 @@ analytics.get('/analytics/employees', async (c) => {
       if (row.assessmentStatus === 'completed' || row.assessmentStatus === 'submitted') {
         existing.status = 'completed';
         existing.completedAt = row.assessmentCompleted ?? existing.completedAt;
-        if (row.answerCount >= RISK_THRESHOLDS.HIGH_ANSWER_COUNT) existing.riskLevel = 'high';
-        else if (row.answerCount >= RISK_THRESHOLDS.MEDIUM_ANSWER_COUNT) existing.riskLevel = existing.riskLevel === 'high' ? 'high' : 'medium';
-        else if (!existing.riskLevel) existing.riskLevel = 'low';
       } else if (row.assessmentStatus && existing.status === 'not-started') {
         existing.status = 'in-progress';
         existing.startedAt = row.assessmentStarted ?? existing.startedAt;
@@ -343,7 +342,28 @@ analytics.get('/analytics/employees', async (c) => {
     }
   }
 
+  // Risk level = scored risk register of each person's latest submitted assessment
+  const latestByUser = latestSubmittedByUser(
+    hasDatabase()
+      ? await dbListAssessmentsByOrganisation(auth.organisationId)
+      : Array.from(assessmentsById.values()).filter((a) => a.organisationId === auth.organisationId)
+  );
+  for (const employee of userMap.values()) {
+    const latest = latestByUser.get(employee.userId);
+    const scored = latest ? scoreAssessment(latest) : null;
+    employee.riskLevel = scored?.level ?? null;
+    employee.highRiskCount = scored?.counts.high ?? 0;
+    employee.topRisk = scored?.risks.slice().sort((a, b) => b.residualScore - a.residualScore)[0]?.title ?? null;
+  }
+
   const employees = Array.from(userMap.values());
+  if (wantsCsv(c)) {
+    return csvResponse(c, 'employees.csv', employees, [
+      'userId', 'userName', 'email', 'role', 'department', 'status',
+      'startedAt', 'completedAt', 'assessmentCount', 'latestAssessmentStatus', 'riskLevel', 'highRiskCount', 'topRisk',
+    ]);
+  }
+
   const { page, pageSize } = parsePagination(c.req.query());
   const result = paginate(employees, page, pageSize);
 
@@ -404,6 +424,7 @@ analytics.get('/analytics/employees/:userId', async (c) => {
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       submittedAt: a.submittedAt ?? null,
+      risk: scoreAssessment(a),
     }));
 
   // Get keypasses used by this user
@@ -412,7 +433,9 @@ analytics.get('/analytics/employees/:userId', async (c) => {
         code: k.code, status: k.status, createdAt: k.createdAt,
         expiresAt: k.expiresAt, usedAt: k.usedAt ?? null,
       }))
-    : [];  // In-memory store does not track used_by_user_id — return empty
+    : Array.from(keypassesByCode.values())
+        .filter((k) => k.usedByUserId === userId)
+        .map((k) => ({ code: k.code, status: k.status, createdAt: k.createdAt, expiresAt: k.expiresAt, usedAt: k.usedAt ?? null }));
 
   return c.json({
     success: true,

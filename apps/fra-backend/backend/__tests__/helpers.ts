@@ -48,3 +48,13 @@ export function seedPurchase(organisationId: string, userId: string, packageId =
     createdAt: new Date().toISOString(),
   });
 }
+
+/** Sign up a user whose organisation has paid for the given package. */
+export async function createPaidUser(
+  packageId = 'pkg_full',
+  overrides?: { email?: string; name?: string; organisationName?: string }
+) {
+  const user = await createAuthenticatedUser(overrides);
+  seedPurchase(user.organisationId, user.userId, packageId);
+  return user;
+}

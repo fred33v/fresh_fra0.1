@@ -16,6 +16,10 @@ import paymentRoutes from './routes/payments.js';
 import analyticsRoutes from './routes/analytics.js';
 import s3Routes from './routes/s3.js';
 import reportsExportsRoutes from './routes/reports-exports.js';
+import complianceRoutes from './routes/compliance.js';
+import apiKeyRoutes, { apiKeyMiddleware } from './routes/api-keys.js';
+import riskRegisterRoutes from './routes/risk-register.js';
+import webhookEndpointRoutes from './routes/webhook-endpoints.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 
@@ -98,6 +102,9 @@ const api = app.basePath('/api/v1');
 // Apply API-level middleware (body-size, sanitization, CSRF, rate-limit)
 applyApiMiddleware(api, allowedOrigins);
 
+// Enterprise API keys (read-only) resolve to an AuthContext before routes run
+api.use('*', apiKeyMiddleware);
+
 // Mount route modules
 api.route('/', authRoutes);
 api.route('/', assessmentRoutes);
@@ -106,6 +113,10 @@ api.route('/', paymentRoutes);
 api.route('/', analyticsRoutes);
 api.route('/', s3Routes);
 api.route('/', reportsExportsRoutes);
+api.route('/', apiKeyRoutes);
+api.route('/', riskRegisterRoutes);
+api.route('/', webhookEndpointRoutes);
+api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);
 api.route('/budget-guide', budgetGuide);
 

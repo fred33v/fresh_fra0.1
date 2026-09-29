@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { jsonError } from './helpers.js';
 
@@ -59,6 +60,99 @@ export type Purchase = {
   confirmedAt?: string;
 };
 
+export type ApiKey = {
+  id: string;
+  organisationId: string;
+  createdByUserId: string;
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+};
+
+export type ControlEffectiveness = 'very_strong' | 'reasonably_strong' | 'some_gaps' | 'weak' | 'none';
+export type RiskPriority = 'HIGH' | 'MEDIUM' | 'LOW';
+export type RiskStatus = 'open' | 'in_progress' | 'mitigated' | 'accepted' | 'closed';
+
+export type RiskRegisterEntry = {
+  id: string;
+  organisationId: string;
+  title: string;
+  riskArea: string;
+  description?: string;
+  impact: number;
+  likelihood: number;
+  controlEffectiveness: ControlEffectiveness;
+  controls?: string;
+  inherentScore: number;
+  residualScore: number;
+  priority: RiskPriority;
+  ownerUserId?: string;
+  actionPlan?: string;
+  dueDate?: string;
+  status: RiskStatus;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const WEBHOOK_EVENTS = ['assessment.submitted', 'assessment.high_risk', 'keypass.used', 'risk.created', 'risk.updated', 'risk.high_priority'] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export type WebhookEndpoint = {
+  id: string;
+  organisationId: string;
+  url: string;
+  secret: string;
+  events: WebhookEvent[];
+  isActive: boolean;
+  createdByUserId: string;
+  createdAt: string;
+  lastDeliveryAt?: string;
+  lastDeliveryStatus?: number;
+};
+
+export const INCIDENT_TYPES = ['fraud_incident', 'data_breach', 'non_compliance', 'policy_violation', 'other'] as const;
+export const INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export const SENIOR_ROLES = ['CEO', 'CFO', 'COO', 'CTO', 'CISO', 'Board Chair', 'Executive Director', 'Other'] as const;
+
+export type ComplianceIncident = {
+  id: string;
+  organisationId: string;
+  type: (typeof INCIDENT_TYPES)[number];
+  description: string;
+  severity: (typeof INCIDENT_SEVERITIES)[number];
+  reportedAt: string;
+  resolvedAt?: string;
+  resolutionNotes?: string;
+};
+
+export type SeniorManager = {
+  id: string;
+  organisationId: string;
+  userId: string;
+  userName?: string;
+  role: (typeof SENIOR_ROLES)[number];
+  complianceScore?: number;
+  lastReviewed?: string;
+  reviewNotes?: string;
+};
+
+export type AuditEvent = {
+  id: string;
+  eventType: string;
+  actorId?: string;
+  actorEmail?: string;
+  organisationId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  details: Record<string, unknown>;
+  ipAddress?: string;
+  createdAt: string;
+};
+
 export type Package = {
   id: string;
   name: string;
@@ -80,6 +174,7 @@ export type Keypass = {
   createdAt: string;
   expiresAt: string;
   usedAt?: string;
+  usedByUserId?: string;
 };
 
 export type RateLimitConfig = {
@@ -161,7 +256,7 @@ function resolveRefreshSecret(): jwt.Secret {
     throw new Error('JWT_REFRESH_SECRET environment variable must be set in production');
   }
   usingDevRefreshSecret = true;
-  return require('crypto').randomBytes(64).toString('hex');
+  return randomBytes(64).toString('hex');
 }
 
 export const refreshSecret: jwt.Secret = resolveRefreshSecret();

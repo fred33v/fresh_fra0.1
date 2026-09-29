@@ -213,5 +213,5 @@ export interface ComplianceMappingModule {
   eccta2023Alignment: ScaleValue;
   failureToPreventsReadiness: ScaleValue;
   auditTrailRetentionYears: number;
-  regulatoryDocumentsUp toDate: boolean;
+  regulatoryDocumentsUpToDate: boolean;
 }

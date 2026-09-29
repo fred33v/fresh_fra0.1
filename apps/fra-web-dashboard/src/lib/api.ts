@@ -128,7 +128,36 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   return json.data;
 }
 
+/** Fetch a file (e.g. ?format=csv) with the user's token and save it in the browser. */
+async function download(path: string, filename: string, retry = true): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (res.status === 401 && retry && getRefreshToken()) {
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+    }
+    if (await refreshPromise) return download(path, filename, false);
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => null) as { error?: { code: string; message: string } } | null;
+    throw new ApiError(json?.error?.code ?? 'DOWNLOAD_FAILED', json?.error?.message ?? `Download failed (${res.status})`);
+  }
+
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
+  download,
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

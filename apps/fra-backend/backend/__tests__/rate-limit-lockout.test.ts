@@ -1,9 +1,10 @@
 /// <reference types="jest" />
 
-import { app, createAuthenticatedUser } from './helpers';
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
+import { app, createPaidUser, authHeaders } from './helpers';
 
 async function signup() {
-  const { accessToken, email } = await createAuthenticatedUser({ name: 'RL User', organisationName: 'RL Org' });
+  const { accessToken, email } = await createPaidUser('pkg_full', { name: 'RL User', organisationName: 'RL Org' });
   return { accessToken, email };
 }
 

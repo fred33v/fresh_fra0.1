@@ -1,10 +1,11 @@
 /// <reference types="jest" />
 
-import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
+import { app, createAuthenticatedUser, authHeaders, seedPurchase, createPaidUser } from './helpers';
 import { accountLockouts, keypassesByCode, purchasesById, assessmentsById } from '../src/stores';
 
 async function signup() {
-  return createAuthenticatedUser({ organisationName: 'Security Test Org' });
+  return createPaidUser('pkg_full', { organisationName: 'Security Test Org' });
 }
 
 describe('Security hardening', () => {
@@ -576,7 +577,7 @@ describe('Security hardening', () => {
 
   describe('Keypass quota enforcement', () => {
     it('rejects generation beyond package allowance', async () => {
-      const { accessToken, organisationId, userId } = await signup();
+      const { accessToken, organisationId, userId } = await createAuthenticatedUser({ organisationName: 'Quota Org' });
       // pkg_basic has keypassAllowance=1
       seedPurchase(organisationId, userId, 'pkg_basic');
 

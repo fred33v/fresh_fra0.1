@@ -1,9 +1,10 @@
 /// <reference types="jest" />
 
-import { app, createAuthenticatedUser, authHeaders } from './helpers';
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
+import { app, createPaidUser, authHeaders } from './helpers';
 
 async function signup() {
-  const { accessToken, email } = await createAuthenticatedUser({ organisationName: 'Assess Org' });
+  const { accessToken, email } = await createPaidUser("pkg_full", { organisationName: "Assess Org" });
   return { accessToken, email };
 }
 
@@ -260,6 +261,88 @@ describe('Assessments endpoints', () => {
       const res = await app.request(`http://localhost/api/v1/assessments/${fakeId}/submit`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── GET /assessments/modules ──────────────────────────────────
+
+  describe('GET /assessments/modules', () => {
+    it('returns module definitions whose question IDs map onto the scorer input', async () => {
+      const { accessToken } = await signup();
+      const res = await app.request('http://localhost/api/v1/assessments/modules', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as any;
+      expect(json.data.map((m: any) => m.id)).toEqual(['procurement', 'cashBanking', 'payrollHR', 'revenue', 'itSystems']);
+      for (const module of json.data) {
+        expect(module.questions.length).toBeGreaterThan(0);
+        for (const q of module.questions) expect(q.id.startsWith(`${module.id}.`)).toBe(true);
+      }
+    });
+
+    it('rejects without auth', async () => {
+      const res = await app.request('http://localhost/api/v1/assessments/modules');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ── GET /assessments/:id/results ──────────────────────────────
+
+  describe('GET /assessments/:id/results', () => {
+    async function createWithAnswers(accessToken: string, answers: Record<string, unknown>) {
+      const res = await app.request('http://localhost/api/v1/assessments', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ answers }),
+      });
+      return ((await res.json()) as any).data.id as string;
+    }
+
+    it('returns 409 before the assessment is submitted', async () => {
+      const { accessToken } = await signup();
+      const id = await createWithAnswers(accessToken, {});
+      const res = await app.request(`http://localhost/api/v1/assessments/${id}/results`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as any).error.code).toBe('NOT_SUBMITTED');
+    });
+
+    it('scores stored answers once submitted', async () => {
+      const { accessToken } = await signup();
+      const id = await createWithAnswers(accessToken, {
+        'procurement.dueDiligenceLevel': 1,
+        'procurement.monthlySpend': 750000,
+        'procurement.recentFraud': 'yes',
+        'procurement.controlMaturity': 2,
+      });
+      await app.request(`http://localhost/api/v1/assessments/${id}/submit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const res = await app.request(`http://localhost/api/v1/assessments/${id}/results`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as any;
+      expect(json.data.assessmentId).toBe(id);
+      const procurement = json.data.modules.find((m: any) => m.id === 'procurement');
+      // base 20 + due diligence 15 + spend 20 + recent fraud 25 + controls 15
+      expect(procurement).toMatchObject({ title: 'Procurement', score: 95, level: 'High' });
+      expect(json.data.topRisks[0]).toMatchObject({ module: 'procurement', moduleTitle: 'Procurement', severity: 'Critical' });
+      expect(['Low', 'Medium', 'High']).toContain(json.data.riskLevel);
+    });
+
+    it('returns 404 for another organisation\'s assessment', async () => {
+      const owner = await signup();
+      const other = await signup();
+      const id = await createWithAnswers(owner.accessToken, {});
+      const res = await app.request(`http://localhost/api/v1/assessments/${id}/results`, {
+        headers: { Authorization: `Bearer ${other.accessToken}` },
       });
       expect(res.status).toBe(404);
     });

@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 
-import { app } from './helpers';
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
+import { app, seedPurchase } from './helpers';
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}) {
   return app.request(`http://localhost/api/v1${path}`, {
@@ -103,7 +104,8 @@ describe('Integration flows', () => {
         name: 'Assess Flow',
         organisationName: 'Assess Org',
       });
-      const { accessToken } = ((await signupRes.json()) as any).data;
+      const { accessToken, organisation, user } = ((await signupRes.json()) as any).data;
+      seedPurchase(organisation.organisationId, user.userId);
       const h = auth(accessToken);
 
       // 1. Create assessment

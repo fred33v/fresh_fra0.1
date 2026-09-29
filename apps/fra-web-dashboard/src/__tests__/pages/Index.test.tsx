@@ -226,7 +226,7 @@ describe('Index', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Choose Professional/ });
-      expect(link).toHaveAttribute('href', '/checkout?package=Professional&price=1799');
+      expect(link).toHaveAttribute('href', '/checkout?package=Professional');
     });
 
     it('Professional links to signup when not authenticated', () => {
@@ -242,7 +242,7 @@ describe('Index', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Choose Enterprise/ });
-      expect(link).toHaveAttribute('href', '/checkout?package=Enterprise&price=4995');
+      expect(link).toHaveAttribute('href', '/checkout?package=Enterprise');
     });
 
     it('Enterprise links to signup when not authenticated', () => {

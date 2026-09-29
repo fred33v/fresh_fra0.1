@@ -14,23 +14,16 @@ import {
   AlertCircle,
   ChevronRight,
 } from 'lucide-react';
+import { getPackage } from '@/data/packages';
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
 
-  const VALID_PACKAGES = ['Professional', 'Enterprise', 'Health-Check', 'Starter'] as const;
-
-  const PACKAGE_ID_MAP: Record<string, string> = {
-    Professional: 'pkg_training',
-    Enterprise: 'pkg_full',
-    'Health-Check': 'pkg_basic',
-    Starter: 'pkg_basic',
-  };
-
+  // Price always comes from the catalogue, never the URL. "Health-Check" is the
+  // Starter package's old name, kept so existing links still work.
   const rawPackageName = searchParams.get('package');
-  const priceParam = searchParams.get('price');
-  const parsedPrice = priceParam ? parseFloat(priceParam) : 0;
-  const price = Number.isFinite(parsedPrice) && parsedPrice > 0 ? parsedPrice : 0;
+  const selectedPackage = getPackage(rawPackageName === 'Health-Check' ? 'Starter' : rawPackageName ?? '');
+  const price = selectedPackage?.priceGbp ?? 0;
 
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -41,11 +34,9 @@ export default function Checkout() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  const packageName = VALID_PACKAGES.includes(rawPackageName as typeof VALID_PACKAGES[number])
-    ? rawPackageName!
-    : null;
+  const packageName = selectedPackage?.name ?? null;
 
-  if (!packageName || !priceParam || price <= 0) {
+  if (!selectedPackage || !packageName) {
     return <Navigate to="/" replace />;
   }
 
@@ -96,7 +87,7 @@ export default function Checkout() {
 
     setIsProcessing(true);
     try {
-      const packageId = PACKAGE_ID_MAP[packageName!];
+      const packageId = selectedPackage.id;
       const { purchaseId, paymentIntentId } = await api.post<{
         purchaseId: string;
         paymentIntentId: string;

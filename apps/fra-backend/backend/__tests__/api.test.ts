@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
 
 describe('Backend API', () => {
@@ -32,6 +33,7 @@ describe('Backend API', () => {
     expect(signupJson.data?.accessToken).toBeTruthy();
 
     const accessToken: string = signupJson.data.accessToken;
+    seedPurchase(signupJson.data.organisation.organisationId, signupJson.data.user.userId);
 
     const createAssessmentRes = await app.request('http://localhost/api/v1/assessments', {
       method: 'POST',

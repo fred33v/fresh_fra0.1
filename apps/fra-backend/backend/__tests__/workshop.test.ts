@@ -1,13 +1,14 @@
 /// <reference types="jest" />
 
-import { app, createAuthenticatedUser, authHeaders } from './helpers';
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
+import { app, createPaidUser, authHeaders } from './helpers';
 
 describe('Workshop endpoints', () => {
   // ── GET /workshop/profile ───────────────────────────────────
 
   describe('GET /workshop/profile', () => {
     it('returns null data when no database is configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/profile', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -49,7 +50,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid profile data', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/profile', {
         method: 'PUT',
         headers: authHeaders(accessToken),
@@ -61,7 +62,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 NO_DATABASE when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/profile', {
         method: 'PUT',
         headers: authHeaders(accessToken),
@@ -77,7 +78,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid sector value', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/profile', {
         method: 'PUT',
         headers: authHeaders(accessToken),
@@ -95,7 +96,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/roles', () => {
     it('returns empty array when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/roles', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -115,7 +116,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/sessions', () => {
     it('returns empty array when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -144,7 +145,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects missing title', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -156,7 +157,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -177,7 +178,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 404 when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000000', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -196,7 +197,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 404 when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/code/ABC123', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -219,7 +220,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid update data', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -231,7 +232,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -254,7 +255,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/end', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -276,7 +277,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/join', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -296,7 +297,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns count 0 when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/participants', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -311,7 +312,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/progress', () => {
     it('returns null when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -340,7 +341,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -365,7 +366,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid data', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -377,7 +378,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -393,7 +394,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/sessions/:sessionId/polls', () => {
     it('returns empty array when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -413,7 +414,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/sessions/:sessionId/polls/active', () => {
     it('returns null when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls/active', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -437,7 +438,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid poll data (missing options)', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -449,7 +450,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -474,7 +475,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid data', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -484,7 +485,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -509,7 +510,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects invalid data', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001/respond', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -519,7 +520,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001/respond', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -535,7 +536,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/sessions/:sessionId/questions', () => {
     it('returns empty array when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/questions', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -564,7 +565,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('rejects missing questionText', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/questions', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -574,7 +575,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/questions', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -599,7 +600,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/questions/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -622,7 +623,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/questions/00000000-0000-0000-0000-000000000001/upvote', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -637,7 +638,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/action-plans', () => {
     it('returns null when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/action-plans', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -666,7 +667,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/action-plans', {
         method: 'POST',
         headers: authHeaders(accessToken),
@@ -691,7 +692,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/action-plans/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
@@ -707,7 +708,7 @@ describe('Workshop endpoints', () => {
 
   describe('GET /workshop/certificates', () => {
     it('returns null when no database', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/certificates', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -736,7 +737,7 @@ describe('Workshop endpoints', () => {
     });
 
     it('returns 503 when DB not configured', async () => {
-      const { accessToken } = await createAuthenticatedUser();
+      const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/certificates', {
         method: 'POST',
         headers: authHeaders(accessToken),

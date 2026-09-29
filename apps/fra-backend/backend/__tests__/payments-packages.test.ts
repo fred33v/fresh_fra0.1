@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
 
 async function signup() {
@@ -261,7 +262,8 @@ describe('Payments & Packages endpoints', () => {
 
   describe('GET /analytics/assessments', () => {
     it('returns assessments timeline', async () => {
-      const { accessToken } = await signup();
+      const { accessToken, organisationId, userId } = await signup();
+      seedPurchase(organisationId, userId);
       // Create an assessment first
       await app.request('http://localhost/api/v1/assessments', {
         method: 'POST',

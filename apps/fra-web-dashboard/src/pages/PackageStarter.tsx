@@ -12,6 +12,9 @@ import {
   ClipboardCheck,
   FileText,
 } from 'lucide-react';
+import { getPackage, checkoutPath, formatPrice } from '@/data/packages';
+
+const PKG = getPackage('pkg_basic')!;
 
 export default function PackageStarter() {
   const { user } = useAuth();
@@ -78,13 +81,13 @@ export default function PackageStarter() {
 
               <div className="flex items-center gap-3 mb-8 justify-center lg:justify-start">
                 <p className="text-2xl font-bold text-accent">
-                  £795<span className="text-base font-medium text-primary-foreground/60"> one-time</span>
+                  {formatPrice(PKG)}<span className="text-base font-medium text-primary-foreground/60"> one-time</span>
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-                  <Link to={user ? '/checkout?package=Starter&price=795' : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
                     Start Assessment
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
@@ -240,9 +243,9 @@ export default function PackageStarter() {
                 </tr>
                 <tr>
                   <td className="py-4 px-4 text-primary-foreground font-bold">Price</td>
-                  <td className="text-center py-4 px-4 font-bold text-accent">£795</td>
-                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">£1,799/year</td>
-                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">£4,995/year</td>
+                  <td className="text-center py-4 px-4 font-bold text-accent">{formatPrice(PKG)}</td>
+                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">{formatPrice(getPackage('pkg_training')!)}/year</td>
+                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">{formatPrice(getPackage('pkg_full')!)}/year</td>
                 </tr>
               </tbody>
             </table>
@@ -262,11 +265,11 @@ export default function PackageStarter() {
                 One-time comprehensive assessment across 13 key fraud risk areas.
               </p>
               <p className="text-2xl font-bold text-accent mb-8">
-                £795 (one-time)
+                {formatPrice(PKG)} (one-time)
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-                  <Link to={user ? '/checkout?package=Starter&price=795' : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
                     Start Assessment Now
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
