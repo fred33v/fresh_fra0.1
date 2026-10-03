@@ -79,7 +79,7 @@ export default function ControlsTechnologyScreen() {
         onChange={(value) =>
           updateAssessment({ controlsTechnology: { ...assessment.controlsTechnology, automatedMonitoring: value } })
         }
-        followUpQuestion="Please describe your monitoring procedures and what thresholds trigger alerts"
+        followUp="Please describe your monitoring procedures and what thresholds trigger alerts"
         followUpValue={assessment.controlsTechnology.automatedMonitoringDetails}
         onFollowUpChange={(text) =>
           updateAssessment({ controlsTechnology: { ...assessment.controlsTechnology, automatedMonitoringDetails: text } })

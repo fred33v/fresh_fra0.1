@@ -2,23 +2,34 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import type { CurrencyValue } from '@/types/assessment';
 
+/** What the number is: money in pounds (default), a whole-number count, or a percentage (0–100). */
+export type NumberKind = 'currency' | 'count' | 'percent';
+
 export interface CurrencyQuestionProps {
   question: string;
   hint?: string;
   value: CurrencyValue | null;
   onChange: (value: CurrencyValue | null) => void;
+  kind?: NumberKind;
 }
 
-export function CurrencyQuestion({ question, hint, value, onChange }: CurrencyQuestionProps) {
+const KIND: Record<NumberKind, { prefix?: string; suffix?: string; placeholder: string; keyboard: 'decimal-pad' | 'number-pad'; decimals: boolean; max?: number }> = {
+  currency: { prefix: '£', placeholder: '0.00', keyboard: 'decimal-pad', decimals: true },
+  count: { placeholder: '0', keyboard: 'number-pad', decimals: false },
+  percent: { suffix: '%', placeholder: '0', keyboard: 'decimal-pad', decimals: true, max: 100 },
+};
+
+export function CurrencyQuestion({ question, hint, value, onChange, kind = 'currency' }: CurrencyQuestionProps) {
+  const k = KIND[kind];
   const [inputValue, setInputValue] = useState(value?.toString() || '');
 
   const handleChangeText = (text: string) => {
-    // Remove any non-numeric characters except decimal point
-    const cleanText = text.replace(/[^0-9.]/g, '');
-
-    // Ensure only one decimal point
+    // Keep digits (and one decimal point where the kind allows decimals)
+    const cleanText = text.replace(k.decimals ? /[^0-9.]/g : /[^0-9]/g, '');
     const parts = cleanText.split('.');
-    const sanitizedText = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleanText;
+    let sanitizedText = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleanText;
+    // A percentage cannot exceed 100
+    if (k.max !== undefined && parseFloat(sanitizedText) > k.max) sanitizedText = String(k.max);
 
     setInputValue(sanitizedText);
 
@@ -38,15 +49,17 @@ export function CurrencyQuestion({ question, hint, value, onChange }: CurrencyQu
       {hint && <Text style={styles.hint}>{hint}</Text>}
 
       <View style={styles.inputContainer}>
-        <Text style={styles.currencySymbol}>£</Text>
+        {k.prefix && <Text style={styles.currencySymbol}>{k.prefix}</Text>}
         <TextInput
           style={styles.input}
           value={inputValue}
           onChangeText={handleChangeText}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          placeholderTextColor="#999"
+          placeholder={k.placeholder}
+          keyboardType={k.keyboard}
+          placeholderTextColor="#767676"
+          accessibilityLabel={question}
         />
+        {k.suffix && <Text style={styles.unitSuffix}>{k.suffix}</Text>}
       </View>
     </View>
   );
@@ -84,6 +97,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginRight: 8,
+  },
+  unitSuffix: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginLeft: 8,
   },
   input: {
     flex: 1,

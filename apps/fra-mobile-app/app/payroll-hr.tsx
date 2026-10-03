@@ -23,6 +23,7 @@ export default function PayrollHRScreen() {
       progress={{ current: 5, total: 13 }}
     >
       <CurrencyQuestion
+        kind="count"
         question="What is your total number of employees on payroll?"
         hint="Include full-time, part-time, and contractors"
         value={assessment.payrollHR.totalEmployeeCount}
@@ -46,7 +47,7 @@ export default function PayrollHRScreen() {
         onChange={(value) =>
           updateAssessment({ payrollHR: { ...assessment.payrollHR, unauthorizedChangesDetected: value } })
         }
-        followUpQuestion="Please describe the incidents detected and remediation actions taken"
+        followUp="Please describe the incidents detected and remediation actions taken"
         followUpValue={assessment.payrollHR.changeDescription}
         onFollowUpChange={(text) =>
           updateAssessment({ payrollHR: { ...assessment.payrollHR, changeDescription: text } })

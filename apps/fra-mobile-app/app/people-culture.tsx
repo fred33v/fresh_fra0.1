@@ -60,7 +60,7 @@ export default function PeopleCultureScreen() {
         onChange={(value) =>
           updateAssessment({ peopleCulture: { ...assessment.peopleCulture, whistleblowingUsed: value } })
         }
-        followUpQuestion="Please describe the cases and how they were handled"
+        followUp="Please describe the cases and how they were handled"
         followUpValue={assessment.peopleCulture.whistleblowingDetails}
         onFollowUpChange={(text) =>
           updateAssessment({ peopleCulture: { ...assessment.peopleCulture, whistleblowingDetails: text } })

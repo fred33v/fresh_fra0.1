@@ -101,9 +101,13 @@ export interface OrganisationInfo {
 }
 
 export interface RiskAppetite {
-  tolerance: RiskTolerance | ScaleValue | null;
+  tolerance: RiskTolerance | null;
+  /** 1 (very risk averse) – 5 (very risk tolerant) */
+  toleranceScale: ScaleValue | null;
   fraudSeriousness: FraudSeriousness | null;
-  reputationImportance: ReputationImportance | ScaleValue | null;
+  reputationImportance: ReputationImportance | null;
+  /** 1 (minimal impact) – 5 (severe impact) of reputational damage */
+  reputationScale: ScaleValue | null;
 }
 
 export interface FraudTriangle {

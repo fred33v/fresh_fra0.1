@@ -36,9 +36,9 @@ export default function RiskAppetiteScreen() {
         question="On a scale of 1-5, how would you quantify your risk tolerance level?"
         minLabel="Very risk averse"
         maxLabel="Very risk tolerant"
-        value={assessment.riskAppetite.tolerance}
+        value={assessment.riskAppetite.toleranceScale}
         onChange={(value) =>
-          updateAssessment({ riskAppetite: { ...assessment.riskAppetite, tolerance: value } })
+          updateAssessment({ riskAppetite: { ...assessment.riskAppetite, toleranceScale: value } })
         }
       />
 
@@ -64,9 +64,9 @@ export default function RiskAppetiteScreen() {
         question="How significant would reputational damage be to your organisation?"
         minLabel="Minimal impact"
         maxLabel="Severe/critical impact"
-        value={assessment.riskAppetite.reputationImportance}
+        value={assessment.riskAppetite.reputationScale}
         onChange={(value) =>
-          updateAssessment({ riskAppetite: { ...assessment.riskAppetite, reputationImportance: value } })
+          updateAssessment({ riskAppetite: { ...assessment.riskAppetite, reputationScale: value } })
         }
       />
 

@@ -10,9 +10,11 @@ export interface YesNoQuestionProps {
   value: YesNoUnsure | null;
   followUpValue?: string;
   onChange: (value: YesNoUnsure, followUpValue?: string) => void;
+  /** Saves the follow-up answer separately from the yes/no value. */
+  onFollowUpChange?: (text: string) => void;
 }
 
-export function YesNoQuestion({ question, followUp, value, followUpValue, onChange }: YesNoQuestionProps) {
+export function YesNoQuestion({ question, followUp, value, followUpValue, onChange, onFollowUpChange }: YesNoQuestionProps) {
   const yesNoOptions: QuestionOption<YesNoUnsure>[] = [
     { value: 'yes', label: 'Yes' },
     { value: 'no', label: 'No' },
@@ -24,7 +26,8 @@ export function YesNoQuestion({ question, followUp, value, followUpValue, onChan
   };
 
   const handleFollowUpChange = (text: string) => {
-    onChange(value!, text);
+    if (onFollowUpChange) onFollowUpChange(text);
+    else onChange(value!, text);
   };
 
   return (

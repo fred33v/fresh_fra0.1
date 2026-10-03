@@ -9,6 +9,7 @@ import {
   generateId,
   isLocalOnlyAssessmentId,
   createEmptyAssessment,
+  migrateRiskAppetite,
 } from '@/utils/assessment';
 
 // ---------------------------------------------------------------------------
@@ -144,5 +145,37 @@ describe('createEmptyAssessment', () => {
     expect(a.createdAt >= before).toBe(true);
     expect(a.createdAt <= after).toBe(true);
     expect(a.updatedAt).toBe(a.createdAt);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// migrateRiskAppetite
+// ---------------------------------------------------------------------------
+
+describe('migrateRiskAppetite', () => {
+  it('moves 1–5 answers saved in the choice fields by older drafts into the scale fields', () => {
+    const legacy = { tolerance: 3, fraudSeriousness: 'manageable', reputationImportance: 5 } as never;
+    expect(migrateRiskAppetite({ ...createEmptyAssessment().riskAppetite, ...(legacy as object) })).toEqual({
+      tolerance: null,
+      toleranceScale: 3,
+      fraudSeriousness: 'manageable',
+      reputationImportance: null,
+      reputationScale: 5,
+    });
+  });
+
+  it('leaves current answers untouched', () => {
+    const current = { tolerance: 'low', toleranceScale: 2, fraudSeriousness: null, reputationImportance: 'critical', reputationScale: 4 } as const;
+    expect(migrateRiskAppetite({ ...current })).toEqual(current);
+  });
+});
+
+describe('createEmptyAssessment defaults', () => {
+  it('includes every field the newer assessment screens read', () => {
+    const a = createEmptyAssessment();
+    expect(a.riskAppetite).toMatchObject({ toleranceScale: null, reputationScale: null });
+    expect(a.fraudTriangle).toMatchObject({ estimatedLossExposure: null, rationalizationRisk: null });
+    expect(a.fraudResponsePlan).toMatchObject({ detectedLossesValue: null, responseSpeed: null });
+    expect(a.monitoringEvaluation).toMatchObject({ fraudIncidentsDetected: 0, suspiciousTradeDetected: 0, fraudRiskLikelihood: null });
   });
 });

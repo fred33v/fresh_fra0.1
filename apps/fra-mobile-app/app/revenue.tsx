@@ -32,6 +32,7 @@ export default function RevenueScreen() {
       />
 
       <CurrencyQuestion
+        kind="percent"
         question="What percentage of invoices are typically unpaid after 60 days?"
         hint="As a percentage (0-100)"
         value={assessment.revenue.unpaidInvoicesPercentage}
@@ -46,7 +47,7 @@ export default function RevenueScreen() {
         onChange={(value) =>
           updateAssessment({ revenue: { ...assessment.revenue, writeOffsOccurred: value } })
         }
-        followUpQuestion="Please describe the write-offs and the circumstances indicating fraud risk"
+        followUp="Please describe the write-offs and the circumstances indicating fraud risk"
         followUpValue={assessment.revenue.writeOffDescription}
         onFollowUpChange={(text) =>
           updateAssessment({ revenue: { ...assessment.revenue, writeOffDescription: text } })

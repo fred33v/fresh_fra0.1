@@ -16,7 +16,7 @@ export { ScaleQuestion } from './ScaleQuestion';
 export type { ScaleQuestionProps } from './ScaleQuestion';
 
 export { CurrencyQuestion } from './CurrencyQuestion';
-export type { CurrencyQuestionProps } from './CurrencyQuestion';
+export type { CurrencyQuestionProps, NumberKind } from './CurrencyQuestion';
 
 export { YesNoQuestion } from './YesNoQuestion';
 export type { YesNoQuestionProps } from './YesNoQuestion';

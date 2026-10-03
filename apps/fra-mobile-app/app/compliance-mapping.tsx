@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { CheckCircle, AlertCircle, FileCheck, TrendingUp } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import type { ComplianceStatus } from '@/types/assessment';
 
 // Calculate compliance status based on assessment data
 function calculateComplianceStatus(assessment: any) {
@@ -102,6 +103,10 @@ function getComplianceStatus(score: number) {
   return { label: 'Below Standard', color: colors.errorRed };
 }
 
+// Same labels the confirmation report and PDF understand (types/assessment.ts ComplianceStatus)
+const statusFor = (score: number): ComplianceStatus =>
+  score >= 80 ? 'compliant' : score >= 60 ? 'partially-compliant' : 'non-compliant';
+
 export default function ComplianceMappingScreen() {
   const router = useRouter();
   const { assessment, updateAssessment } = useAssessment();
@@ -116,17 +121,17 @@ export default function ComplianceMappingScreen() {
         ...assessment.complianceMapping,
         notes,
         govS013: {
-          status: complianceStatus.govS013.score >= 80 ? 'compliant' : complianceStatus.govS013.score >= 60 ? 'partial' : 'non-compliant',
+          status: statusFor(complianceStatus.govS013.score),
           gaps: complianceStatus.govS013.gaps,
           actions: complianceStatus.govS013.actions,
         },
         fraudPreventionStandard: {
-          status: complianceStatus.fraudPreventionStandard.score >= 80 ? 'compliant' : complianceStatus.fraudPreventionStandard.score >= 60 ? 'partial' : 'non-compliant',
+          status: statusFor(complianceStatus.fraudPreventionStandard.score),
           gaps: complianceStatus.fraudPreventionStandard.gaps,
           actions: complianceStatus.fraudPreventionStandard.actions,
         },
         eccta2023: {
-          status: complianceStatus.eccta2023.score >= 80 ? 'compliant' : complianceStatus.eccta2023.score >= 60 ? 'partial' : 'non-compliant',
+          status: statusFor(complianceStatus.eccta2023.score),
           gaps: complianceStatus.eccta2023.gaps,
           actions: complianceStatus.eccta2023.actions,
         },
@@ -255,7 +260,7 @@ export default function ComplianceMappingScreen() {
             onChangeText={setNotes}
             multiline
             numberOfLines={4}
-            placeholderTextColor={colors.lightGrey}
+            placeholderTextColor={colors.govGrey2}
           />
         </View>
 
@@ -376,7 +381,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   notesInput: {
-    backgroundColor: colors.lightGrey,
+    backgroundColor: colors.govLightGrey,
     borderRadius: 4,
     padding: 12,
     fontSize: 14,

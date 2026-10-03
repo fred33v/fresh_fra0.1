@@ -11,6 +11,8 @@ import type {
   PaymentStatus,
   RiskRegisterItem,
   RiskPriority,
+  RiskAppetite,
+  ScaleValue,
 } from '@/types/assessment';
 
 /**
@@ -33,6 +35,24 @@ export function isLocalOnlyAssessmentId(id: string): boolean {
  * Return a complete blank AssessmentData object with every field initialised
  * to its default value.
  */
+/**
+ * Drafts saved before the 1–5 scale answers had their own fields stored the scale number in
+ * `tolerance` / `reputationImportance`. Move such numbers to the scale fields.
+ */
+export function migrateRiskAppetite(ra: RiskAppetite): RiskAppetite {
+  const out = { ...ra };
+  const legacy = ra as unknown as { tolerance: unknown; reputationImportance: unknown };
+  if (typeof legacy.tolerance === 'number') {
+    out.toleranceScale = out.toleranceScale ?? (legacy.tolerance as ScaleValue);
+    out.tolerance = null;
+  }
+  if (typeof legacy.reputationImportance === 'number') {
+    out.reputationScale = out.reputationScale ?? (legacy.reputationImportance as ScaleValue);
+    out.reputationImportance = null;
+  }
+  return out;
+}
+
 export function createEmptyAssessment(
   userId: string = '',
   organisationId: string = '',
@@ -54,13 +74,17 @@ export function createEmptyAssessment(
     },
     riskAppetite: {
       tolerance: null,
+      toleranceScale: null,
       fraudSeriousness: null,
       reputationImportance: null,
+      reputationScale: null,
     },
     fraudTriangle: {
       pressure: null,
       controlStrength: null,
       speakUpCulture: null,
+      estimatedLossExposure: null,
+      rationalizationRisk: null,
     },
     procurement: {
       q1: null,
@@ -151,6 +175,9 @@ export function createEmptyAssessment(
       specialistTraining: [],
       boardTraining: [],
       overallCompletionRate: 0,
+      mandatoryCompletedCount: 0,
+      specialistCompletedCount: 0,
+      boardCompletedCount: 0,
       notes: '',
     },
     monitoringEvaluation: {
@@ -159,6 +186,9 @@ export function createEmptyAssessment(
       lastReviewDate: null,
       nextReviewDate: null,
       responsiblePerson: '',
+      fraudIncidentsDetected: 0,
+      suspiciousTradeDetected: 0,
+      fraudRiskLikelihood: null,
       notes: '',
     },
     complianceMapping: {
@@ -194,6 +224,8 @@ export function createEmptyAssessment(
       disciplinaryMeasures: ['Verbal Warning', 'Written Warning', 'Suspension', 'Dismissal', 'Prosecution'],
       externalReporting: 'Regulatory reporting within 7 days where legally required',
       notes: '',
+      detectedLossesValue: null,
+      responseSpeed: null,
     },
     actionPlan: {
       highPriority: [],

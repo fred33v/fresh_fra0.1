@@ -7,7 +7,7 @@ import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { debounce } from '@/utils/debounce';
 import { createLogger } from '@/utils/logger';
-import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore } from '@/utils/assessment';
+import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore, migrateRiskAppetite } from '@/utils/assessment';
 
 const STORAGE_KEY = 'fra_assessment_draft';
 const SYNC_QUEUE_KEY = 'fra_sync_queue';
@@ -254,7 +254,7 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
             ...defaults,
             ...parsed,
             organisation: { ...defaults.organisation, ...parsed.organisation },
-            riskAppetite: { ...defaults.riskAppetite, ...parsed.riskAppetite },
+            riskAppetite: migrateRiskAppetite({ ...defaults.riskAppetite, ...parsed.riskAppetite }),
             fraudTriangle: { ...defaults.fraudTriangle, ...parsed.fraudTriangle },
             procurement: { ...defaults.procurement, ...parsed.procurement },
             cashBanking: { ...defaults.cashBanking, ...parsed.cashBanking },

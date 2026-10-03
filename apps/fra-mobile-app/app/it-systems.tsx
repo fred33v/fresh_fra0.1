@@ -33,6 +33,7 @@ export default function ITSystemsScreen() {
       />
 
       <CurrencyQuestion
+        kind="count"
         question="How many cybersecurity incidents have you experienced in the last 12 months?"
         hint="Include breaches, malware, unauthorized access, etc."
         value={assessment.itSystems.securityIncidentsCount}
@@ -47,7 +48,7 @@ export default function ITSystemsScreen() {
         onChange={(value) =>
           updateAssessment({ itSystems: { ...assessment.itSystems, hasCriticalSystems: value } })
         }
-        followUpQuestion="Please describe your critical systems and their importance to business operations"
+        followUp="Please describe your critical systems and their importance to business operations"
         followUpValue={assessment.itSystems.criticalSystemsDescription}
         onFollowUpChange={(text) =>
           updateAssessment({ itSystems: { ...assessment.itSystems, criticalSystemsDescription: text } })

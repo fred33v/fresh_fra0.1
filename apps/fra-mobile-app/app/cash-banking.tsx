@@ -32,6 +32,7 @@ export default function CashBankingScreen() {
       />
 
       <CurrencyQuestion
+        kind="count"
         question="How many bank accounts does the organisation maintain?"
         hint="Include all operational, savings, and payroll accounts"
         value={assessment.cashBanking.bankAccountCount}
@@ -46,7 +47,7 @@ export default function CashBankingScreen() {
         onChange={(value) =>
           updateAssessment({ cashBanking: { ...assessment.cashBanking, fraudIncidents: value } })
         }
-        followUpQuestion="Please describe the incident(s) and what controls have been implemented since"
+        followUp="Please describe the incident(s) and what controls have been implemented since"
         followUpValue={assessment.cashBanking.fraudDescription}
         onFollowUpChange={(text) =>
           updateAssessment({ cashBanking: { ...assessment.cashBanking, fraudDescription: text } })
