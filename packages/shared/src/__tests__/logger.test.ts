@@ -1,4 +1,11 @@
 import { describe, it, expect, vitest } from 'vitest';
+
+// The logger reads __DEV__ at import time; simulate a React Native dev build
+// so debug/info output is enabled for these tests.
+vitest.hoisted(() => {
+  (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+});
+
 import { createLogger } from '../logger';
 
 describe('createLogger', () => {
@@ -82,5 +89,27 @@ describe('createLogger', () => {
     expect(calls[1][0]).toContain('[Context2]');
     
     consoleSpy.mockRestore();
+  });
+
+  it('only logs warn and error outside dev builds', async () => {
+    const g = globalThis as { __DEV__?: boolean };
+    g.__DEV__ = false;
+    vitest.resetModules();
+    const { createLogger: createProdLogger } = await import('../logger');
+
+    const logSpy = vitest.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vitest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const logger = createProdLogger('Prod');
+    logger.debug('debug msg');
+    logger.info('info msg');
+    logger.warn('warn msg');
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[WARN]'), '');
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    g.__DEV__ = true;
   });
 });

@@ -80,7 +80,7 @@ describe('Workshop Data', () => {
     });
 
     it('has questions with required structure', () => {
-      quizQuestions.forEach((question) => {
+      Object.values(quizQuestions).forEach((question) => {
         expect(question.question).toBeDefined();
         expect(typeof question.question).toBe('string');
         expect(question.options).toBeDefined();
@@ -93,14 +93,14 @@ describe('Workshop Data', () => {
     });
 
     it('correct answer index is within options range', () => {
-      quizQuestions.forEach((question) => {
+      Object.values(quizQuestions).forEach((question) => {
         expect(question.correctAnswer).toBeGreaterThanOrEqual(0);
         expect(question.correctAnswer).toBeLessThan(question.options.length);
       });
     });
 
     it('each option is a non-empty string', () => {
-      quizQuestions.forEach((question) => {
+      Object.values(quizQuestions).forEach((question) => {
         question.options.forEach((option) => {
           expect(typeof option).toBe('string');
           expect(option.length).toBeGreaterThan(0);

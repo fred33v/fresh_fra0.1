@@ -8,6 +8,11 @@ import {
   isValidEmail,
   calculateCompletionPercentage,
   sanitizeString,
+  validatePasswordStrength,
+  hashString,
+  parseJWT,
+  formatCurrencyGBP,
+  generateUUID,
 } from '../utils';
 
 describe('calculateInherentRisk', () => {

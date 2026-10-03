@@ -87,11 +87,11 @@ describe('Index', () => {
       expect(screen.getByText('GovS-013 & ECCTA 2023 Compliant')).toBeInTheDocument();
     });
 
-    it('shows "Get Started" link when not authenticated', () => {
+    it('shows "Get Started" link to the Professional package when not authenticated', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Get Started/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/package/professional');
     });
 
     it('shows "Go to Dashboard" link when authenticated', () => {
@@ -213,11 +213,11 @@ describe('Index', () => {
       expect(screen.getByText('Most Popular')).toBeInTheDocument();
     });
 
-    it('Starter links to signup', () => {
+    it('Starter links to the Starter package page', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Start Assessment/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/package/starter');
     });
 
     it('Professional links to checkout when authenticated', () => {
@@ -289,11 +289,11 @@ describe('Index', () => {
       expect(screen.getByText('Ready to Strengthen Your Fraud Defences?')).toBeInTheDocument();
     });
 
-    it('Start Workshop link goes to signup when not authenticated', () => {
+    it('Start Workshop link goes to the Professional package when not authenticated', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Start Workshop Now/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/package/professional');
     });
 
     it('Start Workshop link goes to workshop when authenticated', () => {
