@@ -24,6 +24,15 @@ vi.mock('@/components/enterprise/KeypassManager', () => ({
   KeypassManager: () => <div data-testid="keypass-manager" />,
 }));
 
+// The overview has its own tests; here it only needs to expose its drill-down callback
+vi.mock('@/components/enterprise/EnterpriseOverview', () => ({
+  EnterpriseOverview: ({ onShowEmployees }: { onShowEmployees: (f: { risk?: 'high'; department?: string }) => void }) => (
+    <div data-testid="enterprise-overview">
+      <button type="button" onClick={() => onShowEmployees({ department: 'Finance' })}>Drill into Finance</button>
+    </div>
+  ),
+}));
+
 vi.mock('@/lib/api', () => ({
   api: { get: vi.fn() },
   ApiError: class ApiError extends Error {
@@ -155,9 +164,10 @@ function setupAuth(overrides?: Record<string, unknown>) {
   } as ReturnType<typeof useAuth>);
 }
 
-function renderDashboard() {
+// Most tests exercise the employee table, so they open that tab directly
+function renderDashboard(route = '/employer?tab=employees') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <EmployerDashboard />
     </MemoryRouter>,
   );
@@ -172,6 +182,34 @@ beforeEach(() => {
 });
 
 describe('EmployerDashboard', () => {
+  // ── Enterprise overview ─────────────────────────
+
+  describe('overview tab', () => {
+    it('opens on the overview by default', async () => {
+      mockedApi.get.mockResolvedValue([makeEmployee()]);
+
+      renderDashboard('/employer');
+
+      expect(await screen.findByTestId('enterprise-overview')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('drilling into a department opens the employee table filtered to it', async () => {
+      mockedApi.get.mockResolvedValue([
+        makeEmployee(),
+        makeEmployee({ userId: 'emp-2', userName: 'Bob Jones', email: 'bob@example.com', department: 'Operations' }),
+      ]);
+      const user = userEvent.setup();
+      renderDashboard('/employer');
+
+      await user.click(await screen.findByRole('button', { name: 'Drill into Finance' }));
+
+      expect(screen.getByRole('tab', { name: 'Employees' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+      expect(screen.queryByText('Bob Jones')).not.toBeInTheDocument();
+    });
+  });
+
   // ── Auth guard ──────────────────────────────────
 
   describe('auth guard', () => {

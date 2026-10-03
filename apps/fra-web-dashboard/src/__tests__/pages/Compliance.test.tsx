@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import Compliance from '@/pages/Compliance';
 import { api } from '@/lib/api';
 
@@ -19,6 +20,11 @@ vi.mock('@/components/layout/Layout', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const mockedApi = vi.mocked(api);
+
+// The page reads ?tab= so the dashboard can link straight to gaps, incidents or training
+function renderCompliance(route = '/compliance') {
+  return render(<MemoryRouter initialEntries={[route]}><Compliance /></MemoryRouter>);
+}
 
 const report = {
   generatedAt: '2026-09-29T10:00:00Z',
@@ -55,7 +61,7 @@ beforeEach(() => {
 
 describe('Compliance page', () => {
   it('shows framework scores with evidence and next steps', async () => {
-    render(<Compliance />);
+    renderCompliance();
     expect(await screen.findByLabelText('ECCTA 2023 score 50%')).toBeInTheDocument();
     expect(screen.getByLabelText('GovS 013 score 75%')).toBeInTheDocument();
     expect(screen.getByText('No staff have completed fraud awareness training.')).toBeInTheDocument();
@@ -66,14 +72,20 @@ describe('Compliance page', () => {
   });
 
   it('lists gaps by priority', async () => {
-    render(<Compliance />);
+    renderCompliance();
     await userEvent.click(await screen.findByRole('tab', { name: 'Gaps' }));
     expect(await screen.findByText('CRITICAL')).toBeInTheDocument();
     expect(screen.getByText('Run the workshop.')).toBeInTheDocument();
   });
 
+  it('opens the tab named in ?tab= so dashboard links land on the right section', async () => {
+    renderCompliance('/compliance?tab=gaps');
+    expect(await screen.findByText('CRITICAL')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Gaps' })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('requires a description before recording an incident', async () => {
-    render(<Compliance />);
+    renderCompliance();
     await userEvent.click(await screen.findByRole('tab', { name: 'Incidents' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Record incident' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Describe what happened');
@@ -82,7 +94,7 @@ describe('Compliance page', () => {
 
   it('records an incident and refreshes the report', async () => {
     mockedApi.post.mockResolvedValue({});
-    render(<Compliance />);
+    renderCompliance();
     await userEvent.click(await screen.findByRole('tab', { name: 'Incidents' }));
     await userEvent.type(await screen.findByLabelText('What happened'), 'Duplicate invoice paid');
     await userEvent.click(screen.getByRole('button', { name: 'Record incident' }));
@@ -93,7 +105,7 @@ describe('Compliance page', () => {
   });
 
   it('downloads a dataset export', async () => {
-    render(<Compliance />);
+    renderCompliance();
     await userEvent.click(await screen.findByRole('tab', { name: 'Exports' }));
     const panel = await screen.findByRole('tabpanel');
     await userEvent.click(within(panel).getByRole('button', { name: 'Download Risk register CSV' }));

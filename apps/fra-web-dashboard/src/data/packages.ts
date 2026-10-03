@@ -94,3 +94,11 @@ export function billingLabel(pkg: CataloguePackage): string {
 export function checkoutPath(pkg: CataloguePackage): string {
   return `/checkout?package=${pkg.name}`;
 }
+
+/** Signup link that remembers the chosen package, so the user lands on checkout afterwards. */
+export function signupPath(pkg: CataloguePackage): string {
+  return `/auth?mode=signup&package=${pkg.slug}`;
+}
+
+/** Home page section where all three packages can be compared and chosen. */
+export const PACKAGE_CHOOSER_PATH = '/#packages';

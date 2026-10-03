@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,14 +21,21 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react';
-import { useState } from 'react';
-import { PACKAGES, billingLabel, checkoutPath, formatPrice } from '@/data/packages';
+import { useEffect, useState } from 'react';
+import { PACKAGES, PACKAGE_CHOOSER_PATH, billingLabel, checkoutPath, formatPrice, signupPath } from '@/data/packages';
 
 const [STARTER, PROFESSIONAL, ENTERPRISE] = PACKAGES;
 
 export default function Index() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { hash, key } = useLocation();
+
+  // React Router doesn't scroll to #anchors, so "Get Started" (/#packages) would otherwise do nothing.
+  useEffect(() => {
+    if (!hash) return;
+    document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+  }, [hash, key]); // key changes on every click, so repeat clicks scroll again
   const [sessionCode, setSessionCode] = useState('');
 
   const handleJoinSession = () => {
@@ -189,7 +196,7 @@ export default function Index() {
                 Build fraud resilience through engaging content and practical action plans.
               </p>
 
-              <div className="inline-flex items-center gap-2 rounded bg-white/10 px-4 py-2 text-sm font-semibold text-white mb-8">
+              <div className="inline-flex items-center gap-2 rounded bg-[#003078]/40 px-4 py-2 text-sm font-semibold text-white mb-8">
                 <Shield className="h-4 w-4 text-[#ffdd00]" aria-hidden="true" />
                 <span>GovS-013 & ECCTA 2023 Compliant</span>
               </div>
@@ -205,7 +212,7 @@ export default function Index() {
                   </Link>
                 ) : (
                   <Link
-                    to="/package/professional"
+                    to={PACKAGE_CHOOSER_PATH}
                     className="inline-flex items-center justify-center gap-2 rounded bg-[#00703c] px-6 py-3 text-lg font-bold text-white shadow-[0_2px_0_#002d18] hover:bg-[#005a30] no-underline"
                   >
                     Get Started
@@ -277,11 +284,11 @@ export default function Index() {
                 {stats.map((stat) => (
                   <div
                     key={stat.label}
-                    className="text-center p-4 rounded bg-white/10 border border-white/20"
+                    className="text-center p-4 rounded bg-[#003078]/40 border border-white/30"
                   >
                     <div className="text-2xl font-bold text-white">{stat.value}</div>
-                    <div className="text-sm font-medium text-white/90">{stat.label}</div>
-                    <div className="text-xs text-white/70">{stat.sublabel}</div>
+                    <div className="text-sm font-medium text-white">{stat.label}</div>
+                    <div className="text-xs text-white/90">{stat.sublabel}</div>
                   </div>
                 ))}
               </div>
@@ -326,7 +333,7 @@ export default function Index() {
       </section>
 
       {/* ===== Packages / Pricing Section ===== */}
-      <section className="py-16 lg:py-24 bg-[#f3f2f1]" aria-label="Packages">
+      <section id="packages" className="scroll-mt-4 py-16 lg:py-24 bg-[#f3f2f1]" aria-label="Packages">
         <div className="container">
           <div className="max-w-3xl mb-12">
             <h2 className="text-3xl font-bold text-[#0b0c0c] sm:text-4xl mb-4">
@@ -412,7 +419,7 @@ export default function Index() {
                   ))}
                 </ul>
                 <Link
-                  to={user ? checkoutPath(PROFESSIONAL) : '/auth?mode=signup'}
+                  to={user ? checkoutPath(PROFESSIONAL) : signupPath(PROFESSIONAL)}
                   className="inline-flex items-center justify-center gap-2 rounded bg-[#00703c] px-4 py-3 text-sm font-bold text-white shadow-[0_2px_0_#002d18] hover:bg-[#005a30] no-underline"
                 >
                   Choose Professional
@@ -429,7 +436,7 @@ export default function Index() {
               viewport={{ once: true }}
             >
               <div className="h-full flex flex-col bg-white border-2 border-[#f47738] p-6">
-                <span className="inline-flex items-center gap-1.5 self-start rounded bg-[#f47738]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#f47738] mb-4">
+                <span className="inline-flex items-center gap-1.5 self-start rounded bg-[#f47738]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#8a3a0f] mb-4">
                   <Shield className="h-3 w-3" aria-hidden="true" />
                   Package 3
                 </span>
@@ -450,8 +457,8 @@ export default function Index() {
                   ))}
                 </ul>
                 <Link
-                  to={user ? checkoutPath(ENTERPRISE) : '/auth?mode=signup'}
-                  className="inline-flex items-center justify-center gap-2 rounded bg-[#f47738] px-4 py-3 text-sm font-bold text-white shadow-[0_2px_0_#6e3619] hover:bg-[#e0621e] no-underline"
+                  to={user ? checkoutPath(ENTERPRISE) : signupPath(ENTERPRISE)}
+                  className="inline-flex items-center justify-center gap-2 rounded bg-[#b8501f] px-4 py-3 text-sm font-bold text-white shadow-[0_2px_0_#6e3619] hover:bg-[#9a4119] no-underline"
                 >
                   Choose Enterprise
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />

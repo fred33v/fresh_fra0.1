@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Shield, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { checkoutPath, getPackage } from '@/data/packages';
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -72,12 +73,15 @@ export default function Auth() {
   const [resetSuccess, setResetSuccess] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  // A package chosen before signing up/in (e.g. ?package=enterprise) takes the user straight to its checkout.
+  const chosenPackage = getPackage(searchParams.get('package') ?? '');
+  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : '/dashboard';
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate(afterAuthPath);
     }
-  }, [user, navigate]);
+  }, [user, navigate, afterAuthPath]);
 
   const signInForm = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -159,7 +163,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Welcome back!');
-      navigate('/dashboard');
+      navigate(afterAuthPath);
     }
     setIsLoading(false);
   };
@@ -181,7 +185,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Account created successfully!');
-      navigate('/dashboard');
+      navigate(afterAuthPath);
     }
     setIsLoading(false);
   };

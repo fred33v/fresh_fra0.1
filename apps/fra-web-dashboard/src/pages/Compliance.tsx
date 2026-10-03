@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 import { Layout } from '@/components/layout/Layout';
@@ -12,14 +13,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CheckCircle2, CircleDashed, Download, Printer, XCircle } from 'lucide-react';
+import { AlertTriangle, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
+import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
 
 const logger = createLogger('Compliance');
 
 // ── Types (mirror /api/v1/compliance responses) ─────────────────
 
-type Status = 'met' | 'partial' | 'not_met';
+type Status = ComplianceStatus;
 interface Requirement { id: string; name: string; status: Status; evidence: string; recommendation?: string }
 interface Framework { score: number; requirements: Requirement[] }
 interface Metrics {
@@ -46,22 +48,6 @@ const SENIOR_ROLES = ['CEO', 'CFO', 'COO', 'CTO', 'CISO', 'Board Chair', 'Execut
 
 const fmtDate = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-
-const STATUS_META: Record<Status, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  met: { label: 'Met', icon: CheckCircle2, className: 'text-success' },
-  partial: { label: 'Partly met', icon: CircleDashed, className: 'text-amber-600 dark:text-amber-400' },
-  not_met: { label: 'Not met', icon: XCircle, className: 'text-destructive' },
-};
-
-function StatusLabel({ status }: { status: Status }) {
-  const meta = STATUS_META[status];
-  const Icon = meta.icon;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${meta.className}`}>
-      <Icon className="h-4 w-4" aria-hidden="true" /> {meta.label}
-    </span>
-  );
-}
 
 async function downloadCsv(path: string, filename: string) {
   try {
@@ -611,11 +597,17 @@ function Exports() {
 
 // ── Page ────────────────────────────────────────────────────────
 
+const COMPLIANCE_TABS = ['overview', 'gaps', 'incidents', 'senior', 'training', 'audit', 'exports'];
+
 export default function Compliance() {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [tab, setTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get('tab') ?? '';
+    return COMPLIANCE_TABS.includes(requested) ? requested : 'overview';
+  });
 
   const loadReport = useCallback(() => {
     api.get<Report>('/api/v1/compliance/report')

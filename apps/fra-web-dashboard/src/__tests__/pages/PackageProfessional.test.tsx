@@ -103,7 +103,7 @@ describe('PackageProfessional', () => {
       renderPage();
 
       const links = screen.getAllByRole('link', { name: /Choose Professional/ });
-      expect(links[0]).toHaveAttribute('href', '/auth?mode=signup');
+      expect(links[0]).toHaveAttribute('href', '/auth?mode=signup&package=professional');
     });
 
     it('links to checkout when authenticated', () => {
@@ -119,7 +119,7 @@ describe('PackageProfessional', () => {
       renderPage();
 
       const link = screen.getByRole('link', { name: /Get Started Now/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/auth?mode=signup&package=professional');
     });
 
     it('CTA "Get Started Now" links to checkout when authenticated', () => {
@@ -138,11 +138,11 @@ describe('PackageProfessional', () => {
       expect(link).toHaveAttribute('href', '/resources');
     });
 
-    it('Compare All Packages link points to /', () => {
+    it('Compare All Packages link points to the package chooser', () => {
       renderPage();
 
       const link = screen.getByRole('link', { name: /Compare All Packages/ });
-      expect(link).toHaveAttribute('href', '/');
+      expect(link).toHaveAttribute('href', '/#packages');
     });
   });
 

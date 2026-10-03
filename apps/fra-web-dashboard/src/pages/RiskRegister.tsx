@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertTriangle, Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { scoreRisk, type ControlEffectiveness, type Priority } from '@/lib/risk-scoring';
+import { RiskHeatMap } from '@/components/enterprise/RiskHeatMap';
 
 const logger = createLogger('RiskRegister');
 
@@ -65,13 +66,6 @@ const PRIORITY_CLASS: Record<Priority, string> = {
   MEDIUM: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
   LOW: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800',
 };
-
-function heatCellClass(impact: number, likelihood: number) {
-  const score = impact * likelihood;
-  if (score >= 15) return 'bg-destructive/20';
-  if (score >= 8) return 'bg-amber-200/60 dark:bg-amber-900/50';
-  return 'bg-emerald-200/60 dark:bg-emerald-900/40';
-}
 
 type FormState = {
   title: string; riskArea: string; description: string; impact: number; likelihood: number;
@@ -268,28 +262,7 @@ export default function RiskRegister() {
                     <CardDescription>Impact (rows) × likelihood (columns)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-[auto_repeat(5,2.25rem)] gap-1 text-xs" role="table" aria-label="Risk heat map">
-                      {[5, 4, 3, 2, 1].map((impact) => (
-                        <div key={impact} className="contents" role="row">
-                          <span className="pr-2 self-center text-muted-foreground" role="rowheader">{impact}</span>
-                          {[1, 2, 3, 4, 5].map((likelihood) => {
-                            const count = summary.heatMap[impact - 1][likelihood - 1];
-                            return (
-                              <span
-                                key={likelihood}
-                                role="cell"
-                                aria-label={`Impact ${impact}, likelihood ${likelihood}: ${count} risks`}
-                                className={`h-9 rounded flex items-center justify-center font-medium ${heatCellClass(impact, likelihood)}`}
-                              >
-                                {count || ''}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ))}
-                      <span />
-                      {[1, 2, 3, 4, 5].map((l) => <span key={l} className="text-center text-muted-foreground">{l}</span>)}
-                    </div>
+                    <RiskHeatMap heatMap={summary.heatMap} />
                   </CardContent>
                 </Card>
               </div>

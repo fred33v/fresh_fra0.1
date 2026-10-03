@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,11 +7,13 @@ import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('EmployerDashboard');
 const LIVE_REFRESH_MS = 30_000;
+const DASHBOARD_TABS = ['overview', 'employees', 'keypasses'];
 const EMPLOYEE_PAGE_SIZE = 200;
 import { Layout } from '@/components/layout/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { KeypassManager } from '@/components/enterprise/KeypassManager';
 import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
+import { EnterpriseOverview } from '@/components/enterprise/EnterpriseOverview';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -117,7 +119,13 @@ export default function EmployerDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const expandedUserRef = useRef<string | null>(null);
-  const [tab, setTab] = useState('employees');
+  const [searchParams] = useSearchParams();
+  // Deep links such as /employer?tab=employees open a specific tab
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get('tab') ?? '';
+    return DASHBOARD_TABS.includes(requested) ? requested : 'overview';
+  });
+  const [refreshSignal, setRefreshSignal] = useState(0);
   const { entitlements } = useEntitlements();
 
   const isEmployerOrAdmin = user?.role === 'employer' || user?.role === 'admin';
@@ -137,6 +145,7 @@ export default function EmployerDashboard() {
         if (batch.length < EMPLOYEE_PAGE_SIZE) break;
       }
       setEmployees(all);
+      setRefreshSignal((n) => n + 1);
     } catch (err: unknown) {
       if (silent) {
         logger.warn('Background dashboard refresh failed', err);
@@ -216,6 +225,15 @@ export default function EmployerDashboard() {
     ].filter(d => d.value > 0);
   }, [employees]);
 
+  // Overview drill-down: jump to the employee table with the matching filter applied
+  const showEmployees = useCallback((filter: { risk?: 'high'; department?: string }) => {
+    setStatusFilter('all');
+    setSearchQuery('');
+    setRiskFilter(filter.risk ?? 'all');
+    setDepartmentFilter(filter.department ?? 'all');
+    setTab('employees');
+  }, []);
+
   const fetchEmployeeDetail = async (userId: string) => {
     setDetailLoading(true);
     setDetailError(null);
@@ -281,7 +299,7 @@ export default function EmployerDashboard() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">Organisation Dashboard</h1>
-            <p className="text-muted-foreground">Employee fraud risk awareness overview</p>
+            <p className="text-muted-foreground">Fraud risk, compliance and staff coverage across your organisation</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate('/compliance')}>
@@ -338,7 +356,7 @@ export default function EmployerDashboard() {
           <Tabs value={tab} onValueChange={setTab}>
             <div className="space-y-4 mb-6">
               <SubscriptionCard entitlements={entitlements} />
-              {highRiskEmployees.length > 0 && (
+              {tab !== 'overview' && highRiskEmployees.length > 0 && (
                 <Card className="border-destructive/40 bg-destructive/5" role="alert">
                   <CardContent className="pt-6 flex flex-wrap items-start justify-between gap-4">
                     <div className="flex gap-3">
@@ -353,17 +371,22 @@ export default function EmployerDashboard() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => { setTab('employees'); setRiskFilter('high'); }}>
+                    <Button variant="outline" size="sm" onClick={() => showEmployees({ risk: 'high' })}>
                       Show high-risk employees
                     </Button>
                   </CardContent>
                 </Card>
               )}
               <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="employees">Employees</TabsTrigger>
                 <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
               </TabsList>
             </div>
+
+            <TabsContent value="overview">
+              <EnterpriseOverview employees={employees} refreshSignal={refreshSignal} onShowEmployees={showEmployees} />
+            </TabsContent>
 
             <TabsContent value="keypasses">
               <KeypassManager organisationId={user.organisationId} userNames={userNames} />

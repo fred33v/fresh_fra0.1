@@ -90,6 +90,26 @@ describe('Auth', () => {
 
       expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
     });
+
+    it('navigates to checkout for the chosen package when ?package= is set', () => {
+      setupAuth({
+        user: { userId: 'u-1', email: 'a@b.com', name: 'A', role: 'employee', organisationId: 'o-1', createdAt: '' },
+      });
+
+      renderAuth('/auth?mode=signup&package=enterprise');
+
+      expect(mockNavigate).toHaveBeenCalledWith('/checkout?package=Enterprise');
+    });
+
+    it('ignores an unknown ?package= value', () => {
+      setupAuth({
+        user: { userId: 'u-1', email: 'a@b.com', name: 'A', role: 'employee', organisationId: 'o-1', createdAt: '' },
+      });
+
+      renderAuth('/auth?package=not-a-package');
+
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
   });
 
   // ── Sign in mode (default) ────────────────────

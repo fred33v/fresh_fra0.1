@@ -12,7 +12,7 @@ import {
   ClipboardCheck,
   FileText,
 } from 'lucide-react';
-import { getPackage, checkoutPath, formatPrice } from '@/data/packages';
+import { getPackage, checkoutPath, signupPath, formatPrice, PACKAGE_CHOOSER_PATH } from '@/data/packages';
 
 const PKG = getPackage('pkg_basic')!;
 
@@ -87,12 +87,12 @@ export default function PackageStarter() {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : signupPath(PKG)}>
                     Start Assessment
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
-                <Button size="lg" variant="outline" className="border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10" asChild>
+                <Button size="lg" variant="outline" className="border-primary-foreground/20 bg-transparent text-primary-foreground hover:bg-primary-foreground/10" asChild>
                   <Link to="/resources">
                     <BookOpen className="mr-2 h-5 w-5" />
                     View Resources
@@ -119,20 +119,20 @@ export default function PackageStarter() {
       <section className="py-16 lg:py-24">
         <div className="container">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl mb-12 text-center">
               What's Included
             </h2>
             <div className="grid gap-6">
               {starterFeatures.map((feature) => {
                 const Icon = feature.icon;
                 return (
-                  <Card key={feature.text} className="border-primary-foreground/20">
+                  <Card key={feature.text} className="border-border">
                     <CardContent className="p-6 flex gap-4">
                       <div className="flex-shrink-0">
                         <Icon className="h-6 w-6 text-accent" aria-hidden="true" />
                       </div>
                       <div>
-                        <p className="text-lg font-medium text-primary-foreground">{feature.text}</p>
+                        <p className="text-lg font-medium text-foreground">{feature.text}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -147,17 +147,17 @@ export default function PackageStarter() {
       <section className="py-16 lg:py-24 bg-muted/50">
         <div className="container">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl mb-12 text-center">
               Complete Assessment of 13 Key Areas
             </h2>
-            <p className="text-lg text-primary-foreground/80 text-center mb-12 max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground text-center mb-12 max-w-2xl mx-auto">
               Our comprehensive assessment covers all critical fraud risk areas, helping you build a complete picture of your organization's vulnerabilities and readiness.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               {assessmentModules.map((module) => (
-                <div key={module} className="flex items-start gap-3 p-4 rounded-lg border border-primary-foreground/10 bg-background">
+                <div key={module} className="flex items-start gap-3 p-4 rounded-lg border border-border bg-background">
                   <CheckCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" aria-hidden="true" />
-                  <span className="text-primary-foreground font-medium">{module}</span>
+                  <span className="text-foreground font-medium">{module}</span>
                 </div>
               ))}
             </div>
@@ -168,14 +168,14 @@ export default function PackageStarter() {
       {/* Ideal For */}
       <section className="py-16 lg:py-24 bg-muted/50">
         <div className="container">
-          <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl mb-12 text-center">
             Why Choose Starter?
           </h2>
           <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
             {idealFor.map((item) => (
-              <div key={item} className="flex items-start gap-3 p-4 rounded-lg border border-primary-foreground/10">
+              <div key={item} className="flex items-start gap-3 p-4 rounded-lg border border-border">
                 <CheckCircle2 className="h-6 w-6 text-accent shrink-0 mt-0.5" aria-hidden="true" />
-                <span className="text-primary-foreground">{item}</span>
+                <span className="text-foreground">{item}</span>
               </div>
             ))}
           </div>
@@ -185,67 +185,67 @@ export default function PackageStarter() {
       {/* Package Comparison */}
       <section className="py-16 lg:py-24">
         <div className="container">
-          <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl mb-12 text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl mb-12 text-center">
             Package Comparison
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-primary-foreground/20">
-                  <th className="text-left py-4 px-4 font-bold text-primary-foreground">Feature</th>
-                  <th className="text-center py-4 px-4 font-bold text-accent">Starter</th>
-                  <th className="text-center py-4 px-4 font-semibold text-primary-foreground/60">Professional</th>
-                  <th className="text-center py-4 px-4 font-semibold text-primary-foreground/60">Enterprise</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-4 px-4 font-bold text-foreground">Feature</th>
+                  <th className="text-center py-4 px-4 font-bold text-amber-700 dark:text-accent">Starter</th>
+                  <th className="text-center py-4 px-4 font-semibold text-muted-foreground">Professional</th>
+                  <th className="text-center py-4 px-4 font-semibold text-muted-foreground">Enterprise</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">Fraud Risk Assessment</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">Fraud Risk Assessment</td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">PDF Report</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">PDF Report</td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">ECCTA Compliance</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">ECCTA Compliance</td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-accent inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
-                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-primary-foreground/40 inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
+                  <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-muted-foreground inline" /></td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">Staff Training</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">Staff Training</td>
                   <td className="text-center py-4 px-4 text-muted-foreground">—</td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">Employee Key-Passes</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">Employee Key-Passes</td>
                   <td className="text-center py-4 px-4">1</td>
                   <td className="text-center py-4 px-4">50</td>
                   <td className="text-center py-4 px-4">Unlimited</td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">Reassessment</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">Reassessment</td>
                   <td className="text-center py-4 px-4 text-muted-foreground">One-time</td>
                   <td className="text-center py-4 px-4">Quarterly</td>
                   <td className="text-center py-4 px-4">Continuous</td>
                 </tr>
-                <tr className="border-b border-primary-foreground/10">
-                  <td className="py-4 px-4 text-primary-foreground">Email Support</td>
+                <tr className="border-b border-border">
+                  <td className="py-4 px-4 text-foreground">Email Support</td>
                   <td className="text-center py-4 px-4 text-muted-foreground">—</td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
                   <td className="text-center py-4 px-4"><CheckCircle2 className="h-5 w-5 text-green-500 inline" /></td>
                 </tr>
                 <tr>
-                  <td className="py-4 px-4 text-primary-foreground font-bold">Price</td>
-                  <td className="text-center py-4 px-4 font-bold text-accent">{formatPrice(PKG)}</td>
-                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">{formatPrice(getPackage('pkg_training')!)}/year</td>
-                  <td className="text-center py-4 px-4 font-semibold text-primary-foreground/60">{formatPrice(getPackage('pkg_full')!)}/year</td>
+                  <td className="py-4 px-4 text-foreground font-bold">Price</td>
+                  <td className="text-center py-4 px-4 font-bold text-amber-700 dark:text-accent">{formatPrice(PKG)}</td>
+                  <td className="text-center py-4 px-4 font-semibold text-muted-foreground">{formatPrice(getPackage('pkg_training')!)}/year</td>
+                  <td className="text-center py-4 px-4 font-semibold text-muted-foreground">{formatPrice(getPackage('pkg_full')!)}/year</td>
                 </tr>
               </tbody>
             </table>
@@ -269,13 +269,13 @@ export default function PackageStarter() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-                  <Link to={user ? checkoutPath(PKG) : '/auth?mode=signup'}>
+                  <Link to={user ? checkoutPath(PKG) : signupPath(PKG)}>
                     Start Assessment Now
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
-                <Button size="lg" variant="outline" className="border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10" asChild>
-                  <Link to="/">
+                <Button size="lg" variant="outline" className="border-primary-foreground/20 bg-transparent text-primary-foreground hover:bg-primary-foreground/10" asChild>
+                  <Link to={PACKAGE_CHOOSER_PATH}>
                     Compare All Packages
                   </Link>
                 </Button>
@@ -296,7 +296,7 @@ export default function PackageStarter() {
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <Shield className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold text-primary-foreground">Fraud Risk Assessment Service</span>
+              <span className="font-semibold text-foreground">Fraud Risk Assessment Service</span>
             </div>
             <p className="text-sm text-muted-foreground">
               GovS-013 & ECCTA 2023 Compliant

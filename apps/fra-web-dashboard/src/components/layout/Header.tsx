@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { PACKAGE_CHOOSER_PATH } from '@/data/packages';
 
 export function Header() {
   const { user, profile, signOut, hasRole } = useAuth();
@@ -101,7 +102,7 @@ export function Header() {
                 <Link to="/auth">Sign In</Link>
               </Button>
               <Button size="sm" asChild>
-                <Link to="/auth?mode=signup">Get Started</Link>
+                <Link to={PACKAGE_CHOOSER_PATH}>Get Started</Link>
               </Button>
             </div>
           )}

@@ -84,11 +84,11 @@ describe('Header', () => {
       expect(link).toHaveAttribute('href', '/auth');
     });
 
-    it('shows Get Started link pointing to /auth?mode=signup', () => {
+    it('shows Get Started link pointing to the package chooser', () => {
       renderHeader();
 
       const link = screen.getByRole('link', { name: /Get Started/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/#packages');
     });
 
     it('does not render the avatar dropdown', () => {

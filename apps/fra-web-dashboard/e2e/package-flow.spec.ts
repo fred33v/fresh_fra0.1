@@ -7,7 +7,7 @@
 import { test, expect, navigateToPage, waitForPageContent } from './fixtures';
 
 test.describe('Package Selection Flow', () => {
-  test('Home "Get Started" button leads to package page', async ({ page }) => {
+  test('Home "Get Started" button leads to the package chooser', async ({ page }) => {
     await navigateToPage(page, '/', 5000);
 
     const hasContent = await waitForPageContent(page, 3000);
@@ -16,9 +16,9 @@ test.describe('Package Selection Flow', () => {
     // Find "Get Started" button
     const getStartedButton = await page.locator('a, button').filter({ hasText: /Get Started/ }).first();
     const href = await getStartedButton.getAttribute('href');
-    
-    // Should go to a package page, not directly to auth
-    expect(href).toContain('/package');
+
+    // Should go to the section listing all three packages, not directly to auth
+    expect(href).toBe('/#packages');
     console.log('✓ Get Started button redirects to:', href);
   });
 
@@ -140,36 +140,25 @@ test.describe('Package Selection Flow', () => {
     console.log('✓ Enterprise package pricing shown');
   });
 
-  test('Complete flow: Home → Get Started → Professional Package → Can proceed to checkout', async ({ page }) => {
+  test('Complete flow: Home → Get Started → choose Enterprise → signup remembers the package', async ({ page }) => {
     // Step 1: Start on home
     await navigateToPage(page, '/', 5000);
     expect(await waitForPageContent(page, 3000)).toBeTruthy();
-    console.log('✓ Step 1: Home page loaded');
 
-    // Step 2: Click Get Started button
-    const getStartedButton = await page.locator('a, button').filter({ hasText: /Get Started/ }).first();
-    const getStartedHref = await getStartedButton.getAttribute('href');
-    console.log('✓ Step 2: Get Started button found, redirects to:', getStartedHref);
+    // Step 2: Get Started scrolls to the package chooser
+    await page.locator('a, button').filter({ hasText: /Get Started/ }).first().click();
+    await expect(page).toHaveURL(/#packages$/);
 
-    // Step 3: Navigate to package page
-    expect(getStartedHref).toContain('/package');
-    await navigateToPage(page, getStartedHref || '/package/professional', 5000);
-    expect(await waitForPageContent(page, 3000)).toBeTruthy();
-    console.log('✓ Step 3: Package page loaded');
+    // Step 3: all three packages are selectable, including Enterprise (Package 3)
+    const packages = page.locator('#packages');
+    await expect(packages.getByRole('link', { name: /Start Assessment/ })).toBeVisible();
+    await expect(packages.getByRole('link', { name: /Choose Professional/ })).toBeVisible();
+    const chooseEnterprise = packages.getByRole('link', { name: /Choose Enterprise/ });
+    await expect(chooseEnterprise).toBeVisible();
 
-    // Step 4: Verify CTA button and pricing exists
-    const chooseButton = await page.locator('button, a').filter({ hasText: /Choose|Subscribe|Select/ }).first();
-    const isVisible = await chooseButton.isVisible({ timeout: 2000 }).catch(() => false);
-    expect(isVisible).toBeTruthy();
-    console.log('✓ Step 4: CTA button visible');
-
-    // Step 5: Verify pricing information
-    const priceVisible = await page.textContent('body');
-    expect(priceVisible).toContain('£');
-    expect(priceVisible).toContain('year');
-    console.log('✓ Step 5: Pricing information visible');
-
-    console.log('✅ Complete flow verified: Home → Get Started → Package Selection → Ready for Checkout');
+    // Step 4: choosing Enterprise goes to signup carrying the package, so checkout follows signup
+    await chooseEnterprise.click();
+    await expect(page).toHaveURL(/\/auth\?mode=signup&package=enterprise/);
   });
 
   test('Starter package page exists and renders', async ({ page }) => {

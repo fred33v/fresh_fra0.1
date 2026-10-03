@@ -87,11 +87,11 @@ describe('Index', () => {
       expect(screen.getByText('GovS-013 & ECCTA 2023 Compliant')).toBeInTheDocument();
     });
 
-    it('shows "Get Started" link to the Professional package when not authenticated', () => {
+    it('shows "Get Started" link to the package chooser when not authenticated', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Get Started/ });
-      expect(link).toHaveAttribute('href', '/package/professional');
+      expect(link).toHaveAttribute('href', '/#packages');
     });
 
     it('shows "Go to Dashboard" link when authenticated', () => {
@@ -233,7 +233,7 @@ describe('Index', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Choose Professional/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/auth?mode=signup&package=professional');
     });
 
     it('Enterprise links to checkout when authenticated', () => {
@@ -249,7 +249,7 @@ describe('Index', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Choose Enterprise/ });
-      expect(link).toHaveAttribute('href', '/auth?mode=signup');
+      expect(link).toHaveAttribute('href', '/auth?mode=signup&package=enterprise');
     });
   });
 
