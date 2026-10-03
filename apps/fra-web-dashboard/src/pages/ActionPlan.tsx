@@ -39,8 +39,8 @@ export default function ActionPlan() {
     setFetchError(false);
 
     try {
-      const plans = await api.get<ActionPlanType[]>('/api/v1/workshop/action-plans');
-      const data = plans.length > 0 ? plans[0] : null;
+      // The API returns the user's latest action plan, or null when they have none yet
+      const data = await api.get<ActionPlanType | null>('/api/v1/workshop/action-plans');
 
       if (data) {
         setActionPlan({

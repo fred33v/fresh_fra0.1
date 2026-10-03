@@ -158,7 +158,7 @@ beforeEach(() => {
   setupAuth();
   setupProgress();
   // Default: existing action plan
-  mockedApi.get.mockResolvedValue([makeActionPlan()]);
+  mockedApi.get.mockResolvedValue(makeActionPlan());
 });
 
 describe('ActionPlan', () => {
@@ -167,7 +167,7 @@ describe('ActionPlan', () => {
   describe('auth guard', () => {
     it('stays in loading state when user is null (never fetches)', () => {
       setupAuth({ user: null });
-      mockedApi.get.mockResolvedValue([]);
+      mockedApi.get.mockResolvedValue(null);
 
       renderActionPlan();
 
@@ -178,7 +178,7 @@ describe('ActionPlan', () => {
 
     it('stays in loading state when profile is null', () => {
       setupAuth({ profile: null });
-      mockedApi.get.mockResolvedValue([]);
+      mockedApi.get.mockResolvedValue(null);
 
       renderActionPlan();
 
@@ -224,7 +224,7 @@ describe('ActionPlan', () => {
       });
 
       // Second call succeeds
-      mockedApi.get.mockResolvedValueOnce([makeActionPlan()]);
+      mockedApi.get.mockResolvedValueOnce(makeActionPlan());
       await user.click(screen.getByText('Try Again'));
 
       await waitFor(() => {
@@ -233,13 +233,26 @@ describe('ActionPlan', () => {
     });
   });
 
+  // ── API contract ──────────────────────────────
+
+  describe('API contract', () => {
+    it('reuses the existing plan the API returns instead of creating another', async () => {
+      // GET /workshop/action-plans returns a single plan object (or null), not a list
+      mockedApi.get.mockResolvedValueOnce(makeActionPlan());
+      renderActionPlan();
+
+      await waitFor(() => {
+        expect(screen.getByText('Your Action Plan')).toBeInTheDocument();
+      });
+      expect(mockedApi.post).not.toHaveBeenCalled();
+    });
+  });
+
   // ── Empty state ───────────────────────────────
 
   describe('empty state', () => {
     it('shows empty state when action plan has zero items', async () => {
-      mockedApi.get.mockResolvedValueOnce([
-        makeActionPlan({ action_items: [] }),
-      ]);
+      mockedApi.get.mockResolvedValueOnce(makeActionPlan({ action_items: [] }));
 
       renderActionPlan();
 
@@ -250,9 +263,7 @@ describe('ActionPlan', () => {
     });
 
     it('Go to Workshop button navigates to /workshop', async () => {
-      mockedApi.get.mockResolvedValueOnce([
-        makeActionPlan({ action_items: [] }),
-      ]);
+      mockedApi.get.mockResolvedValueOnce(makeActionPlan({ action_items: [] }));
 
       const user = userEvent.setup();
       renderActionPlan();
@@ -382,9 +393,7 @@ describe('ActionPlan', () => {
     });
 
     it('pre-fills commitments from API data', async () => {
-      mockedApi.get.mockResolvedValueOnce([
-        makeActionPlan({ commitments: ['First commitment', 'Second commitment'] }),
-      ]);
+      mockedApi.get.mockResolvedValueOnce(makeActionPlan({ commitments: ['First commitment', 'Second commitment'] }));
 
       renderActionPlan();
 
@@ -458,7 +467,7 @@ describe('ActionPlan', () => {
 
   describe('default plan creation', () => {
     it('creates a new action plan via POST when none exists', async () => {
-      mockedApi.get.mockResolvedValueOnce([]);
+      mockedApi.get.mockResolvedValueOnce(null);
       mockedApi.post.mockResolvedValueOnce(makeActionPlan());
 
       renderActionPlan();

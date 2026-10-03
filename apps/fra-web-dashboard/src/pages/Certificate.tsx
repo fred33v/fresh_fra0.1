@@ -33,10 +33,9 @@ export default function Certificate() {
     if (!user) return;
 
     try {
-      const certs = await api.get<CertificateType[]>('/api/v1/workshop/certificates');
-      if (certs.length > 0) {
-        setCertificate(certs[0]);
-      }
+      // The API returns the user's latest certificate, or null when none has been issued
+      const cert = await api.get<CertificateType | null>('/api/v1/workshop/certificates');
+      if (cert) setCertificate(cert);
     } catch (err: unknown) {
       logger.error('Error fetching certificate', err);
       toast.error('Failed to load certificate');

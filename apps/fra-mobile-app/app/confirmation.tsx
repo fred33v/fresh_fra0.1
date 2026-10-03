@@ -6,6 +6,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Download, Share2 } from 'lucide-react-native';
 import colors from '@/constants/colors';
 import { createLogger } from '@/utils/logger';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
+import { buildReportHtml, buildRiskRegisterCsv, fileSlug } from '@/utils/reportExport';
 import {
   PaymentSummaryCard,
   EmployeeAccessCard,
@@ -20,20 +24,56 @@ export default function ConfirmationScreen() {
   const { organisation } = useAuth();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
-  const handleDownloadReport = () => {
-    Alert.alert(
-      'Report Ready',
-      'Your comprehensive FRA Version 2.0 report has been generated and would be downloaded as a PDF file.',
-      [{ text: 'OK' }]
-    );
+  const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const baseName = `fraud-risk-assessment-${fileSlug(assessment.organisation.name)}-${today}`;
+
+  // Opens the system share sheet so the file can be saved to Files, emailed or sent on
+  const shareFile = async (uri: string, mimeType: string, UTI: string, dialogTitle: string) => {
+    if (!(await Sharing.isAvailableAsync())) {
+      Alert.alert('Sharing unavailable', 'This device cannot share files. Try again on a phone or tablet.');
+      return;
+    }
+    await Sharing.shareAsync(uri, { mimeType, UTI, dialogTitle });
   };
 
-  const handleExportRegister = () => {
-    Alert.alert(
-      'Export Risk Register',
-      'Your risk register would be exported as a CSV file for use in Excel or other tools.',
-      [{ text: 'OK' }]
-    );
+  const handleDownloadReport = async () => {
+    if (exporting) return;
+    setExporting('pdf');
+    try {
+      const { uri } = await Print.printToFileAsync({ html: buildReportHtml(assessment) });
+      // printToFileAsync picks a random name; give the PDF a meaningful one before sharing
+      const pdf = new File(Paths.cache, `${baseName}.pdf`);
+      if (pdf.exists) pdf.delete();
+      new File(uri).move(pdf);
+      await shareFile(pdf.uri, 'application/pdf', 'com.adobe.pdf', 'Fraud risk assessment report');
+    } catch (error: unknown) {
+      logger.error('PDF export failed:', error);
+      Alert.alert('Export failed', 'The PDF report could not be created. Please try again.');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleExportRegister = async () => {
+    if (exporting) return;
+    if (assessment.riskRegister.length === 0) {
+      Alert.alert('Nothing to export', 'No risks were identified in this assessment.');
+      return;
+    }
+    setExporting('csv');
+    try {
+      const csv = new File(Paths.cache, `${baseName}-risk-register.csv`);
+      if (csv.exists) csv.delete();
+      csv.create();
+      csv.write(buildRiskRegisterCsv(assessment.riskRegister));
+      await shareFile(csv.uri, 'text/csv', 'public.comma-separated-values-text', 'Risk register (CSV)');
+    } catch (error: unknown) {
+      logger.error('CSV export failed:', error);
+      Alert.alert('Export failed', 'The risk register could not be exported. Please try again.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   const handleShareReport = async () => {
@@ -118,23 +158,23 @@ export default function ConfirmationScreen() {
         <View style={styles.actionsContainer}>
           <Text style={styles.actionsTitle}>Export Options</Text>
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleDownloadReport} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Download Full Report as PDF">
+          <TouchableOpacity style={styles.actionButton} onPress={handleDownloadReport} disabled={exporting !== null} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Download Full Report as PDF" accessibilityState={{ busy: exporting === 'pdf' }}>
             <View style={styles.actionIcon}>
               <Download size={20} color={colors.govBlue} />
             </View>
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Download Full Report (PDF)</Text>
-              <Text style={styles.actionSubtitle}>Complete FRA Version 2.0 document</Text>
+              <Text style={styles.actionSubtitle}>{exporting === 'pdf' ? 'Creating PDF…' : 'Complete FRA Version 2.0 document'}</Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleExportRegister} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Export Risk Register as CSV">
+          <TouchableOpacity style={styles.actionButton} onPress={handleExportRegister} disabled={exporting !== null} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Export Risk Register as CSV" accessibilityState={{ busy: exporting === 'csv' }}>
             <View style={styles.actionIcon}>
               <Download size={20} color={colors.govBlue} />
             </View>
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Export Risk Register (CSV)</Text>
-              <Text style={styles.actionSubtitle}>For use in Excel or other tools</Text>
+              <Text style={styles.actionSubtitle}>{exporting === 'csv' ? 'Preparing CSV…' : 'For use in Excel or other tools'}</Text>
             </View>
           </TouchableOpacity>
 

@@ -145,7 +145,7 @@ beforeEach(() => {
   setupAuth();
   setupProgress();
   // Default: no certificate exists yet, loading finishes quickly
-  mockedApi.get.mockResolvedValue([]);
+  mockedApi.get.mockResolvedValue(null);
 });
 
 describe('Certificate', () => {
@@ -274,7 +274,17 @@ describe('Certificate', () => {
 
   describe('certificate display', () => {
     beforeEach(() => {
-      mockedApi.get.mockResolvedValue([makeCertificate()]);
+      mockedApi.get.mockResolvedValue(makeCertificate());
+    });
+
+    it('shows the certificate object the API returns without generating a new one', async () => {
+      // GET /workshop/certificates returns the latest certificate object (or null), not a list
+      renderCertificate();
+
+      await waitFor(() => {
+        expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+      });
+      expect(mockedApi.post).not.toHaveBeenCalled();
     });
 
     it('shows user name and organisation', async () => {
@@ -327,7 +337,7 @@ describe('Certificate', () => {
 
   describe('pdf download', () => {
     it('calls window.print when Download PDF is clicked', async () => {
-      mockedApi.get.mockResolvedValue([makeCertificate()]);
+      mockedApi.get.mockResolvedValue(makeCertificate());
       const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
 
       const user = userEvent.setup();
@@ -348,7 +358,7 @@ describe('Certificate', () => {
 
   describe('share functionality', () => {
     it('falls back to clipboard when navigator.share is unavailable', async () => {
-      mockedApi.get.mockResolvedValue([makeCertificate()]);
+      mockedApi.get.mockResolvedValue(makeCertificate());
       const { toast } = await import('sonner');
 
       // Ensure navigator.share is absent

@@ -5,13 +5,14 @@ import { Shield, ArrowRight, Users, BookOpen, RefreshCw, Mail, CheckCircle, Clip
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import colors from '@/constants/colors';
+import { PACKAGES, formatGbp } from '@/constants/packages';
 
 export default function PackageProfessionalScreen() {
   const router = useRouter();
   const { selectPackage } = useAssessment();
 
   const handleSelectPackage = () => {
-    selectPackage('with-awareness', 1799);
+    selectPackage('with-awareness', PACKAGES['with-awareness'].priceGbp);
     router.push('/payment');
   };
 
@@ -41,7 +42,7 @@ export default function PackageProfessionalScreen() {
             </View>
             <Text style={styles.priceLabel}>Professional Package</Text>
             <View style={styles.priceRow}>
-              <Text style={styles.priceAmount}>£1,799</Text>
+              <Text style={styles.priceAmount}>{formatGbp(PACKAGES['with-awareness'].priceGbp)}</Text>
               <Text style={styles.pricePeriod}>/year + VAT</Text>
             </View>
             <Text style={styles.priceNote}>Annual subscription — cancel anytime</Text>

@@ -5,13 +5,14 @@ import { Shield, ArrowRight, LayoutDashboard, Users, BarChart3, Key, Headphones,
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import colors from '@/constants/colors';
+import { PACKAGES, formatGbp } from '@/constants/packages';
 
 export default function PackageEnterpriseScreen() {
   const router = useRouter();
   const { selectPackage } = useAssessment();
 
   const handleSelectPackage = () => {
-    selectPackage('with-dashboard', 4995);
+    selectPackage('with-dashboard', PACKAGES['with-dashboard'].priceGbp);
     router.push('/payment');
   };
 
@@ -37,7 +38,7 @@ export default function PackageEnterpriseScreen() {
           <View style={styles.priceCard}>
             <Text style={styles.priceLabel}>Enterprise Package</Text>
             <View style={styles.priceRow}>
-              <Text style={styles.priceAmount}>£4,995</Text>
+              <Text style={styles.priceAmount}>{formatGbp(PACKAGES['with-dashboard'].priceGbp)}</Text>
               <Text style={styles.pricePeriod}>/year + VAT</Text>
             </View>
             <Text style={styles.priceNote}>Annual subscription — unlimited access</Text>

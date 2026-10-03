@@ -5,6 +5,11 @@ import { Shield, FileText, BookOpen, LayoutDashboard, ArrowRight, CheckCircle, U
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { useAuth } from '@/contexts/AuthContext';
 import colors from '@/constants/colors';
+import { PACKAGES, billingNote, formatGbp, spokenPrice } from '@/constants/packages';
+
+const STARTER = PACKAGES['health-check'];
+const PROFESSIONAL = PACKAGES['with-awareness'];
+const ENTERPRISE = PACKAGES['with-dashboard'];
 
 const GOLD_ACCENT = '#b38b2e';
 const GOLD_LIGHT = '#fdf8ed';
@@ -18,7 +23,7 @@ export default function HomeScreen() {
 
   const handlePackage1 = () => {
     startNewAssessment();
-    selectPackage('health-check', 795);
+    selectPackage('health-check', STARTER.priceGbp);
     router.push('/organisation');
   };
 
@@ -65,7 +70,7 @@ export default function HomeScreen() {
             onPress={handlePackage1}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Package 1: Starter — No features included, 799 pounds per year - upgrade required"
+            accessibilityLabel={`Package 1: Starter — ${STARTER.tagline}, ${spokenPrice(STARTER)}`}
             accessibilityHint="Starts a new fraud risk health check assessment"
           >
             <View style={styles.cardInner}>
@@ -76,15 +81,14 @@ export default function HomeScreen() {
                 <Text style={styles.packageBadgeText}>PACKAGE 1</Text>
               </View>
               <Text style={styles.cardTitle}>Starter</Text>
-              <Text style={styles.cardSubtitle}>No Features Included</Text>
+              <Text style={styles.cardSubtitle}>{STARTER.tagline}</Text>
               <View style={styles.priceBlock}>
-                <Text style={styles.cardPrice}>£799</Text>
-                <Text style={styles.cardPriceNote}>per year + VAT</Text>
+                <Text style={styles.cardPrice}>{formatGbp(STARTER.priceGbp)}</Text>
+                <Text style={styles.cardPriceNote}>{billingNote(STARTER)}</Text>
               </View>
               <View style={styles.featureDivider} />
               <View style={styles.cardFeatures}>
-                <FeatureBullet text="No features available" color={colors.govBlue} />
-                <FeatureBullet text="Must upgrade to access functionality" color={colors.govBlue} />
+                {STARTER.features.map((f) => <FeatureBullet key={f} text={f} color={colors.govBlue} />)}
               </View>
               <View style={styles.ctaDivider} />
               <View style={styles.ctaOutlineBlue}>
@@ -100,7 +104,7 @@ export default function HomeScreen() {
             onPress={handlePackage2}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Package 2: Professional — FRA plus Training, 1799 pounds per year. Most popular option"
+            accessibilityLabel={`Package 2: Professional — ${PROFESSIONAL.tagline}, ${spokenPrice(PROFESSIONAL)}. Most popular option`}
             accessibilityHint="Opens the Professional package details page"
           >
             <View style={styles.popularTag}>
@@ -114,18 +118,14 @@ export default function HomeScreen() {
                 <Text style={styles.packageBadgeTextPopular}>PACKAGE 2</Text>
               </View>
               <Text style={styles.cardTitle}>Professional</Text>
-              <Text style={styles.cardSubtitle}>FRA + Training</Text>
+              <Text style={styles.cardSubtitle}>{PROFESSIONAL.tagline}</Text>
               <View style={styles.priceBlock}>
-                <Text style={styles.cardPrice}>£1,995</Text>
-                <Text style={styles.cardPriceNote}>/year + VAT</Text>
+                <Text style={styles.cardPrice}>{formatGbp(PROFESSIONAL.priceGbp)}</Text>
+                <Text style={styles.cardPriceNote}>{billingNote(PROFESSIONAL)}</Text>
               </View>
               <View style={styles.featureDivider} />
               <View style={styles.cardFeatures}>
-                <FeatureBullet text="Everything in Starter" color={colors.govBlue} />
-                <FeatureBullet text="Staff awareness training" color={colors.govBlue} />
-                <FeatureBullet text="50 employee key-passes" color={colors.govBlue} />
-                <FeatureBullet text="Quarterly reassessment" color={colors.govBlue} />
-                <FeatureBullet text="Email support" color={colors.govBlue} />
+                {PROFESSIONAL.features.map((f) => <FeatureBullet key={f} text={f} color={colors.govBlue} />)}
               </View>
               <View style={styles.ctaDivider} />
               <View style={styles.ctaFilledBlue}>
@@ -141,7 +141,7 @@ export default function HomeScreen() {
             onPress={handlePackage3}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Package 3: Enterprise — Full Dashboard plus Unlimited, 4995 pounds per year"
+            accessibilityLabel={`Package 3: Enterprise — ${ENTERPRISE.tagline}, ${spokenPrice(ENTERPRISE)}`}
             accessibilityHint="Opens the Enterprise package details page"
           >
             <View style={styles.cardInner}>
@@ -152,19 +152,14 @@ export default function HomeScreen() {
                 <Text style={styles.packageBadgeTextGold}>PACKAGE 3</Text>
               </View>
               <Text style={styles.cardTitle}>Enterprise</Text>
-              <Text style={styles.cardSubtitle}>Full Dashboard + Unlimited</Text>
+              <Text style={styles.cardSubtitle}>{ENTERPRISE.tagline}</Text>
               <View style={styles.priceBlock}>
-                <Text style={styles.cardPriceGold}>£4,995</Text>
-                <Text style={styles.cardPriceNote}>/year + VAT</Text>
+                <Text style={styles.cardPriceGold}>{formatGbp(ENTERPRISE.priceGbp)}</Text>
+                <Text style={styles.cardPriceNote}>{billingNote(ENTERPRISE)}</Text>
               </View>
               <View style={styles.featureDivider} />
               <View style={styles.cardFeatures}>
-                <FeatureBullet text="Everything in Professional" color={GOLD_ACCENT} />
-                <FeatureBullet text="Real-time dashboard" color={GOLD_ACCENT} />
-                <FeatureBullet text="Unlimited key-passes" color={GOLD_ACCENT} />
-                <FeatureBullet text="Risk register & tracking" color={GOLD_ACCENT} />
-                <FeatureBullet text="API access" color={GOLD_ACCENT} />
-                <FeatureBullet text="Priority support" color={GOLD_ACCENT} />
+                {ENTERPRISE.features.map((f) => <FeatureBullet key={f} text={f} color={GOLD_ACCENT} />)}
               </View>
               <View style={styles.ctaDivider} />
               <View style={styles.ctaOutlineGold}>

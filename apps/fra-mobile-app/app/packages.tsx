@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { Check, Users } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import { PACKAGES } from '@/constants/packages';
 import type { PackageType, EmployeeCount, OrganisationSize } from '@/types/assessment';
 
 interface PackageOption {
@@ -35,62 +36,30 @@ export default function PackagesScreen() {
     [assessment.organisation.employeeCount]
   );
 
-  const packages: PackageOption[] = useMemo(() => [
-    {
-      id: 'health-check',
-      name: 'Starter',
-      price: 795,
-      billingPeriod: 'one-time',
-      description: 'Fraud risk health check for your organisation',
-      features: [
-        'Single fraud risk assessment across 13 key areas',
-        'Downloadable PDF health check report',
-        'ECCTA 2023 compliance snapshot',
-        '1 key-pass included',
-      ],
-      keyPasses: 1,
-      recommended: orgSize === 'small',
-      recommendedFor: 'Micro businesses, annual audits',
-    },
-    {
-      id: 'with-awareness',
-      name: 'Professional',
-      price: 1799,
-      billingPeriod: 'year',
-      description: 'Everything in Starter plus training and support',
-      features: [
-        'Everything in Starter',
-        'Staff awareness training modules',
-        'Up to 50 employee key-passes',
-        'Quarterly reassessment',
-        'Email support',
-      ],
-      keyPasses: 50,
-      popular: orgSize === 'medium',
-      recommended: orgSize === 'medium',
-      recommendedFor: 'SMEs (10-100 employees)',
-    },
-    {
-      id: 'with-dashboard',
-      name: 'Enterprise',
-      price: 4995,
-      billingPeriod: 'year',
-      description: 'Complete solution with dashboard and unlimited access',
-      features: [
-        'Everything in Professional',
-        'Real-time monitoring dashboard',
-        'Unlimited employee key-passes',
-        'Risk register & action tracking',
-        'API access',
-        'Priority support',
-        'GovS-013 & ECCTA compliance reports',
-      ],
-      keyPasses: 'unlimited',
-      popular: orgSize === 'large',
-      recommended: orgSize === 'large',
-      recommendedFor: 'Large orgs (100+ employees)',
-    },
-  ], [orgSize]);
+  // Names, prices, features and key-passes come from the shared catalogue; only the
+  // size-based recommendation is decided here
+  const packages: PackageOption[] = useMemo(() => {
+    const option = (id: PackageType, size: OrganisationSize, description: string): PackageOption => {
+      const pkg = PACKAGES[id];
+      return {
+        id,
+        name: pkg.name,
+        price: pkg.priceGbp,
+        billingPeriod: pkg.billing === 'one-time' ? 'one-time' : 'year',
+        description,
+        features: pkg.features,
+        keyPasses: pkg.keyPasses,
+        popular: id !== 'health-check' && orgSize === size,
+        recommended: orgSize === size,
+        recommendedFor: pkg.audience,
+      };
+    };
+    return [
+      option('health-check', 'small', 'Fraud risk health check for your organisation'),
+      option('with-awareness', 'medium', 'Everything in Starter plus training and support'),
+      option('with-dashboard', 'large', 'Complete solution with dashboard and unlimited access'),
+    ];
+  }, [orgSize]);
 
   const handleSelectPackage = async (pkg: PackageOption) => {
     if (pkg.id === 'with-awareness') {

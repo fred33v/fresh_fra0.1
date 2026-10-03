@@ -162,21 +162,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: colors.govGrey1,
   },
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: colors.govGrey1,
-  },
   inputSection: {
     marginBottom: 16,
   },
@@ -205,6 +190,4 @@ const styles = StyleSheet.create({
     minHeight: 120,
     paddingTop: 12,
   },
-});
-
 });

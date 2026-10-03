@@ -5,6 +5,7 @@ import { getDbPool, closeDbPool } from './db.js';
 import { getRedis } from './redis.js';
 import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
 import { createLogger } from './logger.js';
+import { scheduleRetention } from './retention.js';
 import { usingDevRefreshSecret, refreshSecret } from './types.js';
 import { applyGlobalMiddleware, applyApiMiddleware } from './middleware.js';
 
@@ -185,9 +186,12 @@ function validateProductionEnv(): void {
 if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   validateProductionEnv();
   const server = serve({ fetch: app.fetch, port, hostname });
+  // Daily data-retention job (dry run unless RETENTION_ENABLED=true); needs the database
+  const stopRetention = hasDatabase() ? scheduleRetention() : () => {};
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully`);
+    stopRetention();
     server.close(async () => {
       await closeDbPool();
       logger.info('Shutdown complete');
