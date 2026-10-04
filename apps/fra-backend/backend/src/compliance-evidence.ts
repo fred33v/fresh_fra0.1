@@ -19,7 +19,7 @@ import {
   dbListAuditEvents, dbListIncidents, dbListSeniorManagers, dbListTrainingRecords, type TrainingRecord,
 } from './db/compliance.js';
 import { dbListCounterFraudRecords } from './db/counter-fraud.js';
-import { dueDiligenceStatus, recordsOf, type CounterFraudRecord } from './counter-fraud.js';
+import { BOARD_BODIES, dueDiligenceStatus, recordsOf, type CounterFraudRecord } from './counter-fraud.js';
 import { getIntakeByOrg, listReports } from './speak-up-store.js';
 import { TRIAGE_DAYS, type SpeakUpReport } from './speak-up.js';
 import { latestSubmittedByUser, scoreAssessment, type AssessmentRisk, type RiskPriority } from './assessment-risk.js';
@@ -183,6 +183,8 @@ export type ComplianceMetrics = {
   speakUpOverdueForTriage: number;
   associatedPersons: number;
   associatedPersonsOutstanding: number;
+  boardFraudItemsInYear: number;
+  toneStatementsInYear: number;
 };
 
 export function computeMetrics(data: OrgComplianceData, now = Date.now()): ComplianceMetrics {
@@ -223,6 +225,8 @@ export function computeMetrics(data: OrgComplianceData, now = Date.now()): Compl
     speakUpOverdueForTriage: data.speakUp.reports.filter((r) => r.status === 'new' && daysAgo(r.receivedAt, now) > TRIAGE_DAYS).length,
     associatedPersons: recordsOf(data.records, 'associated_person').length,
     associatedPersonsOutstanding: recordsOf(data.records, 'associated_person').filter((a) => dueDiligenceOutstanding(a, now)).length,
+    boardFraudItemsInYear: recordsOf(data.records, 'board_minute').filter((b) => BOARD_BODIES.includes(b.data.body) && withinYear(b.data.meetingDate, now)).length,
+    toneStatementsInYear: recordsOf(data.records, 'tone_statement').filter((t) => withinYear(t.data.issuedAt, now)).length,
   };
 }
 
@@ -253,11 +257,7 @@ export function evaluateEccta(data: OrgComplianceData, m: ComplianceMetrics, now
   ).length;
 
   const requirements: Requirement[] = [
-    m.seniorManagers === 0
-      ? { id: 'eccta-1', name: 'Top-level commitment', status: 'not_met', evidence: 'No senior managers are recorded as accountable for fraud prevention.', recommendation: 'Record the senior managers accountable for fraud prevention and their last review date.' }
-      : m.seniorManagersReviewedInYear === m.seniorManagers
-        ? { id: 'eccta-1', name: 'Top-level commitment', status: 'met', evidence: `${m.seniorManagers} senior manager(s) recorded, all reviewed in the last 12 months.` }
-        : { id: 'eccta-1', name: 'Top-level commitment', status: 'partial', evidence: `${m.seniorManagersReviewedInYear} of ${m.seniorManagers} senior manager(s) reviewed in the last 12 months.`, recommendation: 'Complete an annual fraud-prevention review with every accountable senior manager.' },
+    topLevelCommitmentRequirement(m),
 
     lastAssessmentDays <= 365
       ? { id: 'eccta-2', name: 'Risk assessment', status: 'met', evidence: `Latest fraud risk assessment submitted ${Math.floor(lastAssessmentDays)} day(s) ago; ${m.assessmentCoverage}% of staff assessed.` }
@@ -503,5 +503,27 @@ function dueDiligenceRequirement(
       ? 'Supplier fraud risk is flagged and procurement controls are recorded, but no associated persons or due diligence records are held.'
       : 'Assessments do not flag supplier fraud risk, but no associated persons or due diligence records are held.',
     recommendation: record,
+  };
+}
+
+// ── ECCTA principle 1: top-level commitment ─────────────────────
+
+/** Accountable senior managers reviewed, the board overseeing fraud, and leaders saying fraud is not tolerated, all within 12 months. */
+function topLevelCommitmentRequirement(m: ComplianceMetrics): Requirement {
+  const id = 'eccta-1';
+  const name = 'Top-level commitment';
+  const managersOk = m.seniorManagers > 0 && m.seniorManagersReviewedInYear === m.seniorManagers;
+  const parts = [
+    { ok: managersOk, have: `${m.seniorManagers} accountable senior manager(s), all reviewed in the last 12 months`, gap: m.seniorManagers === 0 ? 'no accountable senior managers recorded' : `${m.seniorManagers - m.seniorManagersReviewedInYear} of ${m.seniorManagers} senior manager(s) not reviewed in 12 months` },
+    { ok: m.boardFraudItemsInYear > 0, have: `fraud discussed at ${m.boardFraudItemsInYear} board or committee meeting(s)`, gap: 'no board or committee minutes on fraud in 12 months' },
+    { ok: m.toneStatementsInYear > 0, have: `${m.toneStatementsInYear} tone-from-the-top statement(s) issued`, gap: 'no tone-from-the-top statement in 12 months' },
+  ];
+  const met = parts.filter((p) => p.ok);
+  const sentence = (items: string[]) => items.join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+  if (met.length === parts.length) return { id, name, status: 'met', evidence: sentence(parts.map((p) => p.have)) };
+  return {
+    id, name, status: met.length === 0 && m.seniorManagers === 0 ? 'not_met' : 'partial',
+    evidence: sentence([...met.map((p) => p.have), ...parts.filter((p) => !p.ok).map((p) => p.gap)]),
+    recommendation: 'Review each accountable senior manager yearly, minute the board\'s oversight of fraud risk, and have leaders state that fraud will not be tolerated.',
   };
 }

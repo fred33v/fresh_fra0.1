@@ -160,6 +160,10 @@ describe('Compliance report reflects real evidence', () => {
     await send('POST', '/compliance/senior-management', accessToken, {
       userId, role: 'CEO', lastReviewed: new Date().toISOString().slice(0, 10),
     });
+    // Principle 1 also needs the board's oversight minuted and a tone-from-the-top statement
+    const today = new Date().toISOString().slice(0, 10);
+    await send('POST', '/compliance/records', accessToken, { kind: 'board_minute', data: { meetingDate: today, body: 'board', itemsDiscussed: 'Fraud risk assessment results' } });
+    await send('POST', '/compliance/records', accessToken, { kind: 'tone_statement', data: { title: 'Zero tolerance of fraud', issuedBy: 'Chief Executive', issuedAt: today, audience: 'all_staff', channel: 'email', statement: 'We will not tolerate fraud, including fraud that might benefit us.' } });
     await send('POST', '/risk-register', accessToken, {
       title: 'Supplier invoice fraud', riskArea: 'procurement', impact: 4, likelihood: 4,
       controlEffectiveness: 'some_gaps', controls: 'Two-person supplier approval', ownerUserId: userId, actionPlan: 'Bank detail call-backs',

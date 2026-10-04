@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 
 const logger = createLogger('CounterFraudRecords');
 
-export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy' | 'reporting_route' | 'associated_person';
+export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy' | 'reporting_route' | 'associated_person' | 'board_minute' | 'tone_statement';
 type Data = Record<string, string | number | undefined>;
 interface DueDiligence { required: number; done: number; complete: boolean; outstanding: string[] }
 interface CounterFraudRecord {
@@ -62,6 +62,9 @@ const ASSOCIATE_TYPE = {
 const ASSOCIATE_RISK = { medium: 'Medium', low: 'Low', high: 'High' };
 // "No" first, so a check is only recorded as done when someone says so
 const CHECK = { no: 'No', yes: 'Yes', not_applicable: 'Not applicable' };
+const BODY = { board: 'Board', audit_committee: 'Audit committee', risk_committee: 'Risk committee', senior_leadership: 'Senior leadership team' };
+const AUDIENCE_TONE = { all_staff: 'All staff', staff_and_associates: 'Staff and people acting for us', everyone: 'Everyone, including the public' };
+const CHANNEL_TONE = { email: 'Email', intranet: 'Intranet', staff_meeting: 'All-staff meeting', website: 'Website', other: 'Other' };
 const yearAgo = () => new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
 const POLICY_TYPE = {
   counter_fraud: 'Counter fraud policy', response_plan: 'Fraud response plan', gifts_hospitality: 'Gifts and hospitality',
@@ -295,6 +298,48 @@ const REPORTING_ROUTES: KindConfig = {
   ],
 };
 
+/** ECCTA principle 1: shown under Senior management, beside the accountable managers. */
+const BOARD_MINUTES: KindConfig = {
+  kind: 'board_minute', tab: 'Board minutes', component: 'ECCTA principle 1', title: 'Board and committee oversight of fraud', addLabel: 'Record meeting',
+  description: 'Each board or committee meeting where fraud risk was discussed, with the decisions taken. Senior leadership meetings are recorded but do not count as board oversight.',
+  fields: [
+    { name: 'meetingDate', label: 'Meeting date', type: 'date', required: true },
+    { name: 'body', label: 'Meeting of', type: 'select', required: true, options: BODY },
+    { name: 'minuteReference', label: 'Minute reference', type: 'text', hint: 'e.g. AC/2026/14' },
+    { name: 'documentUrl', label: 'Link to the minutes', type: 'url' },
+    { name: 'itemsDiscussed', label: 'Fraud items discussed', type: 'textarea', required: true },
+    { name: 'decisions', label: 'Decisions and actions', type: 'textarea' },
+  ],
+  columns: [
+    { label: 'Meeting', value: (d) => <>{fmtDate(d.meetingDate)}<span className="block text-xs text-muted-foreground">{label(BODY)(d.body)}{d.minuteReference ? ` · ${d.minuteReference}` : ''}</span></> },
+    { label: 'Fraud items discussed', value: (d) => d.itemsDiscussed },
+    { label: 'Decisions', value: (d) => d.decisions ?? '—' },
+    { label: 'Minutes', value: docLink },
+  ],
+};
+
+const TONE_STATEMENTS: KindConfig = {
+  kind: 'tone_statement', tab: 'Tone from the top', component: 'ECCTA principle 1', title: 'Tone from the top', addLabel: 'Record statement',
+  description: 'Statements by leaders that fraud will not be tolerated, including fraud that would benefit the organisation, and how they reached people. Renew at least yearly.',
+  fields: [
+    { name: 'title', label: 'Title', type: 'text', required: true },
+    { name: 'issuedBy', label: 'Issued by', type: 'text', required: true, hint: 'e.g. Chief Executive' },
+    { name: 'issuedAt', label: 'Issued on', type: 'date', required: true },
+    { name: 'audience', label: 'Audience', type: 'select', required: true, options: AUDIENCE_TONE },
+    { name: 'channel', label: 'Shared by', type: 'select', required: true, options: CHANNEL_TONE },
+    { name: 'documentUrl', label: 'Link to the statement', type: 'url' },
+    { name: 'statement', label: 'What was said', type: 'textarea', required: true },
+  ],
+  columns: [
+    { label: 'Issued', value: (d) => (String(d.issuedAt) < yearAgo()
+      ? <Badge variant="outline" className="text-destructive border-destructive/30">Renew (issued {fmtDate(d.issuedAt)})</Badge>
+      : fmtDate(d.issuedAt)) },
+    { label: 'Statement', value: (d) => <><span className="font-medium">{d.title}</span><span className="block text-xs text-muted-foreground">{d.issuedBy} · {label(AUDIENCE_TONE)(d.audience)} · {label(CHANNEL_TONE)(d.channel)}</span></> },
+    { label: 'What was said', value: (d) => d.statement },
+    { label: 'Document', value: docLink },
+  ],
+};
+
 /** Form values are strings; numbers are converted and empty optional fields left out. */
 function toPayload(fields: Field[], values: Record<string, string>): Data {
   const out: Data = {};
@@ -455,6 +500,16 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
 
 export function ReportingRoutesRegister({ onChange }: { onChange: () => void }) {
   return <RecordRegister config={REPORTING_ROUTES} onChange={onChange} />;
+}
+
+/** Board minutes and tone-from-the-top statements (ECCTA principle 1). */
+export function LeadershipRegisters({ onChange }: { onChange: () => void }) {
+  return (
+    <div className="space-y-6">
+      <RecordRegister config={TONE_STATEMENTS} onChange={onChange} />
+      <RecordRegister config={BOARD_MINUTES} onChange={onChange} />
+    </div>
+  );
 }
 
 /** The GovS 013 registers, one tab each. `onChange` refreshes the compliance score. */

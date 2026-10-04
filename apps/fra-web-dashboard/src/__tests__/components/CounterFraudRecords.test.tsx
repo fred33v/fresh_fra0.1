@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CounterFraudRecords } from '@/components/enterprise/CounterFraudRecords';
+import { CounterFraudRecords, LeadershipRegisters } from '@/components/enterprise/CounterFraudRecords';
 import { api } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
@@ -90,5 +90,25 @@ describe('CounterFraudRecords', () => {
     expect(screen.getByText('1 of 4 checks')).toBeInTheDocument();
     expect(screen.getByText(/Outstanding: Ownership and control checked/)).toBeInTheDocument();
     expect(screen.getByText('Review due')).toBeInTheDocument();
+  });
+
+  it('records tone-from-the-top statements and flags ones older than a year', async () => {
+    const user = userEvent.setup();
+    mockedApi.get.mockImplementation(async (path: string) => (path.includes('kind=tone_statement') ? [{
+      id: 't1', kind: 'tone_statement', createdAt: '2025-01-10T10:00:00Z', updatedAt: '2025-01-10T10:00:00Z',
+      data: { title: 'Zero tolerance of fraud', issuedBy: 'Chief Executive', issuedAt: '2025-01-10', audience: 'all_staff', channel: 'email', statement: 'We will not tolerate fraud.' },
+    }] : []));
+    render(<LeadershipRegisters onChange={vi.fn()} />);
+
+    expect(await screen.findByText('Zero tolerance of fraud')).toBeInTheDocument();
+    expect(screen.getByText('Renew (issued 10 Jan 2025)')).toBeInTheDocument();
+    expect(screen.getByText('Board and committee oversight of fraud')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Meeting date'), '2026-09-20');
+    await user.type(screen.getByLabelText('Fraud items discussed'), 'Fraud risk register review');
+    await user.click(screen.getByRole('button', { name: 'Record meeting' }));
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/compliance/records', {
+      kind: 'board_minute', data: { meetingDate: '2026-09-20', body: 'board', itemsDiscussed: 'Fraud risk register review' },
+    }));
   });
 });

@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertTriangle, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
-import { CounterFraudRecords } from '@/components/enterprise/CounterFraudRecords';
+import { CounterFraudRecords, LeadershipRegisters } from '@/components/enterprise/CounterFraudRecords';
 import { SpeakUpCases } from '@/components/enterprise/SpeakUpCases';
 
 const logger = createLogger('Compliance');
@@ -585,6 +585,9 @@ const EXPORTS: { dataset: string; label: string; description: string }[] = [
   { dataset: 'gift_hospitality', label: 'Gifts and hospitality', description: 'Gifts and hospitality register' },
   { dataset: 'conflict_of_interest', label: 'Conflicts of interest', description: 'Declared interests and reviews' },
   { dataset: 'policy', label: 'Policies', description: 'Policies with approval and review dates' },
+  { dataset: 'associated_person', label: 'Associated persons', description: 'People acting for you and their due diligence' },
+  { dataset: 'board_minute', label: 'Board minutes', description: 'Board and committee oversight of fraud' },
+  { dataset: 'tone_statement', label: 'Tone from the top', description: 'Leadership statements on fraud' },
 ];
 
 function Exports() {
@@ -689,7 +692,12 @@ export default function Compliance() {
           <TabsContent value="gaps"><Gaps /></TabsContent>
           <TabsContent value="speak-up"><SpeakUpCases employees={employees} onChange={loadReport} /></TabsContent>
           <TabsContent value="incidents"><Incidents onChange={loadReport} /></TabsContent>
-          <TabsContent value="senior"><SeniorManagement employees={employees} onChange={loadReport} /></TabsContent>
+          <TabsContent value="senior">
+            <div className="space-y-6">
+              <SeniorManagement employees={employees} onChange={loadReport} />
+              <LeadershipRegisters onChange={loadReport} />
+            </div>
+          </TabsContent>
           <TabsContent value="registers"><CounterFraudRecords onChange={loadReport} /></TabsContent>
           <TabsContent value="training"><Training /></TabsContent>
           <TabsContent value="audit"><AuditTrail /></TabsContent>

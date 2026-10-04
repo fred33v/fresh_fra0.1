@@ -4,7 +4,8 @@
 // loss (8), investigator access (9), detection activity (10), and
 // gifts, hospitality and conflict of interest registers with their
 // policies (12), the reporting routes (7) beside the speak-up intake,
-// and the associated persons whose due diligence ECCTA principle 4 expects.
+// the associated persons whose due diligence ECCTA principle 4 expects, and
+// the board minutes and tone-from-the-top statements behind principle 1.
 // One table holds every kind; each kind validates its own fields.
 // ============================================================
 
@@ -47,6 +48,12 @@ export const REQUIRED_CHECKS: Record<AssociateRisk, DueDiligenceCheck[]> = {
   medium: ['identityVerified', 'ownershipChecked', 'sanctionsScreened', 'contractClauses'],
   high: ['identityVerified', 'ownershipChecked', 'sanctionsScreened', 'referencesChecked', 'contractClauses', 'trainingProvided'],
 };
+
+export const OVERSIGHT_BODIES = ['board', 'audit_committee', 'risk_committee', 'senior_leadership'] as const;
+/** Bodies whose minutes show board-level oversight (senior leadership alone does not) */
+export const BOARD_BODIES: readonly string[] = ['board', 'audit_committee', 'risk_committee'];
+export const STATEMENT_AUDIENCES = ['all_staff', 'staff_and_associates', 'everyone'] as const;
+export const STATEMENT_CHANNELS = ['email', 'intranet', 'staff_meeting', 'website', 'other'] as const;
 
 export const POLICY_TYPES = ['counter_fraud', 'response_plan', 'gifts_hospitality', 'conflicts_of_interest', 'whistleblowing'] as const;
 
@@ -158,6 +165,25 @@ const associatedPerson = z.object({
   notes: note(2000),
 }).strict();
 
+const boardMinute = z.object({
+  meetingDate: isoDate,
+  body: z.enum(OVERSIGHT_BODIES),
+  itemsDiscussed: text(2000),
+  decisions: note(5000),
+  minuteReference: note(100),
+  documentUrl,
+}).strict();
+
+const toneStatement = z.object({
+  title: text(200),
+  issuedBy: text(200),
+  issuedAt: isoDate,
+  audience: z.enum(STATEMENT_AUDIENCES),
+  channel: z.enum(STATEMENT_CHANNELS),
+  statement: text(5000),
+  documentUrl,
+}).strict();
+
 export const RECORD_SCHEMAS = {
   strategy,
   loss,
@@ -168,6 +194,8 @@ export const RECORD_SCHEMAS = {
   policy,
   reporting_route: reportingRoute,
   associated_person: associatedPerson,
+  board_minute: boardMinute,
+  tone_statement: toneStatement,
 } as const;
 
 export type CounterFraudKind = keyof typeof RECORD_SCHEMAS;
