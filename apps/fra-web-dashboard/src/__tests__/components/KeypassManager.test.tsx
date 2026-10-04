@@ -33,8 +33,8 @@ describe('KeypassManager', () => {
     expect(await screen.findByText('Unlimited')).toBeInTheDocument();
     const row = (await screen.findByText('USED5678')).closest('tr')!;
     expect(within(row).getByText('Priya Shah')).toBeInTheDocument();
-    expect(within(row).queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
-    expect(within(screen.getByText('AVAIL1234').closest('tr')!).getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /^Revoke key-pass/ })).not.toBeInTheDocument();
+    expect(within(screen.getByText('AVAIL1234').closest('tr')!).getByRole('button', { name: 'Revoke key-pass AVAIL1234' })).toBeInTheDocument();
   });
 
   it('blocks requests beyond the remaining allowance', async () => {

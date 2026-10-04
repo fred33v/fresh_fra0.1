@@ -60,6 +60,40 @@ beforeEach(() => {
 });
 
 describe('Compliance page', () => {
+  it('resolves an incident with optional notes from a dialog, and reopens without one', async () => {
+    const open = { id: 'i1', type: 'fraud_incident', severity: 'high', description: 'Duplicate invoice paid', reportedAt: '2026-09-01T09:00:00Z' };
+    let incidents: Record<string, unknown>[] = [open];
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/v1/compliance/report')) return report;
+      if (path.startsWith('/api/v1/compliance/incidents')) return incidents;
+      return [];
+    });
+    mockedApi.patch.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderCompliance('?tab=incidents');
+
+    await user.click(await screen.findByRole('button', { name: 'Mark resolved' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mark incident resolved' });
+    await user.type(within(dialog).getByLabelText('Resolution notes (optional)'), 'Recovered from supplier');
+    incidents = [{ ...open, resolvedAt: '2026-10-04T09:00:00Z' }];
+    await user.click(within(dialog).getByRole('button', { name: 'Mark resolved' }));
+
+    await waitFor(() => expect(mockedApi.patch).toHaveBeenCalledWith('/api/v1/compliance/incidents/i1', { resolved: true, resolutionNotes: 'Recovered from supplier' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(await screen.findByRole('button', { name: 'Reopen' }));
+    await waitFor(() => expect(mockedApi.patch).toHaveBeenLastCalledWith('/api/v1/compliance/incidents/i1', { resolved: false, resolutionNotes: undefined }));
+  });
+
+  it('labels the senior management and incident form controls', async () => {
+    renderCompliance('?tab=senior');
+    expect(await screen.findByRole('combobox', { name: 'Person' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Role' })).toBeInTheDocument();
+    // Tone from the top and board minutes are ECCTA records, not GovS 013 components
+    expect(screen.getAllByText(/^ECCTA principle 1 · /, { selector: 'p' })).toHaveLength(2);
+    expect(screen.queryByText(/ECCTA principle 1 of GovS 013/)).not.toBeInTheDocument();
+  });
+
   it('shows framework scores with evidence and next steps', async () => {
     renderCompliance();
     expect(await screen.findByLabelText('ECCTA 2023 score 50%')).toBeInTheDocument();

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 // GovS 013 components held as records (/api/v1/compliance/records):
 // 2 counter fraud strategy, 8 identified loss, 9 investigator access,
@@ -416,6 +417,7 @@ function RecordForm({ config, onSaved }: { config: KindConfig; onSaved: () => vo
 }
 
 function RecordRegister({ config, onChange }: { config: KindConfig; onChange: () => void }) {
+  const confirm = useConfirm();
   const [records, setRecords] = useState<CounterFraudRecord[] | null>(null);
 
   const load = useCallback(() => api.get<CounterFraudRecord[]>(`/api/v1/compliance/records?kind=${config.kind}`)
@@ -436,7 +438,7 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
   };
 
   const remove = async (r: CounterFraudRecord) => {
-    if (!window.confirm(`Remove this entry from the ${config.title.toLowerCase()}?`)) return;
+    if (!(await confirm({ title: `Remove this entry from the ${config.title.toLowerCase()}?`, confirmLabel: 'Remove', destructive: true }))) return;
     try {
       await api.delete(`/api/v1/compliance/records/${r.id}`);
       await changed();
@@ -458,7 +460,7 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
         <div>
           <CardTitle className="text-lg">{config.title}</CardTitle>
-          <CardDescription>{config.component} of GovS 013 · {config.description}</CardDescription>
+          <CardDescription>{config.component.startsWith('ECCTA') ? config.component : `${config.component} of GovS 013`} · {config.description}</CardDescription>
         </div>
         <Button variant="outline" size="sm" className="print:hidden" onClick={download}>
           <Download className="mr-2 h-4 w-4" aria-hidden="true" /> CSV

@@ -63,8 +63,15 @@ function ReportForm() {
     amountGbp: '', anonymous: 'yes', name: '', email: '', phone: '',
   });
   const [error, setError] = useState<string | null>(null);
+  // A validation error belongs to a field: shown beside it, linked to it, and focused
+  const [fieldError, setFieldError] = useState<{ field: 'description' | 'contact'; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof form, v: string) => { setForm((f) => ({ ...f, [k]: v })); setError(null); };
+  const set = (k: keyof typeof form, v: string) => { setForm((f) => ({ ...f, [k]: v })); setError(null); setFieldError(null); };
+  const invalid = (field: 'description' | 'contact', message: string, focusId: string) => {
+    setFieldError({ field, message });
+    // Wait for the error to render so the field is announced with it
+    requestAnimationFrame(() => document.getElementById(focusId)?.focus());
+  };
 
   useEffect(() => {
     anonymousApi.get<IntakePage>(`/api/v1/speak-up/${encodeURIComponent(token)}`).then(setPage).catch(() => setUnavailable(true));
@@ -73,8 +80,8 @@ function ReportForm() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const anonymous = form.anonymous === 'yes';
-    if (form.description.trim().length < 20) return setError('Describe what happened in at least 20 characters.');
-    if (!anonymous && !form.email.trim() && !form.phone.trim()) return setError('Give an email or phone number, or choose to stay anonymous.');
+    if (form.description.trim().length < 20) return invalid('description', 'Describe what happened in at least 20 characters.', 'su-description');
+    if (!anonymous && !form.email.trim() && !form.phone.trim()) return invalid('contact', 'Give an email or phone number, or choose to stay anonymous.', 'su-email');
 
     const optional = (v: string) => (v.trim() ? v.trim() : undefined);
     setBusy(true);
@@ -155,7 +162,9 @@ function ReportForm() {
             <div className="space-y-1.5">
               <Label htmlFor="su-description">What happened?</Label>
               <Textarea id="su-description" rows={6} value={form.description} onChange={(e) => set('description', e.target.value)}
-                aria-describedby="su-description-hint" />
+                aria-invalid={fieldError?.field === 'description'}
+                aria-describedby={fieldError?.field === 'description' ? 'su-description-error su-description-hint' : 'su-description-hint'} />
+              {fieldError?.field === 'description' && <p id="su-description-error" className="text-sm text-destructive">{fieldError.message}</p>}
               <p id="su-description-hint" className="text-xs text-muted-foreground">Include what you saw, who was involved and how you know. Avoid details that would identify you if you want to stay anonymous.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -185,10 +194,15 @@ function ReportForm() {
               </RadioGroup>
             </fieldset>
             {!anonymous && (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5"><Label htmlFor="su-name">Name</Label><Input id="su-name" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
-                <div className="space-y-1.5"><Label htmlFor="su-email">Email</Label><Input id="su-email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
-                <div className="space-y-1.5"><Label htmlFor="su-phone">Phone</Label><Input id="su-phone" type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+              <div className="space-y-1.5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-1.5"><Label htmlFor="su-name">Name</Label><Input id="su-name" autoComplete="name" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="su-email">Email</Label><Input id="su-email" type="email" autoComplete="email" value={form.email} onChange={(e) => set('email', e.target.value)}
+                    aria-invalid={fieldError?.field === 'contact'} aria-describedby={fieldError?.field === 'contact' ? 'su-contact-error' : undefined} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="su-phone">Phone</Label><Input id="su-phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)}
+                    aria-invalid={fieldError?.field === 'contact'} aria-describedby={fieldError?.field === 'contact' ? 'su-contact-error' : undefined} /></div>
+                </div>
+                {fieldError?.field === 'contact' && <p id="su-contact-error" className="text-sm text-destructive">{fieldError.message}</p>}
               </div>
             )}
 

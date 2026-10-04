@@ -81,6 +81,23 @@ describe('Auth', () => {
   // ── Redirect if authenticated ─────────────────
 
   describe('redirect if authenticated', () => {
+    it('returns to the page that asked for sign-in', () => {
+      setupAuth({
+        user: { userId: 'u-1', email: 'a@b.com', name: 'A', role: 'employee', organisationId: 'o-1', createdAt: '' },
+      });
+      renderAuth('/auth?returnTo=%2Fcompliance%3Ftab%3Dincidents');
+      expect(mockNavigate).toHaveBeenCalledWith('/compliance?tab=incidents');
+    });
+
+    it.each(['https://evil.example', '//evil.example', '/\\evil.example', 'compliance', '/auth?returnTo=%2Fx'])(
+      'ignores an unsafe return address (%s) and goes to the dashboard', (target) => {
+        setupAuth({
+          user: { userId: 'u-1', email: 'a@b.com', name: 'A', role: 'employee', organisationId: 'o-1', createdAt: '' },
+        });
+        renderAuth(`/auth?returnTo=${encodeURIComponent(target)}`);
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+      });
+
     it('navigates to /dashboard when user exists', () => {
       setupAuth({
         user: { userId: 'u-1', email: 'a@b.com', name: 'A', role: 'employee', organisationId: 'o-1', createdAt: '' },

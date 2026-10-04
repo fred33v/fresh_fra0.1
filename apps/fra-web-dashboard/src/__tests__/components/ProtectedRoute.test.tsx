@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock useAuth
@@ -12,6 +12,11 @@ vi.mock('@/hooks/useAuth', () => ({
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import type { AppRole } from '@/types/workshop';
+
+function AuthProbe() {
+  const { search } = useLocation();
+  return <div>Auth Page<span data-testid="auth-search">{search}</span></div>;
+}
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -28,7 +33,7 @@ function renderRoute(initialPath: string, requiredRole?: AppRole) {
               </ProtectedRoute>
             }
           />
-          <Route path="/auth" element={<div>Auth Page</div>} />
+          <Route path="/auth" element={<AuthProbe />} />
           <Route path="/dashboard" element={<div>Dashboard Page</div>} />
         </Routes>
       </MemoryRouter>
@@ -44,10 +49,11 @@ describe('ProtectedRoute', () => {
     expect(document.querySelector('.animate-spin')).toBeInTheDocument();
   });
 
-  it('redirects to /auth when not authenticated', () => {
+  it('redirects to /auth when not authenticated, remembering the page to come back to', () => {
     mockUseAuth.mockReturnValue({ user: null, isLoading: false, hasRole: () => false });
-    renderRoute('/protected');
+    renderRoute('/protected?tab=incidents');
     expect(screen.getByText('Auth Page')).toBeInTheDocument();
+    expect(screen.getByTestId('auth-search')).toHaveTextContent('?returnTo=%2Fprotected%3Ftab%3Dincidents');
   });
 
   it('renders children when authenticated', () => {

@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Copy, KeyRound, Send, Trash2, Webhook } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('Integrations');
 
@@ -69,6 +70,7 @@ function RevealedSecret({ label, value, onDismiss }: { label: string; value: str
 }
 
 function ApiKeysCard() {
+  const confirm = useConfirm();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
@@ -99,7 +101,7 @@ function ApiKeysCard() {
   };
 
   const revoke = async (key: ApiKey) => {
-    if (!window.confirm(`Revoke "${key.name}"? Anything using it will stop working immediately.`)) return;
+    if (!(await confirm({ title: `Revoke "${key.name}"?`, description: 'Anything using it will stop working immediately.', confirmLabel: 'Revoke', destructive: true }))) return;
     try {
       await api.delete(`/api/v1/api-keys/${key.id}`);
       toast.success('API key revoked');
@@ -173,6 +175,7 @@ function ApiKeysCard() {
 }
 
 function WebhooksCard() {
+  const confirm = useConfirm();
   const [endpoints, setEndpoints] = useState<WebhookEndpoint[]>([]);
   const [url, setUrl] = useState('');
   const [events, setEvents] = useState<string[]>(['assessment.submitted', 'risk.high_priority']);
@@ -223,7 +226,7 @@ function WebhooksCard() {
   };
 
   const remove = async (endpoint: WebhookEndpoint) => {
-    if (!window.confirm(`Stop sending events to ${endpoint.url}?`)) return;
+    if (!(await confirm({ title: `Stop sending events to ${endpoint.url}?`, confirmLabel: 'Remove endpoint', destructive: true }))) return;
     try {
       await api.delete(`/api/v1/webhook-endpoints/${endpoint.id}`);
       toast.success('Webhook removed');

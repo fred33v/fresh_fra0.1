@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ConfirmProvider } from "@/hooks/useConfirm";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PackageGate } from "@/components/PackageGate";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -57,6 +58,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          <ConfirmProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -90,6 +92,7 @@ const App = () => (
               </Routes>
             </Suspense>
           </BrowserRouter>
+          </ConfirmProvider>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

@@ -67,8 +67,27 @@ describe('Speak-up report page', () => {
     await user.click(screen.getByLabelText('Yes, they can contact me'));
     await user.type(screen.getByLabelText('Name'), 'Sam Lee');
     await user.click(screen.getByRole('button', { name: 'Send report' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Give an email or phone number');
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription(/Give an email or phone number/);
+    await waitFor(() => expect(email).toHaveFocus());
     expect(anon.post).not.toHaveBeenCalled();
+  });
+
+  it('marks a too-short description as invalid, explains why, and moves focus to it', async () => {
+    const user = userEvent.setup();
+    renderAt('/speak-up/intake-token-1234567890');
+    const description = await screen.findByLabelText('What happened?');
+    await user.type(description, 'Too short');
+    await user.click(screen.getByRole('button', { name: 'Send report' }));
+
+    expect(description).toHaveAttribute('aria-invalid', 'true');
+    expect(description).toHaveAccessibleDescription(/Describe what happened in at least 20 characters\./);
+    await waitFor(() => expect(description).toHaveFocus());
+    expect(anon.post).not.toHaveBeenCalled();
+
+    await user.type(description, ' and now long enough');
+    expect(description).toHaveAttribute('aria-invalid', 'false');
   });
 
   it('explains when the link does not work', async () => {

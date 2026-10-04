@@ -60,6 +60,20 @@ describe('SpeakUpCases', () => {
     expect(onChange).toHaveBeenCalled();
   });
 
+  it('turns a case into an incident at the chosen severity', async () => {
+    const user = userEvent.setup();
+    mockedApi.post.mockResolvedValue({ ...detail, incidentId: 'i1' });
+    render(<SpeakUpCases employees={[]} onChange={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open case SU-ABCD2345' }));
+    await user.click(await screen.findByRole('combobox', { name: 'Incident severity' }));
+    await user.click(await screen.findByRole('option', { name: 'High' }));
+    await user.click(screen.getByRole('button', { name: 'Create incident' }));
+
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/compliance/speak-up/reports/c1/incident', { severity: 'high' }));
+    expect(await screen.findByText('Linked to an incident')).toBeInTheDocument();
+  });
+
   it('switches the speak-up link off', async () => {
     const user = userEvent.setup();
     mockedApi.put.mockResolvedValue({ enabled: false, token: 'tok-1234567890abcdefghij', intro: null });

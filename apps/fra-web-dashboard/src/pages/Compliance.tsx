@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
 import { CounterFraudRecords, LeadershipRegisters } from '@/components/enterprise/CounterFraudRecords';
 import { SpeakUpCases } from '@/components/enterprise/SpeakUpCases';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('Compliance');
 
@@ -252,10 +254,14 @@ function Incidents({ onChange }: { onChange: () => void }) {
     }
   };
 
-  const setResolved = async (incident: Incident, resolved: boolean) => {
-    const resolutionNotes = resolved ? window.prompt('Resolution notes (optional)') ?? undefined : undefined;
+  // Resolving asks for optional notes in a dialog; reopening needs no input
+  const [resolving, setResolving] = useState<Incident | null>(null);
+  const [resolutionNotes, setResolutionNotes] = useState('');
+
+  const setResolved = async (incident: Incident, resolved: boolean, notes?: string) => {
     try {
-      await api.patch(`/api/v1/compliance/incidents/${incident.id}`, { resolved, resolutionNotes });
+      await api.patch(`/api/v1/compliance/incidents/${incident.id}`, { resolved, resolutionNotes: notes?.trim() || undefined });
+      setResolving(null);
       await load();
       onChange();
     } catch (err: unknown) {
@@ -273,17 +279,17 @@ function Incidents({ onChange }: { onChange: () => void }) {
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1.5">
-              <Label>Type</Label>
+              <Label htmlFor="incident-type">Type</Label>
               <Select value={type} onValueChange={setType}>
-                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="incident-type" className="w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.entries(INCIDENT_TYPES).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Severity</Label>
+              <Label htmlFor="incident-severity">Severity</Label>
               <Select value={severity} onValueChange={setSeverity}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>{['low', 'medium', 'high', 'critical'].map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+                <SelectTrigger id="incident-severity" className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>{['low', 'medium', 'high', 'critical'].map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
@@ -331,7 +337,8 @@ function Incidents({ onChange }: { onChange: () => void }) {
                     </TableCell>
                     <TableCell>{i.resolvedAt ? `Resolved ${fmtDate(i.resolvedAt)}` : <Badge variant="outline">Open</Badge>}</TableCell>
                     <TableCell className="text-right print:hidden">
-                      <Button variant="ghost" size="sm" onClick={() => setResolved(i, !i.resolvedAt)}>
+                      <Button variant="ghost" size="sm"
+                        onClick={() => (i.resolvedAt ? setResolved(i, false) : (setResolutionNotes(''), setResolving(i)))}>
                         {i.resolvedAt ? 'Reopen' : 'Mark resolved'}
                       </Button>
                     </TableCell>
@@ -342,6 +349,24 @@ function Incidents({ onChange }: { onChange: () => void }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!resolving} onOpenChange={(open) => { if (!open) setResolving(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark incident resolved</DialogTitle>
+            <DialogDescription>{resolving?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="incident-resolution-notes">Resolution notes (optional)</Label>
+            <Textarea id="incident-resolution-notes" rows={3} value={resolutionNotes} onChange={(e) => setResolutionNotes(e.target.value)}
+              placeholder="What was done, what was recovered, and any control changes" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResolving(null)}>Cancel</Button>
+            <Button onClick={() => resolving && setResolved(resolving, true, resolutionNotes)}>Mark resolved</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -349,6 +374,7 @@ function Incidents({ onChange }: { onChange: () => void }) {
 // ── Senior management accountability ────────────────────────────
 
 function SeniorManagement({ employees, onChange }: { employees: Employee[]; onChange: () => void }) {
+  const confirm = useConfirm();
   const [managers, setManagers] = useState<SeniorManager[]>([]);
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState('CEO');
@@ -388,7 +414,7 @@ function SeniorManagement({ employees, onChange }: { employees: Employee[]; onCh
   };
 
   const remove = async (m: SeniorManager) => {
-    if (!window.confirm(`Remove ${m.userName ?? 'this person'} (${m.role})?`)) return;
+    if (!(await confirm({ title: `Remove ${m.userName ?? 'this person'} (${m.role})?`, confirmLabel: 'Remove', destructive: true }))) return;
     try {
       await api.delete(`/api/v1/compliance/senior-management/${m.id}`);
       await load();
@@ -411,16 +437,16 @@ function SeniorManagement({ employees, onChange }: { employees: Employee[]; onCh
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end gap-3 print:hidden">
           <div className="space-y-1.5">
-            <Label>Person</Label>
+            <Label htmlFor="senior-person">Person</Label>
             <Select value={userId} onValueChange={(v) => { setUserId(v); setFormError(null); }}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Choose a person" /></SelectTrigger>
+              <SelectTrigger id="senior-person" className="w-56"><SelectValue placeholder="Choose a person" /></SelectTrigger>
               <SelectContent>{employees.map((e) => <SelectItem key={e.userId} value={e.userId}>{e.userName}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Role</Label>
+            <Label htmlFor="senior-role">Role</Label>
             <Select value={role} onValueChange={setRole}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="senior-role" className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>{SENIOR_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
             </Select>
           </div>

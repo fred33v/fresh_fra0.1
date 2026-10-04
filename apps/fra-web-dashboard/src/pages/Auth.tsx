@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { safeReturnPath } from '@/lib/return-path';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Shield, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { checkoutPath, getPackage } from '@/data/packages';
+
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -75,7 +77,9 @@ export default function Auth() {
   const navigate = useNavigate();
   // A package chosen before signing up/in (e.g. ?package=enterprise) takes the user straight to its checkout.
   const chosenPackage = getPackage(searchParams.get('package') ?? '');
-  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : '/dashboard';
+  // Back to the page that asked for sign-in, if it is a page on this site
+  const returnTo = safeReturnPath(searchParams.get('returnTo'));
+  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? '/dashboard';
 
   useEffect(() => {
     if (user) {
@@ -274,6 +278,7 @@ export default function Auth() {
                               <FormLabel>Email</FormLabel>
                               <FormControl>
                                 <Input 
+                                  autoComplete="email"
                                   type="email" 
                                   placeholder="you@organisation.com" 
                                   {...field} 
@@ -291,6 +296,7 @@ export default function Auth() {
                               <FormLabel>Password</FormLabel>
                               <FormControl>
                                 <Input 
+                                  autoComplete="current-password"
                                   type="password" 
                                   placeholder="••••••••" 
                                   {...field} 
@@ -369,6 +375,7 @@ export default function Auth() {
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
                                   <Input
+                                    autoComplete="email"
                                     type="email"
                                     placeholder="you@organisation.com"
                                     {...field}
@@ -439,7 +446,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Reset Token</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Paste your reset token" {...field} />
+                                  <Input autoComplete="one-time-code" placeholder="Paste your reset token" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -452,7 +459,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>New Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="••••••••" {...field} />
+                                  <Input autoComplete="new-password" type="password" placeholder="••••••••" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -465,7 +472,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Confirm New Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="••••••••" {...field} />
+                                  <Input autoComplete="new-password" type="password" placeholder="••••••••" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -518,7 +525,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Full Name</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="John Smith" {...field} />
+                                  <Input autoComplete="name" placeholder="John Smith" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -531,7 +538,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Job Title (Optional)</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Finance Director" {...field} />
+                                  <Input autoComplete="organization-title" placeholder="Finance Director" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -545,7 +552,7 @@ export default function Auth() {
                             <FormItem>
                               <FormLabel>Organisation Name</FormLabel>
                               <FormControl>
-                                <Input placeholder="Your Organisation" {...field} />
+                                <Input autoComplete="organization" placeholder="Your Organisation" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -580,7 +587,7 @@ export default function Auth() {
                             <FormItem>
                               <FormLabel>Email</FormLabel>
                               <FormControl>
-                                <Input type="email" placeholder="you@organisation.com" {...field} />
+                                <Input autoComplete="email" type="email" placeholder="you@organisation.com" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -594,7 +601,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="••••••••" {...field} />
+                                  <Input autoComplete="new-password" type="password" placeholder="••••••••" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -607,7 +614,7 @@ export default function Auth() {
                               <FormItem>
                                 <FormLabel>Confirm Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="••••••••" {...field} />
+                                  <Input autoComplete="new-password" type="password" placeholder="••••••••" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>

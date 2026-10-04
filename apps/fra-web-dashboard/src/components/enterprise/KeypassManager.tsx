@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Copy, Download, KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('KeypassManager');
 
@@ -23,6 +24,10 @@ export interface Keypass {
 }
 
 interface Quota { allowance: number; unlimited?: boolean; used: number; remaining: number | null }
+
+const STATUS_LABEL: Record<Keypass['status'], string> = {
+  available: 'Available', used: 'Redeemed', revoked: 'Revoked', expired: 'Expired',
+};
 
 const STATUS_STYLE: Record<Keypass['status'], string> = {
   available: 'bg-primary/10 text-primary border-primary/20',
@@ -51,6 +56,7 @@ interface KeypassManagerProps {
 }
 
 export function KeypassManager({ organisationId, userNames = {} }: KeypassManagerProps) {
+  const confirm = useConfirm();
   const [keypasses, setKeypasses] = useState<Keypass[]>([]);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,7 +117,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
   };
 
   const revoke = async (code: string) => {
-    if (!window.confirm(`Revoke key-pass ${code}? It will no longer let anyone join.`)) return;
+    if (!(await confirm({ title: `Revoke key-pass ${code}?`, description: 'It will no longer let anyone join.', confirmLabel: 'Revoke', destructive: true }))) return;
     try {
       await api.post('/api/v1/keypasses/revoke', { code });
       toast.success('Key-pass revoked');
@@ -161,9 +167,9 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                 aria-invalid={!!formError} onChange={(e) => { setQuantity(e.target.value); setFormError(null); }} />
             </div>
             <div className="space-y-1.5">
-              <Label>Valid for</Label>
+              <Label htmlFor="keypass-valid-for">Valid for</Label>
               <Select value={expiresInDays} onValueChange={setExpiresInDays}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="keypass-valid-for" className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {['7', '14', '30', '60', '90', '180', '365'].map((d) => <SelectItem key={d} value={d}>{d} days</SelectItem>)}
                 </SelectContent>
@@ -231,7 +237,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                   {visible.map((k) => (
                     <TableRow key={k.code}>
                       <TableCell className="font-mono text-sm">{k.code}</TableCell>
-                      <TableCell><Badge variant="outline" className={STATUS_STYLE[k.status]}>{k.status === 'used' ? 'redeemed' : k.status}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={STATUS_STYLE[k.status]}>{STATUS_LABEL[k.status] ?? k.status}</Badge></TableCell>
                       <TableCell>{formatDate(k.createdAt)}</TableCell>
                       <TableCell>{formatDate(k.expiresAt)}</TableCell>
                       <TableCell>
@@ -241,7 +247,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                       </TableCell>
                       <TableCell className="text-right">
                         {k.status === 'available' && (
-                          <Button variant="ghost" size="sm" onClick={() => revoke(k.code)}>Revoke</Button>
+                          <Button variant="ghost" size="sm" onClick={() => revoke(k.code)} aria-label={`Revoke key-pass ${k.code}`}>Revoke</Button>
                         )}
                       </TableCell>
                     </TableRow>

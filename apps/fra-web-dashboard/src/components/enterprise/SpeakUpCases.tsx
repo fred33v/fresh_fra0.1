@@ -14,6 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Copy, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { ReportingRoutesRegister } from './CounterFraudRecords';
+import { useConfirm } from '@/hooks/useConfirm';
+
+const INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
 // GovS 013 component 7 (reporting routes): the public speak-up link, other routes, and the case log.
 
@@ -37,6 +40,7 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'n
 const NONE = '__none';
 
 function IntakeCard() {
+  const confirm = useConfirm();
   const [intake, setIntake] = useState<Intake | null>(null);
   const [intro, setIntro] = useState('');
 
@@ -80,7 +84,7 @@ function IntakeCard() {
               <Copy className="mr-2 h-4 w-4" aria-hidden="true" /> Copy
             </Button>
             <Button variant="ghost" size="sm"
-              onClick={() => window.confirm('Make a new link? The current link will stop working straight away.') && save({ enabled: true, regenerateLink: true })}>
+              onClick={async () => { if (await confirm({ title: 'Make a new link?', description: 'The current link will stop working straight away.', confirmLabel: 'Make a new link', destructive: true })) save({ enabled: true, regenerateLink: true }); }}>
               New link
             </Button>
           </div>
@@ -99,6 +103,7 @@ function IntakeCard() {
 function CasePanel({ id, employees, onClose, onChange }: { id: string | null; employees: Employee[]; onClose: () => void; onChange: () => void }) {
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [reply, setReply] = useState('');
+  const [incidentSeverity, setIncidentSeverity] = useState('medium');
   const [outcome, setOutcome] = useState('');
   const [referralNotes, setReferralNotes] = useState('');
 
@@ -134,10 +139,8 @@ function CasePanel({ id, employees, onClose, onChange }: { id: string | null; em
 
   const createIncident = async () => {
     if (!detail) return;
-    const severity = window.prompt('Incident severity: low, medium, high or critical', 'medium')?.trim().toLowerCase();
-    if (!severity) return;
     try {
-      setDetail(await api.post<CaseDetail>(`/api/v1/compliance/speak-up/reports/${detail.id}/incident`, { severity }));
+      setDetail(await api.post<CaseDetail>(`/api/v1/compliance/speak-up/reports/${detail.id}/incident`, { severity: incidentSeverity }));
       toast.success('Incident created in the incident log');
       onChange();
     } catch (err: unknown) {
@@ -205,7 +208,20 @@ function CasePanel({ id, employees, onClose, onChange }: { id: string | null; em
               <div className="flex items-end">
                 {detail.incidentId
                   ? <Badge variant="outline">Linked to an incident</Badge>
-                  : <Button variant="outline" size="sm" onClick={createIncident}>Create incident</Button>}
+                  : (
+                    <div className="flex items-end gap-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="case-incident-severity">Incident severity</Label>
+                        <Select value={incidentSeverity} onValueChange={setIncidentSeverity}>
+                          <SelectTrigger id="case-incident-severity" className="w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {INCIDENT_SEVERITIES.map((sv) => <SelectItem key={sv} value={sv}>{sv[0].toUpperCase() + sv.slice(1)}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={createIncident}>Create incident</Button>
+                    </div>
+                  )}
               </div>
             </div>
             <div className="space-y-1.5">

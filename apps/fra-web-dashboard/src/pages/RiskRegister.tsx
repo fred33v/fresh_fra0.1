@@ -16,6 +16,7 @@ import { AlertTriangle, Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { scoreRisk, type ControlEffectiveness, type Priority } from '@/lib/risk-scoring';
 import { RiskHeatMap } from '@/components/enterprise/RiskHeatMap';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('RiskRegister');
 
@@ -59,7 +60,12 @@ const CONTROL_LABELS: Record<ControlEffectiveness, string> = {
 const STATUS_LABELS: Record<RiskStatus, string> = {
   open: 'Open', in_progress: 'In progress', mitigated: 'Mitigated', accepted: 'Accepted', closed: 'Closed',
 };
-const RISK_AREAS = ['procurement', 'cash_banking', 'payroll_hr', 'revenue', 'it_systems', 'expenses', 'assets', 'governance', 'other'];
+const RISK_AREA_LABELS: Record<string, string> = {
+  procurement: 'Procurement', cash_banking: 'Cash and banking', payroll_hr: 'Payroll and HR', revenue: 'Revenue',
+  it_systems: 'IT systems', expenses: 'Expenses', assets: 'Assets', governance: 'Governance', other: 'Other',
+};
+const RISK_AREAS = Object.keys(RISK_AREA_LABELS);
+const riskAreaLabel = (area: string) => RISK_AREA_LABELS[area] ?? area.replace(/_/g, ' ');
 
 const PRIORITY_CLASS: Record<Priority, string> = {
   HIGH: 'bg-destructive/10 text-destructive border-destructive/30',
@@ -81,6 +87,7 @@ const EMPTY_FORM: FormState = {
 const NO_OWNER = '__none__';
 
 export default function RiskRegister() {
+  const confirm = useConfirm();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -183,7 +190,7 @@ export default function RiskRegister() {
   };
 
   const remove = async (risk: Risk) => {
-    if (!window.confirm(`Delete "${risk.title}" from the risk register?`)) return;
+    if (!(await confirm({ title: `Delete "${risk.title}" from the risk register?`, confirmLabel: 'Delete', destructive: true }))) return;
     try {
       await api.delete(`/api/v1/risk-register/${risk.id}`);
       toast.success('Risk deleted');
@@ -315,7 +322,7 @@ export default function RiskRegister() {
                           <TableRow key={r.id}>
                             <TableCell>
                               <p className="font-medium">{r.title}</p>
-                              <p className="text-xs text-muted-foreground">{r.riskArea.replace(/_/g, ' ')}</p>
+                              <p className="text-xs text-muted-foreground">{riskAreaLabel(r.riskArea)}</p>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">{r.inherentScore}</TableCell>
                             <TableCell className="text-right tabular-nums">{r.residualScore}</TableCell>
@@ -355,41 +362,41 @@ export default function RiskRegister() {
                 <Input id="risk-title" value={form.title} onChange={(e) => set('title', e.target.value)} aria-invalid={!!formError} />
               </div>
               <div className="space-y-1.5">
-                <Label>Risk area</Label>
+                <Label htmlFor="risk-risk-area">Risk area</Label>
                 <Select value={form.riskArea} onValueChange={(v) => set('riskArea', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-risk-area"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {RISK_AREAS.map((a) => <SelectItem key={a} value={a}>{a.replace(/_/g, ' ')}</SelectItem>)}
+                    {RISK_AREAS.map((a) => <SelectItem key={a} value={a}>{riskAreaLabel(a)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Status</Label>
+                <Label htmlFor="risk-status">Status</Label>
                 <Select value={form.status} onValueChange={(v) => set('status', v as RiskStatus)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(STATUS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Impact (1–5)</Label>
+                <Label htmlFor="risk-impact-1-5">Impact (1–5)</Label>
                 <Select value={String(form.impact)} onValueChange={(v) => set('impact', Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-impact-1-5"><SelectValue /></SelectTrigger>
                   <SelectContent>{[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Likelihood (1–5)</Label>
+                <Label htmlFor="risk-likelihood-1-5">Likelihood (1–5)</Label>
                 <Select value={String(form.likelihood)} onValueChange={(v) => set('likelihood', Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-likelihood-1-5"><SelectValue /></SelectTrigger>
                   <SelectContent>{[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Control effectiveness</Label>
+                <Label htmlFor="risk-control-effectiveness">Control effectiveness</Label>
                 <Select value={form.controlEffectiveness} onValueChange={(v) => set('controlEffectiveness', v as ControlEffectiveness)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-control-effectiveness"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(CONTROL_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                   </SelectContent>
@@ -401,9 +408,9 @@ export default function RiskRegister() {
                 <Badge variant="outline" className={PRIORITY_CLASS[preview.priority]}>{preview.priority}</Badge>
               </div>
               <div className="space-y-1.5">
-                <Label>Owner</Label>
+                <Label htmlFor="risk-owner">Owner</Label>
                 <Select value={form.ownerUserId || NO_OWNER} onValueChange={(v) => set('ownerUserId', v === NO_OWNER ? '' : v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="risk-owner"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_OWNER}>No owner</SelectItem>
                     {employees.map((e) => <SelectItem key={e.userId} value={e.userId}>{e.userName}</SelectItem>)}

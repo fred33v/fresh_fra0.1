@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { AppRole } from '@/types/workshop';
 import { Layout } from '@/components/layout/Layout';
@@ -12,6 +12,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requiredRole, requiredUserRole }: ProtectedRouteProps) {
   const { user, isLoading, hasRole } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -24,7 +25,9 @@ export function ProtectedRoute({ children, requiredRole, requiredUserRole }: Pro
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    // Come back to this page after signing in
+    const returnTo = `${location.pathname}${location.search}`;
+    return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
 
   if (requiredRole && !hasRole(requiredRole)) {
