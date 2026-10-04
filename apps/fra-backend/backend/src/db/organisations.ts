@@ -24,3 +24,21 @@ export async function dbGetOrganisationById(id: string): Promise<Organisation | 
     createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(),
   };
 }
+
+export async function dbUpdateOrganisation(
+  id: string,
+  updates: { name?: string; employeeCount?: string; region?: string; industry?: string },
+  updatedAt: string,
+): Promise<void> {
+  const pool = getDbPool();
+  await pool.query(
+    `update public.organisations set
+       name = coalesce($2, name),
+       employee_count = coalesce($3, employee_count),
+       region = coalesce($4, region),
+       industry = coalesce($5, industry),
+       updated_at = $6
+     where id = $1`,
+    [id, updates.name ?? null, updates.employeeCount ?? null, updates.region ?? null, updates.industry ?? null, updatedAt]
+  );
+}

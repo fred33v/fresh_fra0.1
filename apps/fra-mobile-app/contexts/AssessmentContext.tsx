@@ -19,6 +19,10 @@ interface SyncStatus {
   errorMessage?: string;
 }
 
+/** The server's error code carried on a failed sync, if any. */
+const syncErrorCode = (error: unknown): string | undefined =>
+  (error as { code?: string } | null)?.code;
+
 interface SyncQueueItem {
   id: string;
   timestamp: string;
@@ -75,7 +79,25 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
       return next;
     }
 
-    throw new Error(response.error?.message || 'Failed to create assessment');
+    // Keep the server's code so callers can tell a refusal from a network failure
+    throw Object.assign(new Error(response.error?.message || 'Failed to create assessment'), { code: response.error?.code });
+  };
+
+  /**
+   * After a failed sync, show why. PACKAGE_REQUIRED is expected before payment (the draft
+   * stays on this device and syncs once a package is bought); ASSESSMENT_LIMIT_REACHED is
+   * shown to the user instead of being hidden behind "pending".
+   */
+  const noteSyncFailure = (error: unknown) => {
+    if (syncErrorCode(error) === 'ASSESSMENT_LIMIT_REACHED') {
+      setSyncStatus((prev) => ({
+        state: 'error',
+        lastSync: prev.lastSync,
+        errorMessage: `${(error as Error).message}. Your answers are saved on this device.`,
+      }));
+      return;
+    }
+    setSyncStatus((prev) => ({ state: 'pending', lastSync: prev.lastSync }));
   };
 
   // Network detection — stable listener, no re-subscription
@@ -224,7 +246,14 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
         throw new Error(response.error?.message || 'Sync failed');
       }
     } catch (error: unknown) {
-      logger.error('Sync to backend failed:', error);
+      const code = syncErrorCode(error);
+      if (code === 'PACKAGE_REQUIRED') {
+        logger.info('Assessment kept on this device until a package is bought');
+      } else if (code === 'ASSESSMENT_LIMIT_REACHED') {
+        logger.warn('Assessment not synced: package limit reached', { error: String(error) });
+      } else {
+        logger.error('Sync to backend failed:', error);
+      }
       setSyncStatus({
         state: 'error',
         lastSync: syncStatus.lastSync,
@@ -254,7 +283,7 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
       } catch (error: unknown) {
         // Add to queue for retry
         await addToSyncQueue(data);
-        setSyncStatus((prev) => ({ state: 'pending', lastSync: prev.lastSync }));
+        noteSyncFailure(error);
       }
     }, SYNC_DEBOUNCE_MS),
     []
@@ -344,9 +373,9 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     saveDraft(newAssessment);
 
     if (apiService.isAuthenticated() && isOnlineRef.current) {
-      ensureRemoteAssessment(newAssessment).catch(async () => {
+      ensureRemoteAssessment(newAssessment).catch(async (error: unknown) => {
         await addToSyncQueue(newAssessment);
-        setSyncStatus((prev) => ({ state: 'pending', lastSync: prev.lastSync }));
+        noteSyncFailure(error);
       });
     }
   }, [saveDraft]);
@@ -369,9 +398,9 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
             { requiresAuth: true }
           )
         )
-        .catch(async () => {
+        .catch(async (error: unknown) => {
           await addToSyncQueue({ status: 'submitted' as AssessmentStatus, riskRegister });
-          setSyncStatus((prev) => ({ state: 'pending', lastSync: prev.lastSync }));
+          noteSyncFailure(error);
         });
     } else {
       addToSyncQueue({ status: 'submitted' as AssessmentStatus, riskRegister }).catch((err: unknown) => logger.error('Failed to add submit to sync queue:', err));
@@ -389,15 +418,28 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     return { valid: true, message: 'Assessment is validated' };
   }, [assessment]);
 
+  // Reads the latest payment inside the update, so a package chosen straight after
+  // startNewAssessment does not bring back the previous assessment's payment
   const selectPackage = useCallback((packageType: PackageType, price: number) => {
-    updateAssessment({
-      payment: {
-        ...assessment.payment,
-        packageType,
-        price,
-      },
+    setAssessment((prev) => {
+      const payment = { ...prev.payment, packageType, price };
+      const updated = { ...prev, payment, updatedAt: new Date().toISOString() };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((err: unknown) => logger.error('Failed to persist assessment:', err));
+      debouncedSync({ payment });
+      return updated;
     });
-  }, [assessment.payment, updateAssessment]);
+  }, [debouncedSync]);
+
+  /**
+   * Choose a package and return the next screen: payment once the assessment has been
+   * submitted, otherwise the assessment itself (a fresh one if the last was already paid for).
+   */
+  const choosePackage = useCallback((packageType: PackageType, price: number): '/payment' | '/organisation' => {
+    const status = assessmentRef.current.status;
+    if (status === 'paid' || status === 'signed') startNewAssessment();
+    selectPackage(packageType, price);
+    return status === 'submitted' ? '/payment' : '/organisation';
+  }, [startNewAssessment, selectPackage]);
 
   const processPayment = useCallback(async (cardDetails: { number: string; expiry: string; cvc: string; name: string }) => {
     logger.info('Processing payment with card ending:', cardDetails.number.slice(-4));
@@ -475,6 +517,7 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     startNewAssessment,
     submitAssessment,
     selectPackage,
+    choosePackage,
     processPayment,
     submitFeedback,
     saveDraft,

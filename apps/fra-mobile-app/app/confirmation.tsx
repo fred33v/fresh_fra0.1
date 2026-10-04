@@ -5,6 +5,7 @@ import { useAssessment } from '@/contexts/AssessmentContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Download, Share2 } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import { PACKAGES } from '@/constants/packages';
 import { createLogger } from '@/utils/logger';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -93,11 +94,10 @@ export default function ConfirmationScreen() {
     }
   };
 
-  const packageName = assessment.payment.packageType === 'health-check'
-    ? 'Health Check FRA'
-    : assessment.payment.packageType === 'with-awareness'
-    ? 'FRA + Awareness Briefing'
-    : 'FRA + Dashboard (12 months)';
+  const purchased = assessment.payment.packageType ? PACKAGES[assessment.payment.packageType] : null;
+  const packageName = purchased
+    ? `${purchased.name}${purchased.billing === 'annual' ? ' (12 months)' : ''}`
+    : '—';
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));

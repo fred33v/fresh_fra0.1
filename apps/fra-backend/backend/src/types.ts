@@ -478,6 +478,17 @@ export const s3PromoteUploadSchema = z.object({
   filename: z.string().min(1).max(255).optional(),
 });
 
+// Organisation profile fields the server stores. Package and key-pass counts are derived from
+// purchases and key-passes, so clients cannot set them here.
+export const organisationUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  employeeCount: z.enum(['1-10', '11-50', '51-100', '101-250', '251-1000', '1001+']).optional(),
+  region: z.string().trim().max(100).optional(),
+  industry: z.string().trim().max(100).optional(),
+}).strict().refine((d) => Object.values(d).some((v) => v !== undefined), {
+  message: 'At least one field must be provided',
+});
+
 export const profileUpdateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   department: z.string().max(255).optional(),

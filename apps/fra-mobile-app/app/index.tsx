@@ -18,13 +18,12 @@ const PRO_CARD_BG = '#f0f5ff';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { startNewAssessment, selectPackage } = useAssessment();
+  const { choosePackage } = useAssessment();
   const { isAuthenticated } = useAuth();
 
+  // Continues a draft in progress rather than wiping it; starts afresh after a paid assessment
   const handlePackage1 = () => {
-    startNewAssessment();
-    selectPackage('health-check', STARTER.priceGbp);
-    router.push('/organisation');
+    router.push(choosePackage('health-check', STARTER.priceGbp));
   };
 
   const handlePackage2 = () => {

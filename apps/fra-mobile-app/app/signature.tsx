@@ -6,6 +6,7 @@ import { useAssessment } from '@/contexts/AssessmentContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { PenTool, Check, X, AlertCircle, Shield } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import { PACKAGES } from '@/constants/packages';
 
 export default function SignatureScreen() {
   const router = useRouter();
@@ -123,11 +124,10 @@ export default function SignatureScreen() {
     router.push('/feedback');
   };
 
-  const packageName = assessment.payment.packageType === 'health-check'
-    ? 'Health Check FRA'
-    : assessment.payment.packageType === 'with-awareness'
-    ? 'FRA + Awareness Briefing'
-    : 'FRA + Dashboard (12 months)';
+  const purchased = assessment.payment.packageType ? PACKAGES[assessment.payment.packageType] : null;
+  const packageName = purchased
+    ? `${purchased.name}${purchased.billing === 'annual' ? ' (12 months)' : ''}`
+    : '—';
 
   const overallRiskLevel = assessment.riskRegister.length > 0
     ? assessment.riskRegister.filter(r => r.priority === 'high').length > 0

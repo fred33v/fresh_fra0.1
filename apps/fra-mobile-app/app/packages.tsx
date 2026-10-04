@@ -29,7 +29,7 @@ function getOrganisationSize(employeeCount: EmployeeCount | null): OrganisationS
 
 export default function PackagesScreen() {
   const router = useRouter();
-  const { assessment, selectPackage } = useAssessment();
+  const { assessment, choosePackage } = useAssessment();
   
   const orgSize = useMemo(() => 
     getOrganisationSize(assessment.organisation.employeeCount),
@@ -66,8 +66,7 @@ export default function PackagesScreen() {
       router.push('/package-professional');
       return;
     }
-    selectPackage(pkg.id, pkg.price);
-    router.push('/payment');
+    router.push(choosePackage(pkg.id, pkg.price));
   };
 
   return (

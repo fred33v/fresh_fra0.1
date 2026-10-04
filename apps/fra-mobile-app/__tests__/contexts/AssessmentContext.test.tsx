@@ -394,6 +394,106 @@ describe('AssessmentContext', () => {
     });
   });
 
+  // ── choosePackage ──────────────────────────────
+
+  describe('choosePackage', () => {
+    async function ready() {
+      const hook = renderHook(() => useAssessment(), { wrapper });
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      return hook;
+    }
+
+    it('sends an unfinished assessment to the questions, keeping its answers', async () => {
+      const { result } = await ready();
+      act(() => {
+        result.current.updateAssessment({ organisation: { ...result.current.assessment.organisation, name: 'Acme Ltd' } });
+      });
+
+      let next;
+      act(() => {
+        next = result.current.choosePackage('with-dashboard', 4995);
+      });
+
+      expect(next).toBe('/organisation');
+      expect(result.current.assessment.organisation.name).toBe('Acme Ltd');
+      expect(result.current.assessment.payment.packageType).toBe('with-dashboard');
+    });
+
+    it('goes to payment once the assessment is submitted', async () => {
+      const { result } = await ready();
+      act(() => {
+        result.current.updateAssessment({ status: 'submitted' });
+      });
+
+      let next;
+      act(() => {
+        next = result.current.choosePackage('with-awareness', 1799);
+      });
+
+      expect(next).toBe('/payment');
+    });
+
+    it('starts afresh after a paid assessment without carrying over its payment', async () => {
+      const { result } = await ready();
+      const oldId = result.current.assessment.id;
+      act(() => {
+        result.current.updateAssessment({
+          status: 'paid',
+          payment: { packageType: 'health-check', price: 795, transactionId: 'pur-old', status: 'success', date: '2026-10-01' },
+        });
+      });
+
+      let next;
+      act(() => {
+        next = result.current.choosePackage('with-awareness', 1799);
+      });
+
+      expect(next).toBe('/organisation');
+      expect(result.current.assessment.id).not.toBe(oldId);
+      expect(result.current.assessment.status).toBe('draft');
+      expect(result.current.assessment.payment).toMatchObject({ packageType: 'with-awareness', price: 1799, transactionId: null, status: 'pending' });
+    });
+  });
+
+  // ── sync refusals ──────────────────────────────
+
+  describe('sync refusals', () => {
+    it('shows the package limit instead of hiding it behind "pending"', async () => {
+      (apiService.isAuthenticated).mockReturnValue(true);
+      (apiService.post).mockResolvedValue({
+        success: false,
+        error: { code: 'ASSESSMENT_LIMIT_REACHED', message: 'Starter includes a single assessment — upgrade to Professional for quarterly reassessment' },
+      });
+
+      const { result } = renderHook(() => useAssessment(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => {
+        result.current.startNewAssessment();
+      });
+
+      await waitFor(() => expect(result.current.syncStatus.state).toBe('error'));
+      expect(result.current.syncStatus.errorMessage).toMatch(/single assessment.*saved on this device/);
+    });
+
+    it('treats "package required" before payment as pending, not an error', async () => {
+      (apiService.isAuthenticated).mockReturnValue(true);
+      (apiService.post).mockResolvedValue({
+        success: false,
+        error: { code: 'PACKAGE_REQUIRED', message: 'A paid package is required to start an assessment' },
+      });
+
+      const { result } = renderHook(() => useAssessment(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => {
+        result.current.startNewAssessment();
+      });
+
+      await waitFor(() => expect(result.current.syncStatus.state).toBe('pending'));
+    });
+  });
+
   // ── submitAssessment ───────────────────────────
 
   describe('submitAssessment', () => {

@@ -200,13 +200,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setOrganisation(updated);
         logger.info('Organisation updated locally');
 
-        // Sync with backend (best-effort; endpoint may not exist yet)
-        if (apiService.isAuthenticated()) {
-          await apiService.patch(
+        // The server keeps only the profile fields; it derives the package and key-pass
+        // counts from purchases itself and rejects them if sent
+        const remote: Record<string, unknown> = {};
+        if (updates.name) remote.name = updates.name;
+        if (updates.employeeBand) remote.employeeCount = updates.employeeBand;
+        if (apiService.isAuthenticated() && Object.keys(remote).length > 0) {
+          const response = await apiService.patch(
             `/api/v1/organisations/${organisation.organisationId}`,
-            updates as unknown as Record<string, unknown>,
+            remote,
             { requiresAuth: true }
-          ).catch((err: unknown) => logger.warn('Backend org sync unavailable', { error: String(err) }));
+          );
+          if (!response.success) logger.warn('Backend org sync failed', { error: response.error?.message });
         }
       } catch (error: unknown) {
         logger.error('Failed to update organisation:', error);
@@ -243,6 +248,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           packageType: packageType as PackageType,
           keyPassesAllocated: allocation,
           keyPassesUsed: 0,
+          ...(employeeCount ? { employeeBand: employeeCount } : {}),
         });
 
         logger.info(`Allocated ${allocation} key-passes`);

@@ -9,11 +9,10 @@ import { PACKAGES, formatGbp } from '@/constants/packages';
 
 export default function PackageEnterpriseScreen() {
   const router = useRouter();
-  const { selectPackage } = useAssessment();
+  const { choosePackage } = useAssessment();
 
   const handleSelectPackage = () => {
-    selectPackage('with-dashboard', PACKAGES['with-dashboard'].priceGbp);
-    router.push('/payment');
+    router.push(choosePackage('with-dashboard', PACKAGES['with-dashboard'].priceGbp));
   };
 
   return (

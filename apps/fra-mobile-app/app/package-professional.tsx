@@ -9,11 +9,10 @@ import { PACKAGES, formatGbp } from '@/constants/packages';
 
 export default function PackageProfessionalScreen() {
   const router = useRouter();
-  const { selectPackage } = useAssessment();
+  const { choosePackage } = useAssessment();
 
   const handleSelectPackage = () => {
-    selectPackage('with-awareness', PACKAGES['with-awareness'].priceGbp);
-    router.push('/payment');
+    router.push(choosePackage('with-awareness', PACKAGES['with-awareness'].priceGbp));
   };
 
   return (

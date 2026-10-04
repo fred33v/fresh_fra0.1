@@ -88,7 +88,7 @@ export default function DashboardScreen() {
             <LayoutDashboard size={64} color={colors.govGrey3} />
             <Text style={styles.emptyTitle}>Dashboard Unavailable</Text>
             <Text style={styles.emptyText}>
-              The organisation dashboard is only available with the All Inclusive (FRA + Dashboard) package.
+              The organisation dashboard is only available with the Enterprise package.
             </Text>
             <TouchableOpacity
               style={styles.upgradeButton}

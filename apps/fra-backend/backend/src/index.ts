@@ -21,6 +21,7 @@ import complianceRoutes from './routes/compliance.js';
 import apiKeyRoutes, { apiKeyMiddleware } from './routes/api-keys.js';
 import riskRegisterRoutes from './routes/risk-register.js';
 import webhookEndpointRoutes from './routes/webhook-endpoints.js';
+import organisationRoutes from './routes/organisations.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 
@@ -117,6 +118,7 @@ api.route('/', reportsExportsRoutes);
 api.route('/', apiKeyRoutes);
 api.route('/', riskRegisterRoutes);
 api.route('/', webhookEndpointRoutes);
+api.route('/', organisationRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);
 api.route('/budget-guide', budgetGuide);
