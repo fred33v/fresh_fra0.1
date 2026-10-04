@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { safeReturnTo } from '@/utils/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Lock, Mail } from 'lucide-react-native';
 import colors from '@/constants/colors';
 
 export default function LoginScreen() {
+  // These screens hide the navigation bar, so keep content clear of the status bar / Dynamic Island
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  // e.g. /auth/login?returnTo=/payment sends the user back to checkout after signing in
+  const returnTo = safeReturnTo(useLocalSearchParams<{ returnTo?: string }>().returnTo);
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +28,7 @@ export default function LoginScreen() {
     try {
       const result = await signIn(email.trim().toLowerCase(), password);
       if (result.success) {
-        router.replace('/');
+        router.replace(returnTo);
       } else {
         Alert.alert('Sign In Failed', result.error || 'Invalid credentials');
       }
@@ -36,7 +42,7 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">Sign in to your account</Text>
           <Text style={styles.subtitle}>Access your fraud risk assessments</Text>
@@ -111,7 +117,7 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.createAccountButton}
-          onPress={() => router.push('/auth/signup')}
+          onPress={() => router.push(returnTo === '/' ? '/auth/signup' : { pathname: '/auth/signup', params: { returnTo: String(returnTo) } })}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Create new account"

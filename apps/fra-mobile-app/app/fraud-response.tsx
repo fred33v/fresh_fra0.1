@@ -10,9 +10,9 @@ export default function FraudResponseScreen() {
     <AssessmentScreen
       title="Fraud Response Plan"
       nextRoute="/action-plan"
-      previousRoute="/monitoring-evaluation"
+      previousRoute="/compliance-mapping"
       hidePrevious={false}
-      progress={{ current: 12, total: 13 }}
+      progress={{ current: 13, total: 13 }}
     >
       <CurrencyQuestion
         question="Estimated fraud losses detected in the past 3 years"

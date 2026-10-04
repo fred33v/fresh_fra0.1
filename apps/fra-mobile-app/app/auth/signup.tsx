@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { safeReturnTo } from '@/utils/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Building2, Mail, Lock, Check } from 'lucide-react-native';
 import colors from '@/constants/colors';
 
 export default function SignUpScreen() {
+  // These screens hide the navigation bar, so keep content clear of the status bar / Dynamic Island
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  // e.g. /auth/login?returnTo=/payment sends the user back to checkout after signing in
+  const returnTo = safeReturnTo(useLocalSearchParams<{ returnTo?: string }>().returnTo);
   const { signUp } = useAuth();
   const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
@@ -61,7 +67,7 @@ export default function SignUpScreen() {
     try {
       const result = await signUp(email.trim().toLowerCase(), password, orgName.trim());
       if (result.success) {
-        router.replace('/');
+        router.replace(returnTo);
       } else {
         Alert.alert('Sign Up Failed', result.error || 'Could not create account');
       }
@@ -75,7 +81,7 @@ export default function SignUpScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">Create your account</Text>
           <Text style={styles.subtitle}>Start managing fraud risk today</Text>

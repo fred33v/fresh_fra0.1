@@ -65,6 +65,7 @@ export function buildReportHtml(assessment: AssessmentData, generatedAt: Date = 
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #0b0c0c; font-size: 11pt; line-height: 1.45; }
   h1 { font-size: 20pt; margin: 0 0 4px; } h2 { font-size: 14pt; margin: 22px 0 8px; border-bottom: 2px solid #1d70b8; padding-bottom: 4px; }
   h3 { font-size: 12pt; margin: 14px 0 6px; } .muted { color: #505a5f; }
+  h2, h3 { page-break-after: avoid; break-after: avoid; } /* never leave a heading alone at the foot of a page */
   table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; } th, td { border: 1px solid #b1b4b6; padding: 5px 7px; text-align: left; vertical-align: top; }
   th { background: #f3f2f1; } tr { page-break-inside: avoid; } .num { text-align: right; }
   .p-high { color: #a4211b; font-weight: 600; } .p-medium { color: #8a4a00; font-weight: 600; } .p-low { color: #00703c; font-weight: 600; }

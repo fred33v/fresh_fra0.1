@@ -9,7 +9,7 @@ import colors from '@/constants/colors';
 export default function PaymentScreen() {
   const router = useRouter();
   const { assessment, processPayment } = useAssessment();
-  const { allocateKeyPasses } = useAuth();
+  const { allocateKeyPasses, isAuthenticated } = useAuth();
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvc, setCvc] = useState('');
@@ -54,6 +54,19 @@ export default function PaymentScreen() {
 
   const handlePayment = async () => {
     if (processingRef.current) return;
+    // Purchases belong to an organisation account, so ask for one before taking card details further
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to continue',
+        'Your purchase is linked to your organisation account. Sign in or create an account, then you will return here to pay.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Create account', onPress: () => router.push('/auth/signup?returnTo=%2Fpayment') },
+          { text: 'Sign in', onPress: () => router.push('/auth/login?returnTo=%2Fpayment') },
+        ]
+      );
+      return;
+    }
     if (!cardNumber || !expiry || !cvc || !cardholderName) {
       Alert.alert('Missing Information', 'Please fill in all card details');
       return;
@@ -117,6 +130,19 @@ export default function PaymentScreen() {
           <Lock size={16} color={colors.govGreen} />
           <Text style={styles.securityText}>Secure payment</Text>
         </View>
+
+        {!isAuthenticated && (
+          <TouchableOpacity
+            style={styles.signInNotice}
+            onPress={() => router.push('/auth/login?returnTo=%2Fpayment')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to your organisation account before paying"
+          >
+            <Text style={styles.signInNoticeText}>
+              You need to sign in before paying. <Text style={styles.signInNoticeLink}>Sign in or create an account</Text>
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Order Summary</Text>
@@ -243,6 +269,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: colors.govGreen,
+  },
+  signInNotice: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.govBlue,
+    backgroundColor: colors.lightBlue,
+    padding: 12,
+    marginBottom: 20,
+  },
+  signInNoticeText: {
+    fontSize: 15,
+    color: colors.govGrey1,
+    lineHeight: 21,
+  },
+  signInNoticeLink: {
+    color: colors.govBlue,
+    fontWeight: '600' as const,
+    textDecorationLine: 'underline',
   },
   summaryCard: {
     backgroundColor: colors.govGrey4,

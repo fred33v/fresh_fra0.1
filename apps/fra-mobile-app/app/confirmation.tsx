@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Share, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle2, Download, Share2 } from 'lucide-react-native';
@@ -106,6 +106,25 @@ export default function ConfirmationScreen() {
 
   const showEmployeeAccess = organisation && (organisation.keyPassesAllocated ?? 0) > 0;
 
+  // Only a confirmed purchase reaches this screen in the normal flow; anything else (an old link,
+  // a failed or abandoned payment) must not be told it has paid
+  if (assessment.payment.status !== 'success') {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ title: 'Payment' }} />
+        <View style={[styles.scrollContent, styles.notPaid]}>
+          <Text style={styles.title} accessibilityRole="header">Payment not completed</Text>
+          <Text style={styles.subtitle}>
+            We have no confirmed payment for this assessment yet. Complete payment to unlock your report and exports.
+          </Text>
+          <TouchableOpacity style={styles.notPaidButton} onPress={() => router.replace(assessment.payment.packageType ? '/payment' : '/packages')} accessibilityRole="button">
+            <Text style={styles.notPaidButtonText}>Go to payment</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -190,7 +209,7 @@ export default function ConfirmationScreen() {
         </View>
 
         <Text style={styles.emailNote}>
-          A confirmation email with download links has been sent to your registered address.
+          Use the export options above to save your report or send it to colleagues.
         </Text>
 
         <TouchableOpacity
@@ -218,6 +237,22 @@ export default function ConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
+  notPaid: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  notPaidButton: {
+    marginTop: 24,
+    backgroundColor: colors.govBlue,
+    borderRadius: 4,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  notPaidButtonText: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: '600' as const,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.white,

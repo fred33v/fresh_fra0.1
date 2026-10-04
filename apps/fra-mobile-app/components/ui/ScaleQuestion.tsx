@@ -24,9 +24,8 @@ export function ScaleQuestion({ question, minLabel, maxLabel, value, onChange }:
     <View style={styles.container}>
       <Text style={styles.question}>{question}</Text>
 
+      {/* Circles span the width; the end labels sit underneath so long labels wrap at word breaks */}
       <View style={styles.scaleContainer}>
-        <Text style={styles.scaleLabel}>{minLabel}</Text>
-
         <View style={styles.scaleOptions}>
           {scaleOptions.map((option) => (
             <TouchableOpacity
@@ -36,6 +35,9 @@ export function ScaleQuestion({ question, minLabel, maxLabel, value, onChange }:
                 value === option.value && styles.scaleButtonSelected,
               ]}
               onPress={() => onChange(option.value)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: value === option.value }}
+              accessibilityLabel={`${option.label} of 5${option.value === 1 ? `, ${minLabel}` : option.value === 5 ? `, ${maxLabel}` : ''}`}
             >
               <Text
                 style={[
@@ -49,7 +51,10 @@ export function ScaleQuestion({ question, minLabel, maxLabel, value, onChange }:
           ))}
         </View>
 
-        <Text style={styles.scaleLabel}>{maxLabel}</Text>
+        <View style={styles.scaleLabels}>
+          <Text style={[styles.scaleLabel, styles.scaleLabelStart]}>{minLabel}</Text>
+          <Text style={[styles.scaleLabel, styles.scaleLabelEnd]}>{maxLabel}</Text>
+        </View>
       </View>
     </View>
   );
@@ -67,29 +72,36 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   scaleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  scaleLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'center',
+    paddingHorizontal: 4,
   },
   scaleOptions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flex: 3,
-    gap: 8,
+    justifyContent: 'space-between',
+  },
+  scaleLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 16,
+  },
+  scaleLabel: {
+    fontSize: 13,
+    color: '#595959',
+    fontWeight: '500',
+    maxWidth: '45%',
+    lineHeight: 18,
+  },
+  scaleLabelStart: {
+    textAlign: 'left',
+  },
+  scaleLabelEnd: {
+    textAlign: 'right',
   },
   scaleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: '#e1e5e9',
     backgroundColor: '#fff',

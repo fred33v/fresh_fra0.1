@@ -7,7 +7,7 @@ import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { debounce } from '@/utils/debounce';
 import { createLogger } from '@/utils/logger';
-import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore, migrateRiskAppetite } from '@/utils/assessment';
+import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore, migrateRiskAppetite, buildActionPlan } from '@/utils/assessment';
 
 const STORAGE_KEY = 'fra_assessment_draft';
 const SYNC_QUEUE_KEY = 'fra_sync_queue';
@@ -270,7 +270,8 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
             complianceMapping: { ...defaults.complianceMapping, ...parsed.complianceMapping },
             fraudResponsePlan: { ...defaults.fraudResponsePlan, ...parsed.fraudResponsePlan },
             actionPlan: { ...defaults.actionPlan, ...parsed.actionPlan },
-            documentControl: { ...defaults.documentControl, ...parsed.documentControl },
+            // Retention follows the current policy, not whatever an older draft stored
+            documentControl: { ...defaults.documentControl, ...parsed.documentControl, retentionPeriod: defaults.documentControl.retentionPeriod },
             payment: { ...defaults.payment, ...parsed.payment },
           };
           setAssessment(merged);
@@ -331,6 +332,8 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     updateAssessment({
       status: 'submitted' as AssessmentStatus,
       riskRegister,
+      // The plan is derived from the same risks, so the report and PDF always match them
+      actionPlan: buildActionPlan(riskRegister),
     });
 
     if (apiService.isAuthenticated() && isOnlineRef.current) {

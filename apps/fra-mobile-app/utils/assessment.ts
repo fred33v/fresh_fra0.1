@@ -13,6 +13,8 @@ import type {
   RiskPriority,
   RiskAppetite,
   ScaleValue,
+  ActionItem,
+  ActionPlan,
 } from '@/types/assessment';
 
 /**
@@ -237,7 +239,7 @@ export function createEmptyAssessment(
       lastUpdated: now,
       reviewedBy: '',
       approvedBy: '',
-      retentionPeriod: '7 years',
+      retentionPeriod: '6 years', // docs/COMPLIANCE.md: fraud assessments are kept 6 years (GovS 013, ECCTA)
       classification: 'Internal',
     },
     payment: {
@@ -397,4 +399,86 @@ export function calculateRiskScore(assessment: AssessmentData): RiskRegisterItem
   }
 
   return risks;
+}
+
+// ---------------------------------------------------------------------------
+// Action plan
+// ---------------------------------------------------------------------------
+
+/** Response time by risk priority (docs/COMPLIANCE.md: high = immediate, medium = planned). */
+export const ACTION_TIMELINE: Record<RiskPriority, string> = {
+  high: '0–3 months',
+  medium: '3–6 months',
+  low: '6–12 months',
+};
+
+/** Concrete remediation steps for each risk calculateRiskScore can raise, keyed by its title. */
+const ACTIONS_BY_RISK: Record<string, string[]> = {
+  'Supplier fraud': [
+    'Verify every new supplier (company registration, bank account, ownership) before first payment',
+    'Introduce call-back verification for any supplier bank detail change',
+  ],
+  'Cash misappropriation': [
+    'Introduce dual control for cash handling and banking',
+    'Reconcile bank accounts monthly with independent review',
+  ],
+  'Payroll fraud': [
+    'Remove leavers from payroll on their last day and review starters and leavers monthly',
+    'Reconcile payroll to HR records each pay run to detect ghost employees',
+  ],
+  'Revenue leakage': [
+    'Reconcile income records to bank receipts monthly',
+    'Review debtor balances and write-offs with a second approver',
+  ],
+  'Cyber fraud': [
+    'Enable multi-factor authentication and review user access quarterly',
+    'Monitor system logs for unusual activity and train staff on phishing and invoice fraud',
+  ],
+  'Unreported fraud': [
+    'Set up a confidential whistleblowing route and publicise it to all staff',
+    'Brief managers on handling and escalating fraud concerns',
+  ],
+  'Segregation of duties failure': [
+    'Separate raising, approving and paying transactions between different people',
+    'Introduce dual approval for payments above an agreed threshold',
+  ],
+  'General fraud risk': [
+    'Brief senior management on fraud risk and the ECCTA 2023 failure to prevent fraud offence',
+  ],
+};
+
+/**
+ * Builds the action plan from the risks the assessment identified: each risk's actions take
+ * its priority, its suggested owner and the matching timeline. A reassessment within 12 months
+ * is always included (GovS 013 expects the fraud risk assessment to be kept current).
+ */
+export function buildActionPlan(risks: RiskRegisterItem[]): ActionPlan {
+  const plan: ActionPlan = { highPriority: [], mediumPriority: [], lowPriority: [] };
+  const bucket: Record<RiskPriority, ActionItem[]> = { high: plan.highPriority, medium: plan.mediumPriority, low: plan.lowPriority };
+
+  for (const risk of [...risks].sort((a, b) => b.residualScore - a.residualScore)) {
+    const steps = ACTIONS_BY_RISK[risk.title] ?? [`Agree and implement controls to reduce: ${risk.title.toLowerCase()}`];
+    steps.forEach((title, i) => {
+      bucket[risk.priority].push({
+        id: `${risk.id}-A${i + 1}`,
+        title,
+        priority: risk.priority,
+        timeline: ACTION_TIMELINE[risk.priority],
+        owner: risk.suggestedOwner,
+        status: 'not-started',
+        dueDate: null,
+      });
+    });
+  }
+
+  plan.lowPriority.push({
+    id: 'REVIEW-A1',
+    title: 'Repeat this fraud risk assessment within 12 months, or sooner after significant change',
+    priority: 'low',
+    timeline: ACTION_TIMELINE.low,
+    owner: 'Senior Management Team',
+    status: 'not-started',
+    dueDate: null,
+  });
+  return plan;
 }

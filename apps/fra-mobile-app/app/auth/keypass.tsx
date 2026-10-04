@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +7,8 @@ import { Key, Mail } from 'lucide-react-native';
 import colors from '@/constants/colors';
 
 export default function KeyPassScreen() {
+  // These screens hide the navigation bar, so keep content clear of the status bar / Dynamic Island
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signInWithKeyPass } = useAuth();
   const [email, setEmail] = useState('');
@@ -41,7 +44,7 @@ export default function KeyPassScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
             <Key size={40} color={colors.govBlue} />

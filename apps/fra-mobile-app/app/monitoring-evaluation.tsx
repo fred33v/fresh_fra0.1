@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { AssessmentScreen, ScaleQuestion } from '@/components/ui';
 import { BarChart3, TrendingUp, AlertTriangle } from 'lucide-react-native';
@@ -7,6 +8,7 @@ import colors from '@/constants/colors';
 import type { ScaleValue } from '@/types/assessment';
 
 export default function MonitoringEvaluationScreen() {
+  const router = useRouter();
   const { assessment, updateAssessment } = useAssessment();
   const [responsiblePerson, setResponsiblePerson] = useState(assessment.monitoringEvaluation.responsiblePerson);
   const [notes, setNotes] = useState(assessment.monitoringEvaluation.notes);
@@ -22,12 +24,14 @@ export default function MonitoringEvaluationScreen() {
         fraudRiskLikelihood: assessment.monitoringEvaluation.fraudRiskLikelihood,
       },
     });
+    // onNext replaces AssessmentScreen's own navigation, so move on here
+    router.push('/compliance-mapping');
   };
 
   return (
     <AssessmentScreen
       title="Monitoring & Evaluation"
-      nextRoute="/fraud-response"
+      nextRoute="/compliance-mapping"
       previousRoute="/training-awareness"
       hidePrevious={false}
       progress={{ current: 11, total: 13 }}

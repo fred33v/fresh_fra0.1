@@ -1,41 +1,33 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ListChecks, AlertTriangle, Clock } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import { useAssessment } from '@/contexts/AssessmentContext';
+import { buildActionPlan, calculateRiskScore } from '@/utils/assessment';
 
 export default function ActionPlanScreen() {
   const router = useRouter();
+  const { assessment, updateAssessment } = useAssessment();
+
+  // Built from this organisation's answers, so the screen, the review and the PDF agree
+  const risks = useMemo(() => calculateRiskScore(assessment), [assessment]);
+  const plan = useMemo(() => buildActionPlan(risks), [risks]);
+  const highPriorityActions = plan.highPriority;
+  const mediumPriorityActions = plan.mediumPriority;
+  const lowPriorityActions = plan.lowPriority;
+  const focusAreas = [...new Set(risks.map((r) => r.area))];
 
   const handleNext = () => {
+    updateAssessment({ actionPlan: plan });
     router.push('/review');
   };
 
-  const highPriorityActions = [
-    { title: 'Deploy new whistleblowing system', owner: 'HR Director', timeline: '0-3 months' },
-    { title: 'Refresh conflict of interest policy', owner: 'Compliance Officer', timeline: '0-3 months' },
-    { title: 'Strengthen supplier due diligence', owner: 'Head of Procurement', timeline: '0-3 months' },
-    { title: 'Introduce dual-approval for bank detail changes', owner: 'Finance Manager', timeline: '0-3 months' },
-  ];
-
-  const mediumPriorityActions = [
-    { title: 'Implement continuous payment monitoring', owner: 'CFO', timeline: '3-6 months' },
-    { title: 'Enhance IT access controls', owner: 'IT Lead', timeline: '3-6 months' },
-    { title: 'Deploy duplicate payment detection analytics', owner: 'Finance Manager', timeline: '3-6 months' },
-    { title: 'Quarterly bank access rights review', owner: 'IT Lead', timeline: '3-6 months' },
-  ];
-
-  const lowPriorityActions = [
-    { title: 'Update training for contractors', owner: 'HR Manager', timeline: '6-12 months' },
-    { title: 'Periodic vendor master cleansing', owner: 'Procurement', timeline: '6-12 months' },
-    { title: 'Enhanced payroll audit analytics', owner: 'HR Manager', timeline: '6-12 months' },
-  ];
-
-  const renderActionCard = (action: { title: string; owner: string; timeline: string }, index: number, priority: 'high' | 'medium' | 'low') => {
+  const renderActionCard = (action: { id: string; title: string; owner: string; timeline: string }, index: number, priority: 'high' | 'medium' | 'low') => {
     const priorityColor = priority === 'high' ? colors.govRed : priority === 'medium' ? colors.warningOrange : colors.successGreen;
     
     return (
-      <View key={action.title} style={[styles.actionCard, { borderLeftColor: priorityColor }]}>
+      <View key={action.id} style={[styles.actionCard, { borderLeftColor: priorityColor }]}>
         <Text style={styles.actionTitle}>{action.title}</Text>
         <View style={styles.actionMeta}>
           <Text style={styles.metaItem}>👤 {action.owner}</Text>
@@ -56,44 +48,50 @@ export default function ActionPlanScreen() {
         Based on your assessment, here are prioritized actions to strengthen your fraud prevention framework.
       </Text>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <AlertTriangle size={20} color={colors.govRed} />
-          <Text style={styles.sectionTitle}>High Priority (0-3 Months)</Text>
+      {highPriorityActions.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <AlertTriangle size={20} color={colors.govRed} />
+            <Text style={styles.sectionTitle}>High Priority (0-3 Months)</Text>
+          </View>
+          <View style={styles.priorityBadge}>
+            <Text style={styles.priorityText}>{highPriorityActions.length} critical action{highPriorityActions.length === 1 ? '' : 's'}</Text>
+          </View>
+          {highPriorityActions.map((action, index) => renderActionCard(action, index, 'high'))}
         </View>
-        <View style={styles.priorityBadge}>
-          <Text style={styles.priorityText}>{highPriorityActions.length} critical actions</Text>
-        </View>
-        {highPriorityActions.map((action, index) => renderActionCard(action, index, 'high'))}
-      </View>
+      )}
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Clock size={20} color={colors.warningOrange} />
-          <Text style={styles.sectionTitle}>Medium Priority (3-6 Months)</Text>
+      {mediumPriorityActions.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Clock size={20} color={colors.warningOrange} />
+            <Text style={styles.sectionTitle}>Medium Priority (3-6 Months)</Text>
+          </View>
+          <View style={[styles.priorityBadge, styles.mediumBadge]}>
+            <Text style={styles.priorityText}>{mediumPriorityActions.length} important action{mediumPriorityActions.length === 1 ? '' : 's'}</Text>
+          </View>
+          {mediumPriorityActions.map((action, index) => renderActionCard(action, index, 'medium'))}
         </View>
-        <View style={[styles.priorityBadge, styles.mediumBadge]}>
-          <Text style={styles.priorityText}>{mediumPriorityActions.length} important actions</Text>
-        </View>
-        {mediumPriorityActions.map((action, index) => renderActionCard(action, index, 'medium'))}
-      </View>
+      )}
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <ListChecks size={20} color={colors.successGreen} />
-          <Text style={styles.sectionTitle}>Low Priority (6-12 Months)</Text>
+      {lowPriorityActions.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <ListChecks size={20} color={colors.successGreen} />
+            <Text style={styles.sectionTitle}>Low Priority (6-12 Months)</Text>
+          </View>
+          <View style={[styles.priorityBadge, styles.lowBadge]}>
+            <Text style={styles.priorityText}>{lowPriorityActions.length} enhancement action{lowPriorityActions.length === 1 ? '' : 's'}</Text>
+          </View>
+          {lowPriorityActions.map((action, index) => renderActionCard(action, index, 'low'))}
         </View>
-        <View style={[styles.priorityBadge, styles.lowBadge]}>
-          <Text style={styles.priorityText}>{lowPriorityActions.length} enhancement actions</Text>
-        </View>
-        {lowPriorityActions.map((action, index) => renderActionCard(action, index, 'low'))}
-      </View>
+      )}
 
       <View style={styles.summaryBox}>
         <Text style={styles.summaryTitle}>📊 Action Plan Summary</Text>
         <Text style={styles.summaryItem}>• Total actions: {highPriorityActions.length + mediumPriorityActions.length + lowPriorityActions.length}</Text>
-        <Text style={styles.summaryItem}>• Estimated completion: 12 months</Text>
-        <Text style={styles.summaryItem}>• Key focus areas: Payments, Training, Monitoring</Text>
+        <Text style={styles.summaryItem}>• Risks identified: {risks.length}</Text>
+        <Text style={styles.summaryItem}>• Key focus areas: {focusAreas.join(', ')}</Text>
       </View>
 
       <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Review Complete Assessment">

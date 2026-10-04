@@ -27,12 +27,12 @@ export default function PaymentSummaryCard({
       </View>
       <View style={styles.detailRow}>
         <Text style={styles.detailLabel}>Transaction ID</Text>
-        <Text style={styles.detailValue}>{transactionId}</Text>
+        <Text style={styles.detailValue}>{transactionId ?? '—'}</Text>
       </View>
       <View style={styles.detailRow}>
         <Text style={styles.detailLabel}>Date</Text>
         <Text style={styles.detailValue}>
-          {new Date(date || '').toLocaleDateString('en-GB')}
+          {date ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
         </Text>
       </View>
     </View>
