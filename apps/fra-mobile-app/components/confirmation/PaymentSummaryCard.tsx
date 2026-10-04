@@ -50,6 +50,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 16,
   },
   detailLabel: {
     fontSize: 14,
@@ -59,5 +60,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: colors.govGrey1,
+    flexShrink: 1,
+    textAlign: 'right',
   },
 });

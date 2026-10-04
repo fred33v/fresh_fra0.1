@@ -1,4 +1,4 @@
-import type { PackageType } from '@/types/assessment';
+import type { EmployeeCount, PackageType } from '@/types/assessment';
 
 // Single source for package names, prices and features in the mobile app.
 // Mirrors the backend catalogue (apps/fra-backend/backend/src/types.ts, FALLBACK_PACKAGES)
@@ -81,3 +81,20 @@ export const billingNote = (pkg: CataloguePackage) => (pkg.billing === 'one-time
 /** Spoken price for screen readers, e.g. "795 pounds one-time plus VAT". */
 export const spokenPrice = (pkg: CataloguePackage) =>
   `${pkg.priceGbp} pounds ${pkg.billing === 'one-time' ? 'one-time' : 'per year'} plus VAT`;
+
+// The backend generates at most 500 codes per request (keypassGenerateSchema)
+const MAX_CODES_PER_REQUEST = 500;
+const STAFF_ESTIMATE: Record<EmployeeCount, number> = {
+  '1-10': 10, '11-50': 50, '51-100': 100, '101-250': 250, '251-1000': 500, '1001+': 500,
+};
+
+/**
+ * Key-passes to request after purchase: the package allowance (Starter 1, Professional 50),
+ * or for Enterprise's unlimited allowance one per member of staff, up to the per-request cap.
+ * Asking for more than the allowance is rejected by the server.
+ */
+export function keyPassAllocation(packageType: PackageType, employeeCount: EmployeeCount | null): number {
+  const allowance = PACKAGES[packageType].keyPasses;
+  if (allowance !== 'unlimited') return allowance;
+  return Math.min(STAFF_ESTIMATE[employeeCount ?? '1001+'], MAX_CODES_PER_REQUEST);
+}

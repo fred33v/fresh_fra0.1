@@ -11,7 +11,9 @@ export default function PaymentScreen() {
   const { assessment, processPayment } = useAssessment();
   const { allocateKeyPasses, isAuthenticated } = useAuth();
   const [cardNumber, setCardNumber] = useState('');
+  // Digits only; shown as MM/YY when the field is not being edited
   const [expiry, setExpiry] = useState('');
+  const [expiryFocused, setExpiryFocused] = useState(false);
   const [cvc, setCvc] = useState('');
   const [cardholderName, setCardholderName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -23,9 +25,11 @@ export default function PaymentScreen() {
     return chunks ? chunks.join(' ') : cleaned;
   };
 
+  // Formatting is applied only outside editing: inserting the slash as the user types
+  // moves the caret (digits land out of order) and undoes a backspace over the slash
   const formatExpiry = (text: string) => {
     const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length >= 2) {
+    if (cleaned.length > 2) {
       return cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4);
     }
     return cleaned;
@@ -41,7 +45,7 @@ export default function PaymentScreen() {
   const handleExpiryChange = (text: string) => {
     const cleaned = text.replace(/\D/g, '');
     if (cleaned.length <= 4) {
-      setExpiry(formatExpiry(cleaned));
+      setExpiry(cleaned);
     }
   };
 
@@ -71,13 +75,17 @@ export default function PaymentScreen() {
       Alert.alert('Missing Information', 'Please fill in all card details');
       return;
     }
+    if (expiry.length !== 4) {
+      Alert.alert('Check expiry date', 'Enter the expiry date as MM/YY, for example 12/30.');
+      return;
+    }
 
     processingRef.current = true;
     setIsProcessing(true);
     try {
       await processPayment({
         number: cardNumber.replace(/\s/g, ''),
-        expiry,
+        expiry: formatExpiry(expiry),
         cvc,
         name: cardholderName,
       });
@@ -183,8 +191,10 @@ export default function PaymentScreen() {
               <Text style={styles.label}>Expiry date</Text>
               <TextInput
                 style={styles.input}
-                value={expiry}
+                value={expiryFocused ? expiry : formatExpiry(expiry)}
                 onChangeText={handleExpiryChange}
+                onFocus={() => setExpiryFocused(true)}
+                onBlur={() => setExpiryFocused(false)}
                 placeholder="MM/YY"
                 placeholderTextColor={colors.govGrey3}
                 keyboardType="number-pad"

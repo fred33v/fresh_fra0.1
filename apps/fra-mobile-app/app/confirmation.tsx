@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Share, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
@@ -21,7 +21,12 @@ export default function ConfirmationScreen() {
   const logger = createLogger('Confirmation');
   const router = useRouter();
   const { assessment } = useAssessment();
-  const { organisation } = useAuth();
+  const { organisation, keyPasses, refreshKeyPasses } = useAuth();
+  useEffect(() => {
+    if (keyPasses.length === 0) refreshKeyPasses();
+  }, [keyPasses.length, refreshKeyPasses]);
+  // Show the card whenever the organisation has codes, even if the local allowance was lost
+  const availableCodes = keyPasses.filter((k) => k.status === 'available');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null);
@@ -66,7 +71,8 @@ export default function ConfirmationScreen() {
       const csv = new File(Paths.cache, `${baseName}-risk-register.csv`);
       if (csv.exists) csv.delete();
       csv.create();
-      csv.write(buildRiskRegisterCsv(assessment.riskRegister));
+      // Written as bytes: writing the string drops the leading BOM that Excel needs to read UTF-8
+      csv.write(new TextEncoder().encode(buildRiskRegisterCsv(assessment.riskRegister)));
       await shareFile(csv.uri, 'text/csv', 'public.comma-separated-values-text', 'Risk register (CSV)');
     } catch (error: unknown) {
       logger.error('CSV export failed:', error);
@@ -104,7 +110,7 @@ export default function ConfirmationScreen() {
 
   const overallRiskRating = highRiskCount > 3 ? 'High' : highRiskCount > 0 ? 'Medium' : 'Low';
 
-  const showEmployeeAccess = organisation && (organisation.keyPassesAllocated ?? 0) > 0;
+  const showEmployeeAccess = keyPasses.length > 0 || (organisation?.keyPassesAllocated ?? 0) > 0;
 
   // Only a confirmed purchase reaches this screen in the normal flow; anything else (an old link,
   // a failed or abandoned payment) must not be told it has paid
@@ -144,10 +150,10 @@ export default function ConfirmationScreen() {
 
         {showEmployeeAccess && (
           <EmployeeAccessCard
-            organisationId={organisation?.organisationId || 'unknown'}
-            keyPassesAllocated={organisation?.keyPassesAllocated ?? 0}
-            keyPassesUsed={organisation?.keyPassesUsed ?? 0}
-            onShareError={(error) => logger.error('Error sharing link:', error)}
+            codes={availableCodes.map((k) => k.code)}
+            keyPassesAllocated={Math.max(organisation?.keyPassesAllocated ?? 0, keyPasses.length)}
+            keyPassesUsed={keyPasses.filter((k) => k.status === 'used').length}
+            onShareError={(error) => logger.error('Error sharing access codes:', error)}
           />
         )}
 

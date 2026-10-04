@@ -4,7 +4,7 @@
  * Prices and allowances must match the backend catalogue and the web app.
  */
 
-import { PACKAGES, billingNote, formatGbp, spokenPrice } from '@/constants/packages';
+import { PACKAGES, billingNote, formatGbp, keyPassAllocation, spokenPrice } from '@/constants/packages';
 
 describe('package catalogue', () => {
   it('matches the backend prices, billing and key-pass allowances', () => {
@@ -25,5 +25,13 @@ describe('package catalogue', () => {
     expect(billingNote(PACKAGES['health-check'])).toBe('one-time + VAT');
     expect(billingNote(PACKAGES['with-dashboard'])).toBe('/year + VAT');
     expect(spokenPrice(PACKAGES['with-awareness'])).toBe('1799 pounds per year plus VAT');
+  });
+
+  it('requests no more key-passes than the package allows', () => {
+    expect(keyPassAllocation('health-check', '11-50')).toBe(1);
+    expect(keyPassAllocation('with-awareness', '251-1000')).toBe(50);
+    expect(keyPassAllocation('with-dashboard', '101-250')).toBe(250);
+    expect(keyPassAllocation('with-dashboard', '1001+')).toBe(500);
+    expect(keyPassAllocation('with-dashboard', null)).toBe(500);
   });
 });

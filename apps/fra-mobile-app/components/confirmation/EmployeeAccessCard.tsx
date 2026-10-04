@@ -1,35 +1,49 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Share, Alert, Clipboard } from 'react-native';
-import { Link2, Copy, Users, Share2 } from 'lucide-react-native';
+import { KeyRound, Copy, Users, Share2 } from 'lucide-react-native';
 import colors from '@/constants/colors';
 
 interface EmployeeAccessCardProps {
-  organisationId: string;
+  /** Key-pass codes allocated to this organisation (each lets one employee join). */
+  codes: string[];
   keyPassesAllocated: number;
   keyPassesUsed: number;
   onShareError: (error: unknown) => void;
 }
 
+// Employees join by entering a key-pass in the app ("Use company access code"), so share the
+// codes themselves with instructions; there is no web join link.
+export function buildAccessMessage(codes: string[]): string {
+  const list = codes.map((c) => `• ${c}`).join('\n');
+  return [
+    'You have been invited to complete a fraud risk assessment for your organisation.',
+    '',
+    'Open the FRAUD-RISK.CO.UK app, tap "Sign In", then "Use company access code", and enter your code:',
+    list,
+    '',
+    'Each code can be used once.',
+  ].join('\n');
+}
+
 export default function EmployeeAccessCard({
-  organisationId,
+  codes,
   keyPassesAllocated,
   keyPassesUsed,
   onShareError,
 }: EmployeeAccessCardProps) {
-  const baseUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://rork.app';
-  const accessLink = `${baseUrl}/employee-access/${organisationId}`;
   const availablePasses = keyPassesAllocated - keyPassesUsed;
+  const shown = codes.slice(0, 5);
 
-  const handleCopyLink = () => {
-    Clipboard.setString(accessLink);
-    Alert.alert('Copied!', 'Link copied to clipboard');
+  const handleCopyCodes = () => {
+    Clipboard.setString(codes.join('\n'));
+    Alert.alert('Copied', codes.length === 1 ? 'Access code copied' : `${codes.length} access codes copied`);
   };
 
-  const handleShareLink = async () => {
+  const handleShareCodes = async () => {
     try {
       await Share.share({
-        message: `You've been granted access to fraud risk awareness training. Visit this link to get started: ${accessLink}`,
-        title: 'Fraud Risk Awareness Training Access',
+        message: buildAccessMessage(codes),
+        title: 'Your fraud risk assessment access code',
       });
     } catch (error: unknown) {
       onShareError(error);
@@ -39,54 +53,75 @@ export default function EmployeeAccessCard({
   return (
     <View style={styles.employeeAccessCard}>
       <View style={styles.employeeAccessHeader}>
-        <Link2 size={24} color={colors.govBlue} />
-        <Text style={styles.employeeAccessTitle}>Employee Access Link</Text>
+        <KeyRound size={24} color={colors.govBlue} />
+        <Text style={styles.employeeAccessTitle}>Employee Access Codes</Text>
       </View>
       <Text style={styles.employeeAccessDescription}>
-        Share this link with your employees to give them access to fraud awareness training and materials.
+        Give each employee one code. They enter it in the app under "Use company access code" to complete their own assessment.
       </Text>
 
-      <View style={styles.linkContainer}>
-        <Text style={styles.linkText} numberOfLines={1}>
-          {accessLink}
-        </Text>
-        <TouchableOpacity
-          style={styles.copyButton}
-          onPress={handleCopyLink}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Copy employee access link"
-        >
-          <Copy size={18} color={colors.white} />
-        </TouchableOpacity>
-      </View>
+      {codes.length > 0 ? (
+        <View style={styles.linkContainer}>
+          <View style={styles.codeList}>
+            {shown.map((code) => (
+              <Text key={code} style={styles.linkText} selectable accessibilityLabel={`Access code ${code.split('').join(' ')}`}>
+                {code}
+              </Text>
+            ))}
+            {codes.length > shown.length && (
+              <Text style={styles.moreCodes}>and {codes.length - shown.length} more</Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={handleCopyCodes}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={codes.length === 1 ? 'Copy access code' : 'Copy all access codes'}
+          >
+            <Copy size={18} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Text style={styles.employeeAccessNote}>Your codes are being prepared. You can also manage them from the dashboard.</Text>
+      )}
 
       <View style={styles.keyPassInfo}>
         <Users size={16} color={colors.govGrey2} />
         <Text style={styles.keyPassInfoText}>
-          {availablePasses} of {keyPassesAllocated} access passes available
+          {availablePasses} of {keyPassesAllocated} access {keyPassesAllocated === 1 ? 'pass' : 'passes'} available
         </Text>
       </View>
 
-      <TouchableOpacity
-        style={styles.shareButton}
-        onPress={handleShareLink}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Share Link with Employees"
-      >
-        <Share2 size={18} color={colors.govBlue} />
-        <Text style={styles.shareButtonText}>Share Link with Employees</Text>
-      </TouchableOpacity>
+      {codes.length > 0 && (
+        <TouchableOpacity
+          style={styles.shareButton}
+          onPress={handleShareCodes}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Share access codes with employees"
+        >
+          <Share2 size={18} color={colors.govBlue} />
+          <Text style={styles.shareButtonText}>Share Codes with Employees</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.employeeAccessNote}>
-        Employees will need to enter their email address to access the materials. Each access uses one key-pass.
+        Each code works once and expires after 90 days.
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  codeList: {
+    flex: 1,
+    gap: 4,
+  },
+  moreCodes: {
+    fontSize: 13,
+    color: colors.govGrey2,
+  },
   employeeAccessCard: {
     backgroundColor: colors.lightBlue,
     borderRadius: 12,

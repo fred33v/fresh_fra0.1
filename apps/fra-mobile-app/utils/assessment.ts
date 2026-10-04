@@ -482,3 +482,12 @@ export function buildActionPlan(risks: RiskRegisterItem[]): ActionPlan {
   });
   return plan;
 }
+
+/**
+ * Payload for PATCH /assessments/:id. The backend schema is { title?, answers, status? } with
+ * its own status values, so the app's state travels as answers and the status is left to the
+ * dedicated submit endpoint.
+ */
+export function toRemotePatch(assessment: AssessmentData): { answers: Record<string, unknown> } {
+  return { answers: assessment as unknown as Record<string, unknown> };
+}

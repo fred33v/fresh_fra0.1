@@ -18,7 +18,8 @@ export type PaymentStatus = 'pending' | 'success' | 'failed';
 export type AssessmentStatus = 'draft' | 'submitted' | 'paid' | 'signed';
 export type RiskPriority = 'high' | 'medium' | 'low';
 export type UserRole = 'employer' | 'employee' | 'admin';
-export type KeyPassStatus = 'unused' | 'used' | 'expired';
+// Matches the backend key-pass lifecycle: available → used, or revoked / expired
+export type KeyPassStatus = 'available' | 'used' | 'revoked' | 'expired';
 export type OrganisationSize = 'small' | 'medium' | 'large';
 export type PaymentRiskArea = 'supplier' | 'payroll' | 'refunds' | 'treasury' | 'high-value';
 export type ControlEffectiveness = 'strong' | 'adequate' | 'weak' | 'not-assessed';

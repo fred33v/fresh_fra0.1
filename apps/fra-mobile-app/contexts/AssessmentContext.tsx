@@ -7,7 +7,7 @@ import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { debounce } from '@/utils/debounce';
 import { createLogger } from '@/utils/logger';
-import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore, migrateRiskAppetite, buildActionPlan } from '@/utils/assessment';
+import { generateId, isLocalOnlyAssessmentId, createEmptyAssessment, calculateRiskScore, migrateRiskAppetite, buildActionPlan, toRemotePatch } from '@/utils/assessment';
 
 const STORAGE_KEY = 'fra_assessment_draft';
 const SYNC_QUEUE_KEY = 'fra_sync_queue';
@@ -29,6 +29,11 @@ interface SyncQueueItem {
 export const [AssessmentProvider, useAssessment] = createContextHook(() => {
   const logger = createLogger('Assessment');
   const [assessment, setAssessment] = useState<AssessmentData>(createEmptyAssessment());
+  // Latest assessment for async sync code, whose closures would otherwise hold a stale copy
+  const assessmentRef = useRef(assessment);
+  useEffect(() => {
+    assessmentRef.current = assessment;
+  }, [assessment]);
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     state: 'synced',
@@ -57,10 +62,16 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     );
 
     if (response.success && response.data?.id) {
-      const now = new Date().toISOString();
-      const next = { ...current, id: response.data.id, updatedAt: now };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      setAssessment(next);
+      const remoteId = response.data.id;
+      // Only swap the id into the LATEST state: answers or a payment recorded while this
+      // request was in flight must not be overwritten by the copy we started from
+      const next = { ...assessmentRef.current, id: remoteId };
+      assessmentRef.current = next;
+      setAssessment((prev) => {
+        const updated = { ...prev, id: remoteId };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((err: unknown) => logger.error('Failed to persist assessment:', err));
+        return updated;
+      });
       return next;
     }
 
@@ -181,13 +192,26 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     try {
       setSyncStatus({ state: 'syncing', lastSync: syncStatus.lastSync });
 
-      const target = await ensureRemoteAssessment(assessment);
+      let target = await ensureRemoteAssessment(assessmentRef.current);
 
-      const response = await apiService.patch(
+      // The API accepts { title?, answers, status? }; send the whole current assessment as
+      // answers (last write wins), so queued partial updates can never be rejected or lost
+      const patch = () => apiService.patch(
         API_CONFIG.ENDPOINTS.ASSESSMENTS.UPDATE(target.id),
-        data as unknown as Record<string, unknown>,
+        toRemotePatch({ ...target, ...data }),
         { requiresAuth: true }
       );
+      let response = await patch();
+
+      // The server no longer has this assessment (deleted, or a different environment):
+      // give the local copy a fresh local id so it is created again, then retry once
+      if (!response.success && response.error?.code === 'NOT_FOUND') {
+        logger.warn('Remote assessment missing; creating it again', { id: target.id });
+        const local = { ...assessmentRef.current, id: generateId() };
+        assessmentRef.current = local;
+        target = await ensureRemoteAssessment(local);
+        response = await patch();
+      }
 
       if (response.success) {
         setSyncStatus({
@@ -337,7 +361,7 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     });
 
     if (apiService.isAuthenticated() && isOnlineRef.current) {
-      ensureRemoteAssessment(assessment)
+      ensureRemoteAssessment(assessmentRef.current)
         .then((target) =>
           apiService.post(
             API_CONFIG.ENDPOINTS.ASSESSMENTS.SUBMIT(target.id),

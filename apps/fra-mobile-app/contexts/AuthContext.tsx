@@ -5,6 +5,7 @@ import type { KeyPass, EmployeeCount, OrganisationSize, PackageType } from '@/ty
 import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { createLogger } from '@/utils/logger';
+import { keyPassAllocation } from '@/constants/packages';
 import type { User as AuthUser, Organisation as AuthOrg } from '@/services/auth.service';
 
 // Response interfaces for API calls
@@ -224,7 +225,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       try {
         logger.info('Allocating key-passes for package:', packageType);
 
-        const allocation = employeeCount === '1-10' || employeeCount === '11-50' ? 100 : 250;
+        const allocation = keyPassAllocation(packageType as PackageType, employeeCount);
 
         const result = await apiService.post<KeyPassAllocateResponse>(
           API_CONFIG.ENDPOINTS.KEYPASSES.ALLOCATE,
@@ -233,7 +234,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         );
 
         if (result.success && Array.isArray(result.data?.codes)) {
-          setKeyPasses(result.data.codes.map((code: string) => ({ code, status: 'unused' } as KeyPass)));
+          setKeyPasses(result.data.codes.map((code: string) => ({ code, status: 'available' } as KeyPass)));
         } else {
           return { success: false, error: result.error?.message || 'Failed to allocate access codes' };
         }
@@ -254,12 +255,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     [organisation, updateOrganisation]
   );
 
+  // Codes live on the server; reload them so they survive an app restart
+  const refreshKeyPasses = useCallback(async () => {
+    const orgId = user?.organisationId;
+    if (!orgId) return;
+    try {
+      const result = await apiService.get<KeyPass[]>(
+        `${API_CONFIG.ENDPOINTS.KEYPASSES.BY_ORG(orgId)}?pageSize=200`,
+        { requiresAuth: true }
+      );
+      if (result.success && Array.isArray(result.data)) setKeyPasses(result.data);
+    } catch (error: unknown) {
+      logger.warn('Could not load key-passes:', error);
+    }
+  }, [user?.organisationId]);
+
   return {
     user,
     organisation,
     isLoading,
     isAuthenticated: !!user,
     keyPasses,
+    refreshKeyPasses,
     signUp,
     signIn,
     signInWithKeyPass,

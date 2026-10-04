@@ -559,7 +559,28 @@ describe('AuthContext', () => {
       expect(allocResult.error).toBe('Quota exceeded');
     });
 
-    it('allocates 250 for larger organisations', async () => {
+    it('requests only the Starter allowance of 1 code', async () => {
+      (authService.restoreSession).mockResolvedValue({ success: true, user: mockUser, organisation: mockOrg });
+      (apiService.post).mockResolvedValue({ success: true, data: { codes: ['KP-001'] } });
+      (apiService.isAuthenticated).mockReturnValue(true);
+      (apiService.patch).mockResolvedValue({ success: true });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isAuthenticated).toBe(true);
+      });
+      await act(async () => {
+        await result.current.allocateKeyPasses('health-check', '51-100');
+      });
+
+      expect(apiService.post).toHaveBeenCalledWith(
+        '/api/v1/keypasses/allocate',
+        { quantity: 1, expiresInDays: 90 },
+        { requiresAuth: true },
+      );
+    });
+
+    it('allocates one code per member of staff for Enterprise (101-250 staff)', async () => {
       (authService.restoreSession).mockResolvedValue({
         success: true,
         user: mockUser,
@@ -579,10 +600,10 @@ describe('AuthContext', () => {
       });
 
       await act(async () => {
-        await result.current.allocateKeyPasses('full-service', '51-100');
+        await result.current.allocateKeyPasses('with-dashboard', '101-250');
       });
 
-      // Verify 250 was passed to the API
+      // Enterprise is unlimited, so the request follows the organisation size
       expect(apiService.post).toHaveBeenCalledWith(
         '/api/v1/keypasses/allocate',
         { quantity: 250, expiresInDays: 90 },
