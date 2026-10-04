@@ -43,6 +43,8 @@ export interface AssessmentResults {
   assessmentId: string;
   overallScore: number;
   riskLevel: ModuleRiskLevel;
+  /** The fraud risk the organisation said it can accept (Risk Appetite module); null if not answered */
+  riskAppetite?: 'Low' | 'Medium' | 'High' | null;
   modules: Array<{
     id: string;
     title: string;

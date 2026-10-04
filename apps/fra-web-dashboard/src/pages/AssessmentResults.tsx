@@ -42,6 +42,8 @@ import type { AssessmentResults as AssessmentResultsData } from '@/types/assessm
 
 type Impact = 'high' | 'medium' | 'low';
 
+const APPETITE_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
+
 const SEVERITY_IMPACT: Record<AssessmentResultsData['topRisks'][number]['severity'], Impact> = {
   Critical: 'high',
   High: 'high',
@@ -227,6 +229,14 @@ export default function AssessmentResults() {
                       {rating === 'critical' &&
                         'Your organisation faces critical fraud risks. Urgent action is needed to strengthen controls.'}
                     </p>
+                    {results.riskAppetite && (
+                      <p className="text-sm leading-relaxed">
+                        <span className="font-medium">Your stated risk appetite: {results.riskAppetite}.</span>{' '}
+                        {APPETITE_RANK[results.riskLevel] > APPETITE_RANK[results.riskAppetite]
+                          ? 'Your assessed risk is above what you said you can accept, so the areas below need action.'
+                          : 'Your assessed risk is within what you said you can accept.'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex gap-2 pt-4">

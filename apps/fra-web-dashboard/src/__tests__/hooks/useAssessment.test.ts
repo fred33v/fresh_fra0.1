@@ -116,7 +116,8 @@ describe('useAssessment', () => {
     expect(result.current.assessment).toBeNull();
     expect(result.current.errorCode).toBe(code);
     expect(result.current.error).toBe(message);
-    expect(toast.error).toHaveBeenCalledWith(message);
+    // Shown once, on the page's own card, not again as a toast
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('keeps every answer from quick changes and saves them in one request after a pause', async () => {

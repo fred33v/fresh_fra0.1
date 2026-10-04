@@ -95,7 +95,8 @@ export function useAssessment() {
       logger.error('Error starting assessment', err);
       setError(message);
       setErrorCode(code);
-      toast.error(message);
+      // The page explains package and limit errors itself, with the way forward; a toast would repeat it
+      if (code !== 'PACKAGE_REQUIRED' && code !== 'ASSESSMENT_LIMIT_REACHED') toast.error(message);
     } finally {
       setIsLoading(false);
       startingRef.current = false;

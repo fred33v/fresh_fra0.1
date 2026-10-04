@@ -54,6 +54,14 @@ const AREA_RISKS = {
   payrollHR: { title: 'Payroll fraud', area: 'Payroll & HR', owner: 'HR Manager', description: 'Weak payroll controls may enable ghost employees or timesheet manipulation.' },
   revenue: { title: 'Revenue leakage', area: 'Revenue', owner: 'Finance Director', description: 'Poor revenue controls may lead to unrecorded income or fee manipulation.' },
   itSystems: { title: 'Cyber fraud', area: 'IT Systems', owner: 'IT Lead', description: 'Weak IT access controls increase vulnerability to internal and external cyber fraud.' },
+  peopleCulture: { title: 'Unreported fraud', area: 'People & Culture', owner: 'HR Director', description: 'Absence of whistleblowing mechanisms prevents detection of fraudulent activity.' },
+  controlsTechnology: { title: 'Segregation of duties failure', area: 'Controls', owner: 'Chief Operating Officer', description: 'Lack of segregation allows single individuals to execute and conceal fraudulent transactions.' },
+  // Web-only areas (the mobile app asks these modules but does not turn them into register risks)
+  fraudTriangle: { title: 'Pressure and rationalisation', area: 'Culture', owner: 'Senior Management Team', description: 'Pressure on the organisation and a culture that excuses dishonesty make fraud more likely.' },
+  trainingAwareness: { title: 'Low fraud awareness', area: 'Training', owner: 'HR / Training Lead', description: 'Staff who are not trained are less likely to recognise and report fraud.' },
+  monitoringEvaluation: { title: 'Undetected fraud', area: 'Monitoring', owner: 'Internal Audit', description: 'Limited monitoring and review allow fraud to continue unnoticed.' },
+  complianceMapping: { title: 'Failure to prevent fraud exposure', area: 'Governance', owner: 'Board', description: 'Gaps in reasonable procedures weaken the defence to the ECCTA 2023 failure to prevent fraud offence.' },
+  fraudResponse: { title: 'Ineffective fraud response', area: 'Fraud Response', owner: 'Counter Fraud Lead', description: 'Without a plan and investigators, losses grow and recoveries fall when fraud is found.' },
 } as const;
 
 const GENERAL_RISK = { title: 'General fraud risk', area: 'Overall', owner: 'Senior Management Team', description: 'While specific indicators are limited, all organisations face some inherent fraud risk.' };
@@ -117,11 +125,11 @@ function scoreMobileAnswers(answers: Answers): AssessmentRisk {
   if (isWeak(field(answers, 'revenue', 'q1'))) add(AREA_RISKS.revenue, 4, 3, reduction);
   if (isWeak(field(answers, 'itSystems', 'q1'))) add(AREA_RISKS.itSystems, 5, 4, reduction);
   if (field(answers, 'peopleCulture', 'whistleblowing') === 'no-formal') {
-    add({ title: 'Unreported fraud', area: 'People & Culture', owner: 'HR Director', description: 'Absence of whistleblowing mechanisms prevents detection of fraudulent activity.' }, 3, 4, reduction * 0.5);
+    add(AREA_RISKS.peopleCulture, 3, 4, reduction * 0.5);
   }
   const segregation = field(answers, 'controlsTechnology', 'segregation');
   if (segregation === 'one-person' || segregation === 'not-sure') {
-    add({ title: 'Segregation of duties failure', area: 'Controls', owner: 'Chief Operating Officer', description: 'Lack of segregation allows single individuals to execute and conceal fraudulent transactions.' }, 5, 4, 0);
+    add(AREA_RISKS.controlsTechnology, 5, 4, 0);
   }
   if (risks.length === 0) add(GENERAL_RISK, 2, 2, reduction);
 

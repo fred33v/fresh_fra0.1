@@ -276,7 +276,11 @@ describe('Assessments endpoints', () => {
       });
       expect(res.status).toBe(200);
       const json = (await res.json()) as any;
-      expect(json.data.map((m: any) => m.id)).toEqual(['procurement', 'cashBanking', 'payrollHR', 'revenue', 'itSystems']);
+      // The 13 modules, in the mobile app's order
+      expect(json.data.map((m: any) => m.id)).toEqual([
+        'riskAppetite', 'fraudTriangle', 'procurement', 'cashBanking', 'payrollHR', 'revenue', 'itSystems',
+        'peopleCulture', 'controlsTechnology', 'trainingAwareness', 'monitoringEvaluation', 'complianceMapping', 'fraudResponse',
+      ]);
       for (const module of json.data) {
         expect(module.questions.length).toBeGreaterThan(0);
         for (const q of module.questions) expect(q.id.startsWith(`${module.id}.`)).toBe(true);

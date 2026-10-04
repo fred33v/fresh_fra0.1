@@ -132,6 +132,11 @@ export const AREA_TO_REGISTER: Record<string, string> = {
   'IT Systems': 'it_systems',
   'People & Culture': 'governance',
   'Controls': 'governance',
+  'Culture': 'governance',
+  'Training': 'governance',
+  'Monitoring': 'governance',
+  'Governance': 'governance',
+  'Fraud Response': 'governance',
 };
 
 // ── Framework evaluation ────────────────────────────────────────

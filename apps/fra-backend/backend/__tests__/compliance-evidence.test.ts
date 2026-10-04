@@ -105,6 +105,46 @@ describe('Web-format assessments score on the same register scale', () => {
   });
 });
 
+describe('The 13-module web assessment', () => {
+  const STRONG: Record<string, unknown> = {
+    'riskAppetite.acceptableRisk': 'Low',
+    'peopleCulture.vettingThoroughness': 5, 'peopleCulture.whistleblowingRoute': 'yes', 'peopleCulture.leadershipMessaging': 5,
+    'controlsTechnology.segregationOfDuties': 5, 'controlsTechnology.accessManagement': 5, 'controlsTechnology.automatedMonitoring': 'yes',
+    'complianceMapping.accountableIndividual': 'yes', 'complianceMapping.boardApprovedPolicy': 'yes',
+    'complianceMapping.associatedPersonsDueDiligence': 5, 'complianceMapping.counterFraudStrategy': 'yes',
+    'fraudResponse.responsePlan': 'yes', 'fraudResponse.responseSpeed': 'Within 24 hours', 'fraudResponse.investigatorAccess': 'yes',
+    'monitoringEvaluation.registerReviewFrequency': 'Quarterly',
+  };
+
+  it('scores the new modules and keeps multiple-choice answers', () => {
+    const weak = buildAssessmentResults('a1', {
+      ...STRONG,
+      'controlsTechnology.segregationOfDuties': 1, 'controlsTechnology.automatedMonitoring': 'no',
+      'fraudResponse.responseSpeed': 'Longer or ad hoc', 'fraudResponse.responsePlan': 'no',
+      'monitoringEvaluation.registerReviewFrequency': 'Never',
+    });
+    const module = (id: string) => weak.modules.find((m) => m.id === id)!;
+    expect(module('controlsTechnology').impactFactors).toEqual(['Weak segregation of duties (1/5)', 'No automated monitoring of unusual transactions']);
+    expect(module('fraudResponse').impactFactors).toEqual(expect.arrayContaining(['No documented fraud response plan', 'Slow or ad hoc response to suspected fraud']));
+    expect(module('monitoringEvaluation').impactFactors).toContain('Fraud risk register never reviewed');
+    expect(weak.riskAppetite).toBe('Low');
+    // Risk appetite is context for the result, not a scored risk
+    expect(weak.modules.map((m) => m.id)).not.toContain('riskAppetite');
+  });
+
+  it('counts only answered modules, so unanswered ones do not pull the score', () => {
+    const strong = buildAssessmentResults('a1', STRONG);
+    expect(strong.modules.map((m) => m.id).sort()).toEqual(['complianceMapping', 'controlsTechnology', 'fraudResponse', 'monitoringEvaluation', 'peopleCulture']);
+    expect(strong.overallScore).toBeLessThan(25);
+    expect(strong.riskLevel).toBe('Low');
+  });
+
+  it('turns weak new areas into register risks with the mobile app\'s names', () => {
+    const risk = scoreAnswers({ ...STRONG, 'peopleCulture.whistleblowingRoute': 'no', 'peopleCulture.vettingThoroughness': 1, 'peopleCulture.leadershipMessaging': 1 });
+    expect(risk.risks.map((r) => [r.title, r.area])).toEqual([['Unreported fraud', 'People & Culture']]);
+  });
+});
+
 describe('Compliance report reflects real evidence', () => {
   it('starts with nothing met and improves as evidence is recorded', async () => {
     const { accessToken, userId } = await createPaidUser();
