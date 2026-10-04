@@ -17,6 +17,7 @@ import { AlertTriangle, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
 import { CounterFraudRecords } from '@/components/enterprise/CounterFraudRecords';
+import { SpeakUpCases } from '@/components/enterprise/SpeakUpCases';
 
 const logger = createLogger('Compliance');
 
@@ -34,6 +35,7 @@ interface Metrics {
   keypassesIssued: number; keypassesUsed: number; auditEvents: number;
   lossIdentifiedGbp?: number; lossRecoveredGbp?: number; lossesNotReported?: number;
   activeInvestigators?: number; detectionCompletedInYear?: number;
+  speakUpReportsInYear?: number; speakUpOpen?: number; speakUpOverdueForTriage?: number;
 }
 interface AreaRisk { area: string; employeesFlagged: number; highestPriority: 'high' | 'medium' | 'low'; averageResidual: number; titles: string[] }
 interface Report { generatedAt: string; eccta2023: Framework; govs013: Framework; metrics: Metrics; topRiskAreas: AreaRisk[]; disclaimer: string }
@@ -106,6 +108,7 @@ function Overview({ report }: { report: Report }) {
       label: 'Losses identified', value: `£${(m.lossIdentifiedGbp ?? 0).toLocaleString('en-GB')}`,
       sub: `£${(m.lossRecoveredGbp ?? 0).toLocaleString('en-GB')} recovered · ${m.lossesNotReported ?? 0} not reported`,
     },
+    { label: 'Open speak-up cases', value: m.speakUpOpen ?? 0, sub: `${m.speakUpOverdueForTriage ?? 0} awaiting review over 7 days` },
   ];
   return (
     <div className="space-y-6">
@@ -611,7 +614,7 @@ function Exports() {
 
 // ── Page ────────────────────────────────────────────────────────
 
-const COMPLIANCE_TABS = ['overview', 'gaps', 'incidents', 'senior', 'registers', 'training', 'audit', 'exports'];
+const COMPLIANCE_TABS = ['overview', 'gaps', 'speak-up', 'incidents', 'senior', 'registers', 'training', 'audit', 'exports'];
 
 export default function Compliance() {
   const [report, setReport] = useState<Report | null>(null);
@@ -671,6 +674,7 @@ export default function Compliance() {
           <TabsList className="mb-6 flex-wrap h-auto print:hidden">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="gaps">Gaps</TabsTrigger>
+            <TabsTrigger value="speak-up">Speak up</TabsTrigger>
             <TabsTrigger value="incidents">Incidents</TabsTrigger>
             <TabsTrigger value="senior">Senior management</TabsTrigger>
             <TabsTrigger value="registers">Counter fraud registers</TabsTrigger>
@@ -683,6 +687,7 @@ export default function Compliance() {
             {report ? <Overview report={report} /> : !error && <Skeleton className="h-96 w-full" />}
           </TabsContent>
           <TabsContent value="gaps"><Gaps /></TabsContent>
+          <TabsContent value="speak-up"><SpeakUpCases employees={employees} onChange={loadReport} /></TabsContent>
           <TabsContent value="incidents"><Incidents onChange={loadReport} /></TabsContent>
           <TabsContent value="senior"><SeniorManagement employees={employees} onChange={loadReport} /></TabsContent>
           <TabsContent value="registers"><CounterFraudRecords onChange={loadReport} /></TabsContent>

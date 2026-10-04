@@ -25,6 +25,7 @@ import {
   COUNTER_FRAUD_KINDS, isCounterFraudKind, parseRecordData, type CounterFraudKind, type CounterFraudRecord,
 } from '../counter-fraud.js';
 import { listOrgPurchases } from '../entitlements.js';
+import speakUpAdmin from './speak-up-admin.js';
 import {
   AREA_TO_REGISTER, computeMetrics, employeeRisks, evaluateEccta, evaluateGovS013, loadComplianceData, riskByArea,
 } from '../compliance-evidence.js';
@@ -422,6 +423,9 @@ compliance.delete('/records/:id', async (c) => {
   await logAccess(c, auth, 'record_removed', { recordId: id, kind: existing.kind });
   return c.json({ success: true, data: { id, deleted: true } });
 });
+
+// ── Speak-up case handling (GovS 013 component 7) ───────────────
+compliance.route('/speak-up', speakUpAdmin);
 
 // ── GET /audit-trail — who did what, when ───────────────────────
 compliance.get('/audit-trail', async (c) => {

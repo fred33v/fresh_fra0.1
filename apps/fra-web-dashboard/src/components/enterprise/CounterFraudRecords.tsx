@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 
 const logger = createLogger('CounterFraudRecords');
 
-export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy';
+export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy' | 'reporting_route';
 type Data = Record<string, string | number | undefined>;
 interface CounterFraudRecord { id: string; kind: RecordKind; data: Data; createdAt: string; updatedAt: string }
 
@@ -47,6 +47,9 @@ const DIRECTION = { received: 'Received', offered: 'Offered' };
 const DECISION = { accepted: 'Accepted', declined: 'Declined' };
 const INTEREST = { financial: 'Financial', non_financial_professional: 'Non-financial professional', non_financial_personal: 'Non-financial personal', indirect: 'Indirect' };
 const COI_STATUS = { active: 'Active', ended: 'Ended' };
+const CHANNEL = { online_form: 'Online form', phone: 'Phone line', email: 'Email', post: 'Post', in_person: 'In person', external: 'External body' };
+const AUDIENCE = { staff: 'Staff', staff_and_contractors: 'Staff and contractors', everyone: 'Everyone, including the public' };
+const YES_NO = { yes: 'Yes', no: 'No' };
 const POLICY_TYPE = {
   counter_fraud: 'Counter fraud policy', response_plan: 'Fraud response plan', gifts_hospitality: 'Gifts and hospitality',
   conflicts_of_interest: 'Conflicts of interest', whistleblowing: 'Whistleblowing',
@@ -219,6 +222,28 @@ const RECORD_KINDS: KindConfig[] = [
   },
 ];
 
+/** Reporting routes sit with the speak-up case log (GovS 013 component 7), not in the registers tabs. */
+const REPORTING_ROUTES: KindConfig = {
+  kind: 'reporting_route', tab: 'Reporting routes', component: 'Component 7', title: 'Other reporting routes', addLabel: 'Add route',
+  description: 'Hotlines, mailboxes and external bodies people can report to, beside the speak-up link.',
+  fields: [
+    { name: 'name', label: 'Route', type: 'text', required: true, hint: 'e.g. Confidential hotline' },
+    { name: 'channel', label: 'Channel', type: 'select', required: true, options: CHANNEL },
+    { name: 'contact', label: 'Number, address or link', type: 'text', required: true },
+    { name: 'audience', label: 'Open to', type: 'select', required: true, options: AUDIENCE },
+    { name: 'anonymousAllowed', label: 'Anonymous reports', type: 'select', required: true, options: YES_NO },
+    { name: 'externalBody', label: 'Run by', type: 'text', hint: 'e.g. NHS Fraud and Corruption Reporting Line' },
+    { name: 'publishedAt', label: 'Published on', type: 'date' },
+  ],
+  columns: [
+    { label: 'Route', value: (d) => d.name },
+    { label: 'Channel', value: (d) => `${label(CHANNEL)(d.channel)}: ${d.contact}` },
+    { label: 'Open to', value: (d) => label(AUDIENCE)(d.audience) },
+    { label: 'Anonymous', value: (d) => label(YES_NO)(d.anonymousAllowed) },
+    { label: 'Run by', value: (d) => d.externalBody ?? 'Us' },
+  ],
+};
+
 /** Form values are strings; numbers are converted and empty optional fields left out. */
 function toPayload(fields: Field[], values: Record<string, string>): Data {
   const out: Data = {};
@@ -375,6 +400,10 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
       </CardContent>
     </Card>
   );
+}
+
+export function ReportingRoutesRegister({ onChange }: { onChange: () => void }) {
+  return <RecordRegister config={REPORTING_ROUTES} onChange={onChange} />;
 }
 
 /** The GovS 013 registers, one tab each. `onChange` refreshes the compliance score. */

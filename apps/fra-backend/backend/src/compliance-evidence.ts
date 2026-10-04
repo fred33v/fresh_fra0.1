@@ -20,6 +20,8 @@ import {
 } from './db/compliance.js';
 import { dbListCounterFraudRecords } from './db/counter-fraud.js';
 import { recordsOf, type CounterFraudRecord } from './counter-fraud.js';
+import { getIntakeByOrg, listReports } from './speak-up-store.js';
+import { TRIAGE_DAYS, type SpeakUpReport } from './speak-up.js';
 import { latestSubmittedByUser, scoreAssessment, type AssessmentRisk, type RiskPriority } from './assessment-risk.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,12 +37,19 @@ export type OrgComplianceData = {
   training: TrainingRecord[];
   /** Strategy, losses, investigators, detection, gifts, conflicts and policies (GovS 013 components 2, 8–10, 12) */
   records: CounterFraudRecord[];
+  /** Speak-up intake and the cases received (GovS 013 component 7) */
+  speakUp: { intakeEnabled: boolean; reports: SpeakUpReport[] };
   auditEventCount: number;
 };
 
+async function loadSpeakUp(orgId: string): Promise<OrgComplianceData['speakUp']> {
+  const [intake, reports] = await Promise.all([getIntakeByOrg(orgId), listReports(orgId)]);
+  return { intakeEnabled: !!intake?.enabled, reports };
+}
+
 export async function loadComplianceData(orgId: string): Promise<OrgComplianceData> {
   if (hasDatabase()) {
-    const [users, assessments, keypasses, risks, incidents, seniorManagers, training, records, audit] = await Promise.all([
+    const [users, assessments, keypasses, risks, incidents, seniorManagers, training, records, speakUp, audit] = await Promise.all([
       dbListUsersByOrganisation(orgId),
       dbListAssessmentsByOrganisation(orgId),
       dbListKeypassesByOrganisation(orgId),
@@ -49,9 +58,10 @@ export async function loadComplianceData(orgId: string): Promise<OrgComplianceDa
       dbListSeniorManagers(orgId),
       dbListTrainingRecords(orgId),
       dbListCounterFraudRecords(orgId),
+      loadSpeakUp(orgId),
       dbListAuditEvents(orgId, 1, 0),
     ]);
-    return { users, assessments, keypasses, risks, incidents, seniorManagers, training, records, auditEventCount: audit.total };
+    return { users, assessments, keypasses, risks, incidents, seniorManagers, training, records, speakUp, auditEventCount: audit.total };
   }
 
   const users = Array.from(usersByEmail.values()).filter((u) => u.organisationId === orgId);
@@ -67,6 +77,7 @@ export async function loadComplianceData(orgId: string): Promise<OrgComplianceDa
       .map((m) => ({ ...m, userName: nameById.get(m.userId) })),
     training: [], // workshop progress is only stored in the database
     records: Array.from(counterFraudRecordsById.values()).filter((r) => r.organisationId === orgId),
+    speakUp: await loadSpeakUp(orgId),
     auditEventCount: auditEvents.filter((e: AuditEvent) => e.organisationId === orgId).length,
   };
 }
@@ -162,6 +173,9 @@ export type ComplianceMetrics = {
   lossesNotReported: number;
   activeInvestigators: number;
   detectionCompletedInYear: number;
+  speakUpReportsInYear: number;
+  speakUpOpen: number;
+  speakUpOverdueForTriage: number;
 };
 
 export function computeMetrics(data: OrgComplianceData, now = Date.now()): ComplianceMetrics {
@@ -197,6 +211,9 @@ export function computeMetrics(data: OrgComplianceData, now = Date.now()): Compl
     keypassesUsed: data.keypasses.filter((k) => k.status === 'used').length,
     auditEvents: data.auditEventCount,
     ...counterFraudMetrics(data.records, now),
+    speakUpReportsInYear: data.speakUp.reports.filter((r) => withinYear(r.receivedAt, now)).length,
+    speakUpOpen: data.speakUp.reports.filter((r) => r.status !== 'closed').length,
+    speakUpOverdueForTriage: data.speakUp.reports.filter((r) => r.status === 'new' && daysAgo(r.receivedAt, now) > TRIAGE_DAYS).length,
   };
 }
 
@@ -319,6 +336,7 @@ export function evaluateGovS013(data: OrgComplianceData, m: ComplianceMetrics, n
     investigatorRequirement(data.records, m),
     detectionRequirement(data.records, m),
     giftsAndInterestsRequirement(data.records, now),
+    reportingRoutesRequirement(data, m),
   ];
 
   return { score: scoreOf(requirements), requirements };
@@ -413,5 +431,39 @@ function giftsAndInterestsRequirement(records: CounterFraudRecord[], now: number
       registerInUse ? null : 'no register entries or reviews in the last 12 months',
     ].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.',
     recommendation: 'Keep both policies within their review date and record declarations, or nil returns, at least yearly.',
+  };
+}
+
+/** Component 7: routes for staff, contractors and the public, one allowing anonymous reports, and reports triaged promptly. */
+function reportingRoutesRequirement(data: OrgComplianceData, m: ComplianceMetrics): Requirement {
+  const routes = recordsOf(data.records, 'reporting_route');
+  // The speak-up link is open to anyone who has it and accepts anonymous reports
+  const audiences = new Set<string>(data.speakUp.intakeEnabled ? ['staff', 'contractors', 'public'] : []);
+  for (const r of routes) {
+    audiences.add('staff');
+    if (r.data.audience !== 'staff') audiences.add('contractors');
+    if (r.data.audience === 'everyone') audiences.add('public');
+  }
+  const anonymous = data.speakUp.intakeEnabled || routes.some((r) => r.data.anonymousAllowed === 'yes');
+  const name = 'Reporting routes';
+
+  if (audiences.size === 0) {
+    return { id: 'govs-12', name, status: 'not_met', evidence: 'No reporting routes recorded and the speak-up link is off.', recommendation: 'Switch on the speak-up link and record your other reporting routes.' };
+  }
+  const missing = ['staff', 'contractors', 'public'].filter((a) => !audiences.has(a));
+  const caseload = `${m.speakUpReportsInYear} report(s) received in the last 12 months, ${m.speakUpOpen} open`;
+  if (missing.length === 0 && anonymous && m.speakUpOverdueForTriage === 0) {
+    return { id: 'govs-12', name, status: 'met', evidence: `Routes cover staff, contractors and the public, including an anonymous route; ${caseload}.` };
+  }
+  return {
+    id: 'govs-12', name, status: 'partial',
+    evidence: [
+      missing.length ? `No route recorded for ${missing.join(' or ')}` : null,
+      anonymous ? null : 'no anonymous route',
+      m.speakUpOverdueForTriage ? `${m.speakUpOverdueForTriage} report(s) not reviewed within ${TRIAGE_DAYS} days` : null,
+    ].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + `. ${caseload.replace(/^./, (c) => c.toUpperCase())}.`,
+    recommendation: m.speakUpOverdueForTriage
+      ? `Review every new report within ${TRIAGE_DAYS} days.`
+      : 'Offer reporting routes to staff, contractors and the public, including an anonymous one such as the speak-up link.',
   };
 }

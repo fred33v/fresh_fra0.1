@@ -35,6 +35,8 @@ export const RETENTION_RULES: RetentionRule[] = [
     table: 'public.counter_fraud_records', label: 'Loss, detection, gifts and ended conflict records', keepFor: '6 years',
     expiredWhen: "updated_at < $1 AND (kind IN ('loss', 'detection', 'gift_hospitality') OR (kind = 'conflict_of_interest' AND data->>'status' = 'ended'))",
   },
+  // Messages go with their case (ON DELETE CASCADE); open cases are never removed
+  { table: 'public.speak_up_reports', label: 'Closed speak-up cases', keepFor: '6 years', expiredWhen: "status = 'closed' AND closed_at < $1" },
   { table: 'public.purchases', label: 'Payment records', keepFor: '7 years', expiredWhen: 'created_at < $1' },
   { table: 'public.keypasses', label: 'Expired key-passes', keepFor: '2 years', expiredWhen: 'expires_at < $1' },
   { table: 'public.workshop_feedback', label: 'Workshop feedback', keepFor: '2 years', expiredWhen: 'created_at < $1' },

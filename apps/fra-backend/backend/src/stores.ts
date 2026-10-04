@@ -1,5 +1,6 @@
 import type { User, Assessment, Organisation, Purchase, Keypass, ApiKey, RiskRegisterEntry, WebhookEndpoint, ComplianceIncident, SeniorManager, AuditEvent } from './types.js';
 import type { CounterFraudRecord } from './counter-fraud.js';
+import type { SpeakUpIntake, SpeakUpMessage, SpeakUpReport } from './speak-up.js';
 
 // In-memory fallbacks (used only when DATABASE_URL is not set, e.g. tests)
 export const usersByEmail = new Map<string, User>();
@@ -61,6 +62,9 @@ export const webhookEndpointsById = new Map<string, WebhookEndpoint>();
 export const incidentsById = new Map<string, ComplianceIncident>();
 export const seniorManagersById = new Map<string, SeniorManager>();
 export const counterFraudRecordsById = new Map<string, CounterFraudRecord>();
+export const speakUpIntakeByOrg = new Map<string, SpeakUpIntake>();
+export const speakUpReportsById = new Map<string, SpeakUpReport>();
+export const speakUpMessages: SpeakUpMessage[] = [];
 
 // Bounded audit log for no-database mode (the database keeps the full history)
 export const auditEvents: AuditEvent[] = [];

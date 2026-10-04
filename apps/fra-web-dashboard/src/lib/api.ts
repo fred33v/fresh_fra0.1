@@ -156,6 +156,36 @@ async function download(path: string, filename: string, retry = true): Promise<v
   URL.revokeObjectURL(url);
 }
 
+/**
+ * For public pages that must not identify the caller (the speak-up report form):
+ * never sends the signed-in user's token, cookies or the page address.
+ */
+async function anonymousRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+  });
+  let json: ApiResponse<T>;
+  try {
+    json = await res.json() as ApiResponse<T>;
+  } catch {
+    throw new ApiError('NETWORK_ERROR', `Server returned ${res.status} with non-JSON response`);
+  }
+  if (!json.success) {
+    const err = json as { success: false; error: { code: string; message: string } };
+    throw new ApiError(err.error.code, err.error.message);
+  }
+  return json.data;
+}
+
+export const anonymousApi = {
+  get: <T>(path: string) => anonymousRequest<T>('GET', path),
+  post: <T>(path: string, body: unknown) => anonymousRequest<T>('POST', path, body),
+};
+
 export const api = {
   download,
   get: <T>(path: string) => request<T>('GET', path),

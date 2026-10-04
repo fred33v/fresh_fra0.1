@@ -3,8 +3,8 @@
 // derived from assessments: counter fraud strategy (2), identified
 // loss (8), investigator access (9), detection activity (10), and
 // gifts, hospitality and conflict of interest registers with their
-// policies (12). One table holds every kind; each kind validates
-// its own fields.
+// policies (12), and the reporting routes (7) beside the speak-up
+// intake. One table holds every kind; each kind validates its own fields.
 // ============================================================
 
 import { z } from 'zod';
@@ -23,6 +23,8 @@ export const INVESTIGATOR_ARRANGEMENTS = ['in_house', 'contracted', 'shared_serv
 export const DETECTION_METHODS = ['data_analytics', 'data_matching', 'audit_sample', 'loss_measurement', 'other'] as const;
 export const DETECTION_STATUSES = ['planned', 'in_progress', 'completed'] as const;
 export const INTEREST_TYPES = ['financial', 'non_financial_professional', 'non_financial_personal', 'indirect'] as const;
+export const ROUTE_CHANNELS = ['online_form', 'phone', 'email', 'post', 'in_person', 'external'] as const;
+export const ROUTE_AUDIENCES = ['staff', 'staff_and_contractors', 'everyone'] as const;
 export const POLICY_TYPES = ['counter_fraud', 'response_plan', 'gifts_hospitality', 'conflicts_of_interest', 'whistleblowing'] as const;
 
 const strategy = z.object({
@@ -106,6 +108,16 @@ const policy = z.object({
 }).strict()
   .refine((p) => p.reviewDue >= p.approvedAt, { message: 'The review date must follow approval', path: ['reviewDue'] });
 
+const reportingRoute = z.object({
+  name: text(200),
+  channel: z.enum(ROUTE_CHANNELS),
+  contact: text(500),
+  audience: z.enum(ROUTE_AUDIENCES),
+  anonymousAllowed: z.enum(['yes', 'no']),
+  externalBody: note(200),
+  publishedAt: isoDate.optional(),
+}).strict();
+
 export const RECORD_SCHEMAS = {
   strategy,
   loss,
@@ -114,6 +126,7 @@ export const RECORD_SCHEMAS = {
   gift_hospitality: giftHospitality,
   conflict_of_interest: conflictOfInterest,
   policy,
+  reporting_route: reportingRoute,
 } as const;
 
 export type CounterFraudKind = keyof typeof RECORD_SCHEMAS;

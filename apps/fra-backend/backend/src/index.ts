@@ -22,6 +22,7 @@ import apiKeyRoutes, { apiKeyMiddleware } from './routes/api-keys.js';
 import riskRegisterRoutes from './routes/risk-register.js';
 import webhookEndpointRoutes from './routes/webhook-endpoints.js';
 import organisationRoutes from './routes/organisations.js';
+import speakUpRoutes from './routes/speak-up.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 
@@ -38,7 +39,8 @@ app.onError((err, c) => {
   logger.error('Unhandled error', {
     rid: requestId,
     method: c.req.method,
-    path: c.req.path,
+    // Speak-up paths carry intake tokens (see the request log in middleware.ts)
+    path: c.req.path.startsWith('/api/v1/speak-up') ? '/api/v1/speak-up/[redacted]' : c.req.path,
     error: err.message,
     stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
   });
@@ -119,6 +121,7 @@ api.route('/', apiKeyRoutes);
 api.route('/', riskRegisterRoutes);
 api.route('/', webhookEndpointRoutes);
 api.route('/', organisationRoutes);
+api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);
 api.route('/budget-guide', budgetGuide);

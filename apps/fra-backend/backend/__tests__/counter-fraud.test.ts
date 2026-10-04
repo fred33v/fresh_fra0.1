@@ -23,12 +23,12 @@ describe('Counter-fraud records (GovS 013 components 2, 8, 9, 10, 12)', () => {
     expect((await get('/compliance/records', accessToken)).status).toBe(403);
   });
 
-  it('adds the five components to the GovS 013 score, all unmet at first', async () => {
+  it('adds the record-based components to the GovS 013 score, all unmet at first', async () => {
     const { accessToken } = await createPaidUser();
     const report = await json(await get('/compliance/report', accessToken));
-    expect(report.govs013.requirements).toHaveLength(11);
+    expect(report.govs013.requirements).toHaveLength(12);
     const status = Object.fromEntries(report.govs013.requirements.map((r: any) => [r.id, r.status]));
-    expect(status).toMatchObject({ 'govs-7': 'not_met', 'govs-8': 'partial', 'govs-9': 'not_met', 'govs-10': 'not_met', 'govs-11': 'not_met' });
+    expect(status).toMatchObject({ 'govs-7': 'not_met', 'govs-8': 'partial', 'govs-9': 'not_met', 'govs-10': 'not_met', 'govs-11': 'not_met', 'govs-12': 'not_met' });
   });
 
   it('meets the strategy component with an approved strategy for the current period', async () => {

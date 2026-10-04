@@ -165,13 +165,16 @@ export function applyGlobalMiddleware(app: Hono) {
 
     // Structured request log (skip health checks to reduce noise)
     if (c.req.path !== '/health') {
+      // Speak-up reporters may be anonymous: their paths carry intake tokens and the
+      // caller's address could identify them, so neither is logged
+      const speakUp = c.req.path.startsWith('/api/v1/speak-up');
       const logEntry = {
         ts: new Date().toISOString(),
         method: c.req.method,
-        path: c.req.path,
+        path: speakUp ? '/api/v1/speak-up/[redacted]' : c.req.path,
         status: c.res.status,
         ms: Number(ms),
-        ip: getClientIp(c),
+        ip: speakUp ? undefined : getClientIp(c),
         rid: requestId,
       };
       if (c.res.status >= 400) {

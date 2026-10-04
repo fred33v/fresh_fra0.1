@@ -31,6 +31,7 @@ const Integrations = lazy(() => import("./pages/Integrations"));
 const Compliance = lazy(() => import("./pages/Compliance"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const SpeakUp = lazy(() => import("./pages/SpeakUp"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,9 @@ const App = () => (
                 <Route path="/compliance" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Compliance /></PackageGate></ProtectedRoute>} />
                 <Route path="/integrations" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Integrations /></PackageGate></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                {/* Public speak-up pages: no sign-in, reporters may be anonymous */}
+                <Route path="/speak-up/status" element={<SpeakUp mode="follow" />} />
+                <Route path="/speak-up/:token" element={<SpeakUp mode="report" />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
