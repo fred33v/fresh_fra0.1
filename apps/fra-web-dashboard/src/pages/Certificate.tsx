@@ -140,7 +140,8 @@ export default function Certificate() {
     );
   }
 
-  const isCompleted = progress?.completed_at !== null;
+  // No progress yet (or no workshop package) is not completion
+  const isCompleted = !!progress?.completed_at;
 
   if (!isCompleted) {
     return (

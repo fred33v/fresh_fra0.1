@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { requireUUIDParam, RATE_LIMITS } from '../types.js';
 import type { Assessment } from '../types.js';
-import { assessmentsById } from '../stores.js';
-import { dbGetAssessmentById, dbListAssessmentsByOrganisation, auditLog } from '../db/index.js';
+import { assessmentsById, organisationsById } from '../stores.js';
+import { dbGetAssessmentById, dbGetOrganisationById, dbListAssessmentsByOrganisation, auditLog } from '../db/index.js';
 import { rateLimit, getClientIp } from '../middleware.js';
 import { generateAssessmentPdf } from '../pdf-generator.js';
 import { createLogger } from '../logger.js';
@@ -51,11 +51,12 @@ reportsExports.get('/assessments/:id/export-pdf', async (c) => {
   }
 
   try {
-    // Generate PDF
+    // The report names the organisation, not its id
+    const org = hasDatabase() ? await dbGetOrganisationById(auth.organisationId) : organisationsById.get(auth.organisationId);
     const pdfBuffer = await generateAssessmentPdf({
       title: assessment.title ?? 'Fraud Risk Assessment',
       assessment,
-      organizationName: auth.organisationId,
+      organizationName: org?.name ?? 'Your organisation',
     });
 
     // Set response headers

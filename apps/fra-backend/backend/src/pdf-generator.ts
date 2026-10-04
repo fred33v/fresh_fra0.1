@@ -62,6 +62,14 @@ export async function generateAssessmentPdf(options: PDFGenerationOptions): Prom
     });
 
     const page = await browser.newPage();
+    // The report is static HTML built from user-entered text: no scripts, and no requests
+    // leave the renderer (so injected markup could not reach internal addresses)
+    await page.setJavaScriptEnabled(false);
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.url().startsWith('data:') || req.url() === 'about:blank') req.continue();
+      else req.abort();
+    });
 
     // Create HTML content for the report
     const htmlContent = createReportHTML(options);
@@ -350,7 +358,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
       <body>
         <div class="page">
           <div class="header">
-            <h1>${title}</h1>
+            <h1>${escapeHtml(title)}</h1>
             <div class="subtitle">Fraud Risk Assessment Report</div>
           </div>
 
@@ -366,7 +374,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
             ${organizationName ? `
             <div class="metadata-row">
               <span class="metadata-label">Organisation:</span>
-              <span class="metadata-value">${organizationName}</span>
+              <span class="metadata-value">${escapeHtml(organizationName)}</span>
             </div>
             ` : ''}
             <div class="metadata-row">
@@ -761,4 +769,10 @@ function generateRecommendations(riskLevel: string, enhancedData?: any): Array<{
   });
 
   return recommendations;
+}
+
+/** Escapes text placed in the report HTML. API input is already escaped once on the way in,
+ *  so `&` is left alone to avoid double-escaping entities such as &amp;lt;. */
+function escapeHtml(value: string): string {
+  return value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

@@ -15,7 +15,6 @@ import {
   ExternalLink,
   Loader2,
 } from 'lucide-react';
-import { toast } from 'sonner';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   ClipboardCheck,
@@ -39,27 +38,22 @@ export default function Resources() {
 
   if (!user) return null;
 
-  const handleDownload = (resourceTitle: string) => {
-    toast.info(`"${resourceTitle}" will be available for download after your organisation completes the full assessment.`, {
-      duration: 5000,
-    });
-  };
-
+  // Official sources, opened in a new tab
   const preWorkshopResources = [
     {
-      title: 'Understanding the Economic Crime Act 2023',
-      description: 'A brief overview of the key provisions and implications for organisations',
-      type: 'article',
+      title: 'Failure to prevent fraud: Home Office guidance',
+      description: 'The statutory guidance on the ECCTA 2023 offence and the six principles of reasonable procedures (GOV.UK)',
+      url: 'https://www.gov.uk/government/publications/offence-of-failure-to-prevent-fraud-introduced-by-eccta',
     },
     {
-      title: 'Fraud Risk Primer',
-      description: 'Introduction to common fraud schemes and red flags',
-      type: 'guide',
+      title: 'A–Z of fraud and cyber crime',
+      description: 'Common fraud types, how they work and the warning signs (Report Fraud, formerly Action Fraud)',
+      url: 'https://www.reportfraud.police.uk/collection/a-z-fraud/',
     },
     {
-      title: 'Regulatory Compliance Checklist',
-      description: 'Quick reference for compliance requirements',
-      type: 'checklist',
+      title: 'GovS 013: Counter Fraud functional standard',
+      description: 'The standard public bodies are assessed against for counter fraud, bribery and corruption (GOV.UK)',
+      url: 'https://www.gov.uk/government/publications/government-functional-standard-govs-013-counter-fraud',
     },
   ];
 
@@ -103,9 +97,11 @@ export default function Resources() {
                         <CardDescription>{resource.description}</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Button variant="outline" className="w-full" onClick={() => handleDownload(resource.title)} aria-label={`Download ${resource.title} PDF`}>
-                          <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Download PDF
+                        <Button variant="outline" className="w-full" asChild>
+                          <a href={`/resources/${resource.filename}`} download aria-label={`Download ${resource.title} (PDF)`}>
+                            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Download PDF
+                          </a>
                         </Button>
                       </CardContent>
                     </Card>
@@ -135,8 +131,10 @@ export default function Resources() {
                           <div className="text-sm text-muted-foreground">{resource.description}</div>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" aria-label={`Read ${resource.title}`}>
-                        <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                      <Button variant="ghost" size="sm" asChild>
+                        <a href={resource.url} target="_blank" rel="noopener noreferrer" aria-label={`Read ${resource.title} (opens in a new tab)`}>
+                          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                        </a>
                       </Button>
                     </div>
                   ))}

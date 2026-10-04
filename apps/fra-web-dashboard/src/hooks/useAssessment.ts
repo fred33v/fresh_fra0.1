@@ -15,7 +15,7 @@
  * - GET   /api/v1/assessments/:id/results
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
@@ -29,6 +29,9 @@ const logger = createLogger('useAssessment');
  * Key: question ID, Value: answer (varies by question type)
  */
 type AssessmentAnswers = Record<string, unknown>;
+
+/** Answers are saved this long after the last change, so typing an amount is one save, not one per key. */
+const AUTOSAVE_DELAY_MS = 800;
 
 const OPEN_STATUSES = new Set<AssessmentRecord['status']>(['draft', 'in_progress']);
 
@@ -51,6 +54,10 @@ export function useAssessment() {
   // Guards against a double start (e.g. StrictMode effects) creating two assessments,
   // which would consume the Starter package's single allowance
   const startingRef = useRef(false);
+  // The latest answers and the pending autosave, read outside render
+  const answersRef = useRef<AssessmentAnswers>({});
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assessmentIdRef = useRef<string | null>(null);
 
   /**
    * Resume the user's open assessment, or create a new one if there is none
@@ -77,7 +84,9 @@ export function useAssessment() {
 
       setModules(modulesData);
       setAssessment(data);
-      setAnswers(data.answers ?? {});
+      assessmentIdRef.current = data.id;
+      answersRef.current = data.answers ?? {};
+      setAnswers(answersRef.current);
       setCurrentModuleIndex(0);
 
       toast.success(open ? 'Assessment resumed' : 'Assessment started');
@@ -97,24 +106,42 @@ export function useAssessment() {
    * Update a single answer
    * Automatically saves to backend
    */
+  const saveNow = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const id = assessmentIdRef.current;
+    if (!id) return;
+    await api.patch(`/api/v1/assessments/${id}`, { answers: answersRef.current });
+  }, []);
+
+  // Built on the latest answers (not the last render's), so quick successive changes are all kept;
+  // the save waits for a pause so a burst of changes is one request
   const updateAnswer = useCallback(
-    async (questionId: string, value: unknown) => {
-      if (!assessment) return;
+    (questionId: string, value: unknown) => {
+      if (!assessmentIdRef.current) return;
 
-      const newAnswers = { ...answers, [questionId]: value };
-      setAnswers(newAnswers);
+      answersRef.current = { ...answersRef.current, [questionId]: value };
+      setAnswers(answersRef.current);
 
-      try {
-        await api.patch(`/api/v1/assessments/${assessment.id}`, {
-          answers: newAnswers,
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        saveNow().catch((err: unknown) => {
+          logger.error('Error saving answers', err);
+          toast.error('Your latest answers could not be saved yet; they will be saved when you submit');
         });
-      } catch (err: unknown) {
-        logger.error('Error saving answer', err);
-        toast.error('Failed to save answer');
-      }
+      }, AUTOSAVE_DELAY_MS);
     },
-    [assessment, answers]
+    [saveNow]
   );
+
+  // Leaving the page with a save pending still saves it
+  useEffect(() => () => {
+    if (saveTimerRef.current) {
+      saveNow().catch((err: unknown) => logger.error('Error saving answers on leave', err));
+    }
+  }, [saveNow]);
 
   /**
    * Move to next module
@@ -155,8 +182,8 @@ export function useAssessment() {
     setErrorCode(null);
 
     try {
-      // Submit does not take answers, so persist the latest set first in case an autosave failed
-      await api.patch(`/api/v1/assessments/${assessment.id}`, { answers });
+      // Submit does not take answers, so persist the latest set first (any pending or failed autosave)
+      await saveNow();
       const submitted = await api.post<AssessmentRecord>(`/api/v1/assessments/${assessment.id}/submit`);
       setAssessment(submitted);
 
@@ -174,14 +201,14 @@ export function useAssessment() {
     } finally {
       setIsLoading(false);
     }
-  }, [assessment, answers]);
+  }, [assessment, saveNow]);
 
   /**
-   * Calculate progress percentage
+   * Progress = questions answered, so it starts at 0% and reaches 100% only when all are done
    */
-  const progressPercent = modules.length > 0
-    ? ((currentModuleIndex + 1) / modules.length) * 100
-    : 0;
+  const totalQuestions = modules.reduce((n, m) => n + m.questions.length, 0);
+  const answeredQuestions = modules.reduce((n, m) => n + m.questions.filter(q => answers[q.id] !== undefined).length, 0);
+  const progressPercent = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
 
   /**
    * Check if current module is complete

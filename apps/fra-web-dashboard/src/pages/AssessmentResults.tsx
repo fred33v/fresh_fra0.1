@@ -53,6 +53,19 @@ export default function AssessmentResults() {
   const { assessmentId } = useParams();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadReport = async () => {
+    if (!assessmentId) return;
+    setDownloading(true);
+    try {
+      await api.download(`/api/v1/assessments/${assessmentId}/export-pdf`, 'fraud-risk-assessment-report.pdf');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'The report could not be downloaded');
+    } finally {
+      setDownloading(false);
+    }
+  };
   const [results, setResults] = useState<AssessmentResultsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +153,7 @@ export default function AssessmentResults() {
             Assessment Complete
           </h1>
           <p className="text-lg text-muted-foreground">
-            Your fraud risk assessment has been analyzed
+            Your fraud risk assessment has been analysed
           </p>
         </motion.div>
 
@@ -206,13 +219,13 @@ export default function AssessmentResults() {
                     <h3 className="font-semibold">What this means:</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {rating === 'low' &&
-                        'Your organization demonstrates strong fraud prevention controls. Continue monitoring and regular staff training.'}
+                        'Your organisation demonstrates strong fraud prevention controls. Continue monitoring and regular staff training.'}
                       {rating === 'medium' &&
-                        'Your organization has some fraud prevention measures in place, but there are opportunities for improvement.'}
+                        'Your organisation has some fraud prevention measures in place, but there are opportunities for improvement.'}
                       {rating === 'high' &&
-                        'Your organization has significant fraud risks that require immediate attention and remediation.'}
+                        'Your organisation has significant fraud risks that require immediate attention and remediation.'}
                       {rating === 'critical' &&
-                        'Your organization faces critical fraud risks. Urgent action is needed to strengthen controls.'}
+                        'Your organisation faces critical fraud risks. Urgent action is needed to strengthen controls.'}
                     </p>
                   </div>
 
@@ -224,9 +237,9 @@ export default function AssessmentResults() {
                       <ArrowRight className="mr-2 h-4 w-4" />
                       Create Action Plan
                     </Button>
-                    <Button variant="outline" className="flex-1">
+                    <Button variant="outline" className="flex-1" onClick={downloadReport} disabled={downloading}>
                       <Download className="mr-2 h-4 w-4" />
-                      Download Report
+                      {downloading ? 'Preparing report…' : 'Download Report'}
                     </Button>
                   </div>
                 </div>

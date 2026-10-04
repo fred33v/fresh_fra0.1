@@ -274,6 +274,30 @@ auth.post('/auth/login', async (c) => {
   });
 });
 
+/**
+ * People who joined with a key-pass (and accounts made before workshop profiles existed)
+ * have no workshop profile; the web app needs one to show their pages, so build it from
+ * the account and organisation. The sector follows the organisation's creator.
+ */
+async function accountProfile(user: User) {
+  let organisationName = 'Organisation';
+  let sector = 'private';
+  if (hasDatabase()) {
+    const org = await dbGetOrganisationById(user.organisationId);
+    if (org) organisationName = org.name;
+    const creator = await getDbPool().query(
+      `SELECT wp.sector FROM workshop_profiles wp JOIN public.organisations o ON o.created_by_user_id = wp.user_id
+       WHERE o.id = $1 LIMIT 1`, [user.organisationId]);
+    if (creator.rows[0]?.sector) sector = creator.rows[0].sector;
+  } else {
+    organisationName = organisationsById.get(user.organisationId)?.name ?? organisationName;
+  }
+  return {
+    id: `account-${user.id}`, user_id: user.id, full_name: user.name, organization_name: organisationName,
+    sector, job_title: null, created_at: user.createdAt, updated_at: user.createdAt,
+  };
+}
+
 auth.get('/auth/me', async (c) => {
   const limited = await rateLimit('auth:me', { windowMs: 60_000, max: 30 })(c);
   if (limited instanceof Response) return limited;
@@ -284,7 +308,7 @@ auth.get('/auth/me', async (c) => {
   if (!hasDatabase()) {
     const user = usersByEmail.get(authCtx.email.toLowerCase());
     if (!user) return jsonError(c, 401, 'UNAUTHORIZED', 'User not found');
-    return c.json({ success: true, data: { ...publicUser(user), profile: null, workshopRoles: [] } });
+    return c.json({ success: true, data: { ...publicUser(user), profile: await accountProfile(user), workshopRoles: [] } });
   }
 
   const user = await dbGetUserByEmail(authCtx.email.toLowerCase());
@@ -300,7 +324,7 @@ auth.get('/auth/me', async (c) => {
     success: true,
     data: {
       ...publicUser(user),
-      profile: profileRes.rows[0] ?? null,
+      profile: profileRes.rows[0] ?? await accountProfile(user),
       workshopRoles: rolesRes.rows.map((r: { role: string }) => r.role),
     },
   });

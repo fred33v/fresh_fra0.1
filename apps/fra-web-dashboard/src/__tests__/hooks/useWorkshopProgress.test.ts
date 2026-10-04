@@ -164,6 +164,18 @@ describe('useWorkshopProgress', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to load progress');
     });
 
+    it('treats a missing workshop package as no progress, without an error', async () => {
+      mockGet.mockRejectedValueOnce(Object.assign(new Error('Professional package or higher required'), { code: 'PACKAGE_REQUIRED' }));
+
+      const { result } = renderHook(() => useWorkshopProgress());
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.error).toBeNull();
+      expect(result.current.progress).toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
     it('sets progress to null and stops loading when no user', async () => {
       setNoUser();
 

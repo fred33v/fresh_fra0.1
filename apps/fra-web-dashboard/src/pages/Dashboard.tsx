@@ -37,12 +37,15 @@ export default function Dashboard() {
     );
   }
 
-  if (!user || !profile) return null;
+  if (!user) return null;
+  // Key-pass employees have no workshop profile; greet them from their account instead
+  const firstName = (profile?.full_name || user.name || '').split(' ')[0];
 
   const completedCount = progress?.completed_sections?.length || 0;
   const totalSections = workshopSections.length;
   const progressPercent = (completedCount / totalSections) * 100;
-  const isCompleted = progress?.completed_at !== null;
+  // No progress yet (or no workshop package) is not completion
+  const isCompleted = !!progress?.completed_at;
   const currentSection = progress?.current_section || 0;
 
   const getSectorLabel = (sector: string) => {
@@ -64,19 +67,21 @@ export default function Dashboard() {
           className="mb-8"
         >
           <h1 className="text-3xl font-bold tracking-tight mb-2">
-            Welcome back, {profile.full_name?.split(' ')[0] || 'there'}
+            Welcome back, {firstName || 'there'}
           </h1>
-          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            <span>{profile.organization_name}</span>
-            <span>•</span>
-            <Badge variant="secondary">{getSectorLabel(profile.sector)}</Badge>
-            {profile.job_title && (
-              <>
-                <span>•</span>
-                <span>{profile.job_title}</span>
-              </>
-            )}
-          </div>
+          {profile && (
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <span>{profile.organization_name}</span>
+              <span>•</span>
+              <Badge variant="secondary">{getSectorLabel(profile.sector)}</Badge>
+              {profile.job_title && (
+                <>
+                  <span>•</span>
+                  <span>{profile.job_title}</span>
+                </>
+              )}
+            </div>
+          )}
         </motion.div>
 
         <div className="grid gap-6 lg:grid-cols-3">

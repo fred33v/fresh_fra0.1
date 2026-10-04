@@ -58,6 +58,13 @@ export function useWorkshopProgress(sessionId?: string | null) {
       }
       setError(null);
     } catch (err: unknown) {
+      // The workshop is part of Professional and Enterprise; without it there is simply no progress
+      if ((err as { code?: string } | null)?.code === 'PACKAGE_REQUIRED') {
+        setProgress(null);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
       logger.error('Error fetching progress', err);
       setError((err as Error).message || 'Failed to load progress');
       toast.error('Failed to load progress');

@@ -41,10 +41,12 @@ const useFormField = () => {
     throw new Error("useFormField should be used within <FormField>");
   }
 
-  const { id } = itemContext;
+  const { id, hasDescription, setHasDescription } = itemContext;
 
   return {
     id,
+    hasDescription,
+    setHasDescription,
     name: fieldContext.name,
     formItemId: `${id}-form-item`,
     formDescriptionId: `${id}-form-item-description`,
@@ -55,6 +57,9 @@ const useFormField = () => {
 
 type FormItemContextValue = {
   id: string;
+  /** Set by a rendered FormDescription, so the control only points at descriptions that exist */
+  hasDescription: boolean;
+  setHasDescription: (value: boolean) => void;
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
@@ -62,9 +67,11 @@ const FormItemContext = React.createContext<FormItemContextValue>({} as FormItem
 const FormItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => {
     const id = React.useId();
+    const [hasDescription, setHasDescription] = React.useState(false);
+    const value = React.useMemo(() => ({ id, hasDescription, setHasDescription }), [id, hasDescription]);
 
     return (
-      <FormItemContext.Provider value={{ id }}>
+      <FormItemContext.Provider value={value}>
         <div ref={ref} className={cn("space-y-2", className)} {...props} />
       </FormItemContext.Provider>
     );
@@ -84,13 +91,15 @@ FormLabel.displayName = "FormLabel";
 
 const FormControl = React.forwardRef<React.ElementRef<typeof Slot>, React.ComponentPropsWithoutRef<typeof Slot>>(
   ({ ...props }, ref) => {
-    const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
+    const { error, formItemId, formDescriptionId, formMessageId, hasDescription } = useFormField();
+    // Only reference elements that are on the page: the description if rendered, the message if there is an error
+    const describedBy = [hasDescription && formDescriptionId, error && formMessageId].filter(Boolean).join(" ") || undefined;
 
     return (
       <Slot
         ref={ref}
         id={formItemId}
-        aria-describedby={!error ? `${formDescriptionId}` : `${formDescriptionId} ${formMessageId}`}
+        aria-describedby={describedBy}
         aria-invalid={!!error}
         {...props}
       />
@@ -101,7 +110,11 @@ FormControl.displayName = "FormControl";
 
 const FormDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => {
-    const { formDescriptionId } = useFormField();
+    const { formDescriptionId, setHasDescription } = useFormField();
+    React.useLayoutEffect(() => {
+      setHasDescription(true);
+      return () => setHasDescription(false);
+    }, [setHasDescription]);
 
     return <p ref={ref} id={formDescriptionId} className={cn("text-sm text-muted-foreground", className)} {...props} />;
   },

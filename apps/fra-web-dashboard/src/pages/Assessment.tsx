@@ -135,6 +135,11 @@ export default function Assessment() {
   const canSubmit = modules.every(m => 
     m.questions.every(q => answers[q.id] !== undefined)
   );
+  // Next lets people skip ahead, so say what still blocks submitting and where
+  const unanswered = modules
+    .map(m => ({ name: m.title, count: m.questions.filter(q => answers[q.id] === undefined).length }))
+    .filter(m => m.count > 0);
+  const unansweredTotal = unanswered.reduce((n, m) => n + m.count, 0);
 
   return (
     <Layout>
@@ -260,9 +265,16 @@ export default function Assessment() {
                   </Button>
 
                   {isLastModule ? (
+                    <div className="flex flex-col items-end gap-2">
+                    {!canSubmit && (
+                      <p id="submit-hint" className="text-sm text-muted-foreground text-right">
+                        {unansweredTotal} question{unansweredTotal === 1 ? '' : 's'} still to answer: {unanswered.map(m => `${m.name} (${m.count})`).join(', ')}
+                      </p>
+                    )}
                     <Button
                       onClick={handleSubmit}
                       disabled={!canSubmit || isLoading}
+                      aria-describedby={!canSubmit ? 'submit-hint' : undefined}
                     >
                       {isLoading ? (
                         <>
@@ -276,6 +288,7 @@ export default function Assessment() {
                         </>
                       )}
                     </Button>
+                    </div>
                   ) : (
                     <Button
                       onClick={nextModule}

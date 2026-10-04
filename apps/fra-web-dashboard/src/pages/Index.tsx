@@ -17,9 +17,6 @@ import {
   CheckCircle2,
   Mail,
   Phone,
-  ChevronDown,
-  TrendingUp,
-  AlertCircle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PACKAGES, PACKAGE_CHOOSER_PATH, billingLabel, checkoutPath, formatPrice, signupPath } from '@/data/packages';
@@ -71,53 +68,6 @@ export default function Index() {
     { value: '30', label: 'Minutes', sublabel: 'Workshop Duration' },
     { value: '6', label: 'Modules', sublabel: 'Comprehensive Coverage' },
     { value: '100%', label: 'Interactive', sublabel: 'Engaging Content' },
-  ];
-
-  const [activePricingObjection, setActivePricingObjection] = useState<number | null>(0);
-
-  const pricingObjections = [
-    {
-      title: 'That\'s Too Expensive',
-      summary: 'Show ROI and risk avoidance to justify value before price.',
-      description:
-        `One prevented fraud incident can easily outweigh subscription costs. Starter is only ${formatPrice(STARTER)} one-time; Professional is under £150/month for the full compliance programme.`,
-      icon: TrendingUp,
-    },
-    {
-      title: 'We Don\'t Have Budget Right Now',
-      summary: 'Offer Starter as a low-commitment entry point.',
-      description:
-        'Start with the one-off assessment now and build the business case for annual investment next cycle. Payment plans available for Professional/Enterprise.',
-      icon: Clock,
-    },
-    {
-      title: 'Why Choose START FRA vs Competitor',
-      summary: 'Highlight unique compliance and price advantages.',
-      description:
-        'We are GovS-013 + ECCTA 2023 focused, with live dashboard and rapid onboarding versus consultancy delays.',
-      icon: Shield,
-    },
-    {
-      title: 'Need to Justify to Boss/CFO/Board',
-      summary: 'Provide ready-made case materials and metrics.',
-      description:
-        'Deliver an executive one-pager, ROI template, compliance mapping and case studies in minutes so they can sign off quickly.',
-      icon: Award,
-    },
-    {
-      title: 'Do I Really Need This Feature?',
-      summary: 'Recommend the minimal package based on scale and needs.',
-      description:
-        `Starter for sole traders and micro-businesses, Professional for teams of 10–100, Enterprise for 100+ with unlimited key-passes and API access.`,
-      icon: Users,
-    },
-    {
-      title: 'What If It Doesn\'t Work for Us?',
-      summary: 'Explain onboarding, support and satisfaction guarantee.',
-      description:
-        'We include onboarding support, live assistance, actionable metrics by week two and a 30-day satisfaction guarantee for Starter.',
-      icon: CheckCircle2,
-    },
   ];
 
   return (
@@ -465,54 +415,6 @@ export default function Index() {
                 </Link>
               </div>
             </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== Pricing Scripts - Common Objections (Real-time) ===== */}
-      <section className="py-16 lg:py-24 bg-white" aria-label="Pricing objections">
-        <div className="container">
-          <div className="max-w-3xl mb-10">
-            <h2 className="text-3xl font-bold text-[#0b0c0c] sm:text-4xl mb-4">Real-Time Pricing Objection Handling</h2>
-            <p className="text-lg text-[#505a5f]">
-              Live guidance for prospects with pricing hesitation. Click an objection to reveal the recommended response and package positioning.
-            </p>
-          </div>
-
-          <div className="grid gap-4">
-            {pricingObjections.map((item, index) => (
-              <div
-                key={item.title}
-                className="border border-[#b1b4b6] rounded bg-[#f8f9fa] overflow-hidden shadow-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => setActivePricingObjection(activePricingObjection === index ? null : index)}
-                  className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left"
-                  aria-expanded={activePricingObjection === index}
-                  aria-controls={`pricing-objection-${index}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5 text-[#00703c]" aria-hidden="true" />
-                    <div>
-                      <h3 className="text-lg font-bold text-[#0b0c0c]">{item.title}</h3>
-                      <p className="text-sm text-[#505a5f]">{item.summary}</p>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    className={`h-5 w-5 text-[#505a5f] transition-transform ${
-                      activePricingObjection === index ? 'rotate-180' : 'rotate-0'
-                    }`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {activePricingObjection === index && (
-                  <div id={`pricing-objection-${index}`} className="px-6 pb-5 pt-0 text-sm text-[#0b0c0c]">
-                    <p>{item.description}</p>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
       </section>

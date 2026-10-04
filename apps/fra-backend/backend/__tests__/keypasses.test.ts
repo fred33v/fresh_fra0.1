@@ -133,6 +133,10 @@ describe('Keypasses endpoints', () => {
       expect(json.success).toBe(true);
       expect(json.data.accessToken).toBeTruthy();
       expect(json.data.refreshToken).toBeTruthy();
+
+      // The web app needs a profile to show the employee's pages; key-pass sign-up does not create one
+      const me = (await (await app.request('http://localhost/api/v1/auth/me', { headers: authHeaders(json.data.accessToken) })).json()) as any;
+      expect(me.data.profile).toMatchObject({ full_name: 'Employee One', organization_name: 'KP Org', sector: 'private', job_title: null });
     });
 
     it('rejects already-used keypass', async () => {

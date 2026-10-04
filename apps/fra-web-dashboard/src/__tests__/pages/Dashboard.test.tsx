@@ -155,13 +155,14 @@ describe('Dashboard', () => {
       expect(container.querySelector('[data-testid="layout"]')).toBeNull();
     });
 
-    it('renders null when profile is null', () => {
+    // Key-pass employees have no workshop profile; they still get their dashboard
+    it('renders from the account when there is no workshop profile', () => {
       setupAuth({ profile: null });
 
-      const { container } = renderDashboard();
+      renderDashboard();
 
-      expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument();
-      expect(container.querySelector('[data-testid="layout"]')).toBeNull();
+      expect(screen.getByText('Welcome back, Alice')).toBeInTheDocument();
+      expect(screen.queryByText('Test Organisation')).not.toBeInTheDocument();
     });
   });
 
@@ -203,8 +204,8 @@ describe('Dashboard', () => {
       expect(screen.getByText('Charity / Non-Profit')).toBeInTheDocument();
     });
 
-    it('falls back to "there" when full_name has no parts', () => {
-      setupAuth({ profile: makeProfile({ full_name: '' }) });
+    it('falls back to "there" when neither the profile nor the account has a name', () => {
+      setupAuth({ profile: makeProfile({ full_name: '' }), user: { ...makeUser(), name: '' } });
 
       renderDashboard();
 

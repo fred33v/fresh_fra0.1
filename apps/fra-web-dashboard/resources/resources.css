@@ -1,0 +1,27 @@
+/* Shared print styles for the downloadable resources (rendered to A4 PDF) */
+@page { size: A4; margin: 16mm 15mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #0b0c0c; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+.brand { font-weight: 700; letter-spacing: 0.04em; color: #1d70b8; margin: 0 0 4px; font-size: 9pt; }
+h1 { font-size: 20pt; margin: 0 0 8px; }
+h2 { font-size: 13pt; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 2px solid #1d70b8; break-after: avoid; }
+.lead { color: #383f43; margin: 0 0 10px; }
+section { break-inside: avoid; }
+ul, ol { margin: 4px 0 6px; padding-left: 20px; }
+li { margin: 3px 0; }
+ul.checks { list-style: none; padding-left: 0; }
+ul.checks li { position: relative; padding-left: 24px; }
+ul.checks li::before { content: ""; position: absolute; left: 0; top: 2px; width: 12px; height: 12px; border: 1.5px solid #0b0c0c; }
+table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+th, td { border: 1px solid #b1b4b6; padding: 5px 7px; text-align: left; vertical-align: top; }
+th { background: #f3f2f1; }
+tr { break-inside: avoid; }
+td.box { width: 46px; }
+table.meta td { border: none; padding: 2px 6px 2px 0; white-space: nowrap; color: #505a5f; }
+table.meta td.fill { border-bottom: 1px solid #b1b4b6; width: 30%; }
+.note { background: #f3f2f1; border-left: 4px solid #1d70b8; padding: 6px 10px; }
+footer { margin-top: 18px; color: #505a5f; font-size: 8.5pt; border-top: 1px solid #b1b4b6; padding-top: 6px; }
+footer p { margin: 2px 0; }
+table.plan { table-layout: fixed; }
+table.plan th:nth-child(2), table.plan td:nth-child(2) { width: 150px; }
+table.plan th:nth-child(3), table.plan td:nth-child(3) { width: 52px; }

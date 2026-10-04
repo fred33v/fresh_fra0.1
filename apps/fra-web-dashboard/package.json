@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:resources": "node scripts/build-resources.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

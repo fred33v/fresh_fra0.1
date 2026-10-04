@@ -119,6 +119,32 @@ describe('useAssessment', () => {
     expect(toast.error).toHaveBeenCalledWith(message);
   });
 
+  it('keeps every answer from quick changes and saves them in one request after a pause', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockGets([assessment()]);
+      mockPatch.mockResolvedValue(assessment());
+
+      const { result } = renderHook(() => useAssessment());
+      await act(() => result.current.startAssessment());
+      act(() => {
+        result.current.updateAnswer('procurement.recentFraud', 'yes');
+        result.current.updateAnswer('procurement.monthlySpend', 2);
+        result.current.updateAnswer('procurement.monthlySpend', 25);
+      });
+      expect(mockPatch).not.toHaveBeenCalled();
+      expect(result.current.answers).toEqual({ 'procurement.recentFraud': 'yes', 'procurement.monthlySpend': 25 });
+
+      await act(async () => { vi.advanceTimersByTime(1000); });
+      expect(mockPatch).toHaveBeenCalledTimes(1);
+      expect(mockPatch).toHaveBeenCalledWith('/api/v1/assessments/a-1', {
+        answers: { 'procurement.recentFraud': 'yes', 'procurement.monthlySpend': 25 },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('saves answers, submits and loads results from the plural routes', async () => {
     mockGets([assessment()]);
     mockPatch.mockResolvedValue(assessment());

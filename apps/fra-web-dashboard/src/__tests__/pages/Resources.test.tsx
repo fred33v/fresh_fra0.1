@@ -151,53 +151,44 @@ describe('Resources', () => {
       expect(downloadButtons).toHaveLength(downloadableResources.length);
     });
 
-    it('has accessible download button labels', () => {
+    it('links each download to its PDF in public/resources', () => {
       renderResources();
 
       for (const resource of downloadableResources) {
-        expect(screen.getByLabelText(`Download ${resource.title} PDF`)).toBeInTheDocument();
+        const link = screen.getByLabelText(`Download ${resource.title} (PDF)`);
+        expect(link).toHaveAttribute('href', `/resources/${resource.filename}`);
+        expect(link).toHaveAttribute('download');
       }
     });
 
-    it('shows toast when download is clicked', async () => {
-      const { toast } = await import('sonner');
-      const user = userEvent.setup();
-      renderResources();
-
-      await user.click(screen.getByLabelText(`Download ${downloadableResources[0].title} PDF`));
-
-      expect(toast.info).toHaveBeenCalledWith(
-        expect.stringContaining(downloadableResources[0].title),
-        expect.objectContaining({ duration: 5000 }),
-      );
+    it('ships a PDF for every download', async () => {
+      const { existsSync } = await import('node:fs');
+      const { resolve } = await import('node:path');
+      for (const resource of downloadableResources) {
+        expect(existsSync(resolve(__dirname, '../../../public/resources', resource.filename))).toBe(true);
+      }
     });
   });
 
   // ── Pre-workshop reading ────────────────────────
 
   describe('pre-workshop reading', () => {
-    it('shows all pre-workshop resources', () => {
+    const READING = [
+      ['Failure to prevent fraud: Home Office guidance', 'https://www.gov.uk/government/publications/offence-of-failure-to-prevent-fraud-introduced-by-eccta'],
+      ['A–Z of fraud and cyber crime', 'https://www.reportfraud.police.uk/collection/a-z-fraud/'],
+      ['GovS 013: Counter Fraud functional standard', 'https://www.gov.uk/government/publications/government-functional-standard-govs-013-counter-fraud'],
+    ];
+
+    it('links each item to its official source in a new tab', () => {
       renderResources();
 
-      expect(screen.getByText('Understanding the Economic Crime Act 2023')).toBeInTheDocument();
-      expect(screen.getByText('Fraud Risk Primer')).toBeInTheDocument();
-      expect(screen.getByText('Regulatory Compliance Checklist')).toBeInTheDocument();
-    });
-
-    it('shows descriptions for pre-workshop resources', () => {
-      renderResources();
-
-      expect(screen.getByText(/key provisions and implications/)).toBeInTheDocument();
-      expect(screen.getByText(/common fraud schemes and red flags/)).toBeInTheDocument();
-      expect(screen.getByText(/Quick reference for compliance/)).toBeInTheDocument();
-    });
-
-    it('has accessible read buttons', () => {
-      renderResources();
-
-      expect(screen.getByLabelText('Read Understanding the Economic Crime Act 2023')).toBeInTheDocument();
-      expect(screen.getByLabelText('Read Fraud Risk Primer')).toBeInTheDocument();
-      expect(screen.getByLabelText('Read Regulatory Compliance Checklist')).toBeInTheDocument();
+      for (const [title, url] of READING) {
+        expect(screen.getByText(title)).toBeInTheDocument();
+        const link = screen.getByLabelText(`Read ${title} (opens in a new tab)`);
+        expect(link).toHaveAttribute('href', url);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      }
     });
   });
 
