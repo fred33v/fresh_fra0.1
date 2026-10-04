@@ -31,8 +31,10 @@ export default function Workshop() {
   const sessionCode = searchParams.get('session');
   
   const { user, profile } = useAuth();
-  const { progress, updateSection, completeSection, saveQuizScore, saveScenarioChoice, isLoading: progressLoading } = useWorkshopProgress(sessionCode);
-  const { session, participantCount, joinSession } = useSession(sessionCode || undefined);
+  const { session, participantCount, joinSession, isLoading: sessionLoading } = useSession(sessionCode || undefined);
+  // A ?session= link carries the join code; progress is stored against the session's id once it is known
+  const { progress, updateSection, completeSection, markComplete, saveQuizScore, saveScenarioChoice, isLoading: progressLoading } =
+    useWorkshopProgress(session?.id ?? null, { enabled: !sessionCode || !sessionLoading });
   const navigate = useNavigate();
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -84,8 +86,9 @@ export default function Workshop() {
       setScenarioChoice(null);
       setShowFeedback(false);
     } else {
-      // Workshop complete
+      // Workshop complete: record the completion date, which unlocks the certificate and counts as training evidence
       await completeSection(currentSlide);
+      await markComplete();
       toast.success('Congratulations! Workshop completed!');
       navigate('/certificate');
     }

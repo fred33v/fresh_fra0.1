@@ -34,7 +34,11 @@ function mapProgress(row: ProgressRow): WorkshopProgress {
   };
 }
 
-export function useWorkshopProgress(sessionId?: string | null) {
+/**
+ * Progress for the signed-in user, solo (no sessionId) or within a live session.
+ * `enabled: false` holds off loading, e.g. while a session code is still being resolved to its id.
+ */
+export function useWorkshopProgress(sessionId?: string | null, { enabled = true }: { enabled?: boolean } = {}) {
   const { user } = useAuth();
   const [progress, setProgress] = useState<WorkshopProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,13 +78,14 @@ export function useWorkshopProgress(sessionId?: string | null) {
   }, [user, sessionId]);
 
   useEffect(() => {
+    if (!enabled) return; // stays loading until enabled
     if (user) {
       fetchProgress();
     } else {
       setProgress(null);
       setIsLoading(false);
     }
-  }, [user, sessionId, fetchProgress]);
+  }, [user, sessionId, fetchProgress, enabled]);
 
   const updateSection = async (sectionId: number) => {
     if (!user || !progress) return;

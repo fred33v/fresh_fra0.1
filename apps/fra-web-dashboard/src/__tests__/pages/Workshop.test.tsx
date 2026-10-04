@@ -153,6 +153,23 @@ beforeEach(() => {
 });
 
 describe('Workshop', () => {
+  describe('live session links', () => {
+    it('stores progress against the session id, not the join code, once the code is resolved', () => {
+      setupSession({ isLoading: true });
+      renderWorkshop('/workshop?session=ABC123');
+      expect(mockedUseWorkshopProgress).toHaveBeenLastCalledWith(null, { enabled: false });
+
+      setupSession({ session: { id: 'session-uuid', title: 'Board briefing', session_code: 'ABC123', is_active: true } });
+      renderWorkshop('/workshop?session=ABC123');
+      expect(mockedUseWorkshopProgress).toHaveBeenLastCalledWith('session-uuid', { enabled: true });
+    });
+
+    it('uses solo progress without a session link', () => {
+      renderWorkshop();
+      expect(mockedUseWorkshopProgress).toHaveBeenLastCalledWith(null, { enabled: true });
+    });
+  });
+
   // ── Loading state ─────────────────────────────
 
   describe('loading state', () => {
@@ -270,10 +287,12 @@ describe('Workshop', () => {
       expect(screen.getByText('Complete Workshop')).toBeInTheDocument();
     });
 
-    it('completing last section navigates to /certificate', async () => {
+    it('completing last section records completion and navigates to /certificate', async () => {
       const { toast } = await import('sonner');
+      const markComplete = vi.fn().mockResolvedValue(undefined);
       setupProgress({
         progress: makeProgress({ current_section: workshopSections.length - 1 }),
+        markComplete,
       });
 
       const user = userEvent.setup();
@@ -282,6 +301,9 @@ describe('Workshop', () => {
       await user.click(screen.getByText('Complete Workshop'));
 
       expect(mockCompleteSection).toHaveBeenCalledWith(workshopSections.length - 1);
+      // The completion date unlocks the certificate and counts as training evidence
+      expect(markComplete).toHaveBeenCalledTimes(1);
+      expect(mockCompleteSection.mock.invocationCallOrder[0]).toBeLessThan(markComplete.mock.invocationCallOrder[0]);
       expect(toast.success).toHaveBeenCalledWith('Congratulations! Workshop completed!');
       expect(mockNavigate).toHaveBeenCalledWith('/certificate');
     });

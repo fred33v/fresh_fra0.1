@@ -94,6 +94,23 @@ describe('useWorkshopProgress', () => {
   // ── fetchProgress (on mount) ──────────────────────────────
 
   describe('fetchProgress on mount', () => {
+    it('waits while held off, then loads progress for the session once enabled', async () => {
+      mockGet.mockResolvedValue(makeProgressRow({ session_id: 'session-uuid' }));
+
+      const { result, rerender } = renderHook(
+        ({ id, enabled }: { id: string | null; enabled: boolean }) => useWorkshopProgress(id, { enabled }),
+        { initialProps: { id: null as string | null, enabled: false } },
+      );
+      await new Promise((r) => setTimeout(r, 20));
+      expect(mockGet).not.toHaveBeenCalled();
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(result.current.isLoading).toBe(true);
+
+      rerender({ id: 'session-uuid', enabled: true });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/workshop/progress?sessionId=session-uuid');
+    });
+
     it('fetches existing progress and maps it correctly', async () => {
       const row = makeProgressRow({ current_section: 3, completed_sections: [0, 1, 2] });
       mockGet.mockResolvedValueOnce(row);
