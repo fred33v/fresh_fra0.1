@@ -320,11 +320,7 @@ export function evaluateGovS013(data: OrgComplianceData, m: ComplianceMetrics, n
           ].filter(Boolean).join('. ') + '.', recommendation: 'Add every assessed risk area to the register with an owner and action plan.' }
         : { id: 'govs-3', name: 'Risk register and action plan', status: 'not_met', evidence: 'The risk register is empty.', recommendation: 'Start the risk register from the assessment results.' },
 
-    data.incidents.length === 0
-      ? { id: 'govs-4', name: 'Incident reporting and response', status: 'partial', evidence: 'No incidents recorded — confirm reporting routes are in place and used.', recommendation: 'Record fraud incidents and their resolution to evidence the response plan.' }
-      : m.openSeriousIncidents === 0
-        ? { id: 'govs-4', name: 'Incident reporting and response', status: 'met', evidence: `${data.incidents.length} incident(s) recorded; no serious incidents open.` }
-        : { id: 'govs-4', name: 'Incident reporting and response', status: 'partial', evidence: `${m.openSeriousIncidents} serious incident(s) still open.`, recommendation: 'Resolve and document serious incidents.' },
+    policyAndResponseRequirement(data, now),
 
     m.trainingCoverage >= 80
       ? { id: 'govs-5', name: 'Counter-fraud training', status: 'met', evidence: `${m.trainingCoverage}% of staff trained.` }
@@ -409,6 +405,69 @@ function detectionRequirement(records: CounterFraudRecord[], m: ComplianceMetric
   return recordsOf(records, 'detection').some((d) => d.data.status !== 'completed')
     ? { id: 'govs-10', name, status: 'partial', evidence: 'Detection activity is planned or under way; none completed in the last 12 months.', recommendation: 'Complete detection work in the highest-risk areas and record what it found.' }
     : { id: 'govs-10', name, status: 'not_met', evidence: 'No detection activity recorded.', recommendation: 'Plan detection activity, such as data matching or loss measurement, in high-risk areas.' };
+}
+
+/**
+ * Component 4: a counter fraud policy and a fraud response plan, both approved and within their review date,
+ * with the plan shown to work: no serious incident left open for over 30 days.
+ */
+function policyAndResponseRequirement(data: OrgComplianceData, now: number): Requirement {
+  const id = 'govs-4';
+  const name = 'Fraud policy and response plan';
+  const today = todayOf(now);
+  const policies = recordsOf(data.records, 'policy');
+  const state = (type: 'counter_fraud' | 'response_plan', label: string) => {
+    const held = policies.filter((p) => p.data.policyType === type);
+    const current = held.find((p) => p.data.reviewDue >= today);
+    if (current) return { ok: true, held: true, text: `${label} "${current.data.title}" approved ${fmtDay(current.data.approvedAt)}, review due ${fmtDay(current.data.reviewDue)}` };
+    if (held.length) {
+      const latest = held.map((p) => p.data.reviewDue).sort().at(-1)!;
+      return { ok: false, held: true, text: `${label} past its review date (${fmtDay(latest)})` };
+    }
+    return { ok: false, held: false, text: `no ${label} recorded` };
+  };
+  const policy = state('counter_fraud', 'counter fraud policy');
+  const plan = state('response_plan', 'fraud response plan');
+  const seriousOpenOld = data.incidents.filter(
+    (i) => !i.resolvedAt && (i.severity === 'high' || i.severity === 'critical') && daysAgo(i.reportedAt, now) > 30,
+  ).length;
+  const responseOk = seriousOpenOld === 0;
+  const responseText = responseOk
+    ? (data.incidents.length ? `${data.incidents.length} incident(s) logged, none serious and open over 30 days` : null)
+    : `${seriousOpenOld} serious incident(s) open over 30 days`;
+  const sentence = (items: (string | null)[]) => items.filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+
+  if (policy.ok && plan.ok && responseOk) {
+    return { id, name, status: 'met', evidence: sentence([policy.text, plan.text, responseText]) };
+  }
+  // The assessment can say a plan exists, but only a recorded, approved document evidences it
+  const latest = data.assessments
+    .filter((a) => a.status === 'submitted' || a.status === 'completed')
+    .sort((a, b) => (a.submittedAt ?? a.updatedAt).localeCompare(b.submittedAt ?? b.updatedAt))
+    .at(-1);
+  // Web answers are flat ("fraudResponse.responsePlan"); mobile answers are nested by module
+  const answers = (latest?.answers ?? {}) as Record<string, unknown>;
+  const nested = answers.fraudResponse;
+  const answer = answers['fraudResponse.responsePlan']
+    ?? (nested && typeof nested === 'object' ? (nested as Record<string, unknown>).responsePlan : undefined);
+  const saysPlan = answer === 'yes' || answer === true;
+  const recommendation = [
+    !policy.ok ? 'Record the board-approved counter fraud policy with its review date.' : null,
+    !plan.ok ? 'Record the fraud response plan: who is told, who investigates, how evidence is kept and when to refer to the police or Action Fraud.' : null,
+    !responseOk ? 'Follow the response plan to resolve serious incidents within 30 days.' : null,
+  ].filter(Boolean).join(' ');
+
+  if (!policy.held && !plan.held && !saysPlan) {
+    return { id, name, status: 'not_met', evidence: sentence([policy.text, plan.text, responseText]), recommendation };
+  }
+  return {
+    id, name, status: 'partial',
+    evidence: sentence([
+      policy.text, plan.text, responseText,
+      saysPlan && !plan.held ? 'the latest assessment says a response plan exists, but it is not recorded' : null,
+    ]),
+    recommendation,
+  };
 }
 
 /** Component 12: current gifts/hospitality and conflict of interest policies, and registers in use. */

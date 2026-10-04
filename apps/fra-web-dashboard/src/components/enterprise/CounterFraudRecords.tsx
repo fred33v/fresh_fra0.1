@@ -214,7 +214,7 @@ const RECORD_KINDS: KindConfig[] = [
   },
   {
     kind: 'policy', tab: 'Policies', component: 'Components 4 and 12', title: 'Policies', addLabel: 'Add policy',
-    description: 'Approved policies and their review dates, including gifts and hospitality and conflicts of interest.',
+    description: 'Approved policies and their review dates. Component 4 needs a current counter fraud policy and fraud response plan; component 12 needs current gifts and hospitality and conflicts of interest policies.',
     fields: [
       { name: 'policyType', label: 'Policy', type: 'select', required: true, options: POLICY_TYPE },
       { name: 'title', label: 'Title', type: 'text', required: true },
