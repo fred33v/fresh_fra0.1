@@ -22,6 +22,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, Lock } from 'lucide-react';
 import { QuestionRenderer } from '@/components/assessment/QuestionRenderer';
+import { domId } from '@/lib/dom-id';
 import { PACKAGE_ERROR_CODES } from '@/types/assessment';
 
 export default function Assessment() {
@@ -241,13 +242,14 @@ export default function Assessment() {
                     transition={{ delay: idx * 0.1 }}
                   >
                     <div className="space-y-3">
-                      <label className="text-base font-medium">
+                      <p id={`question-${domId(question.id)}`} className="text-base font-medium">
                         {idx + 1}. {question.text}
-                      </label>
+                      </p>
                       <QuestionRenderer
                         question={question}
                         value={answers[question.id]}
                         onChange={(value) => updateAnswer(question.id, value)}
+                        labelledBy={`question-${domId(question.id)}`}
                       />
                     </div>
                   </motion.div>

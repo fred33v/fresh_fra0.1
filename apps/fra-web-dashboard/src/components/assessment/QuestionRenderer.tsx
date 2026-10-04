@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { domId } from '@/lib/dom-id';
 
 interface Question {
   id: string;
@@ -37,13 +38,15 @@ interface QuestionRendererProps {
   question: Question;
   value?: unknown;
   onChange: (value: unknown) => void;
+  /** Id of the element holding the question text, so assistive technology reads it with the answers */
+  labelledBy?: string;
 }
 
 /**
  * Frequency question: How often does this occur?
  * Common options: Never, Rarely, Sometimes, Often, Always
  */
-function FrequencyQuestion({ question, value, onChange }: QuestionRendererProps) {
+function FrequencyQuestion({ question, value, onChange, labelledBy }: QuestionRendererProps) {
   const options = question.responseOptions || [
     'Never',
     'Rarely',
@@ -53,12 +56,12 @@ function FrequencyQuestion({ question, value, onChange }: QuestionRendererProps)
   ];
 
   return (
-    <RadioGroup value={value || ''} onValueChange={onChange}>
+    <RadioGroup value={(value as string) || ''} onValueChange={onChange} aria-labelledby={labelledBy}>
       <div className="space-y-3">
         {options.map((option) => (
           <div key={option} className="flex items-center space-x-2">
-            <RadioGroupItem value={option} id={`${question.id}-${option}`} />
-            <Label htmlFor={`${question.id}-${option}`} className="font-normal cursor-pointer">
+            <RadioGroupItem value={option} id={domId(`${question.id}-${option}`)} />
+            <Label htmlFor={domId(`${question.id}-${option}`)} className="font-normal cursor-pointer">
               {option}
             </Label>
           </div>
@@ -72,7 +75,7 @@ function FrequencyQuestion({ question, value, onChange }: QuestionRendererProps)
  * Currency question: What is the monetary value?
  * Input field with currency formatting (e.g., £, $, €)
  */
-function CurrencyQuestion({ question, value, onChange }: QuestionRendererProps) {
+function CurrencyQuestion({ question, value, onChange, labelledBy }: QuestionRendererProps) {
   const currency = question.metadata?.currency || '£';
   const [displayValue, setDisplayValue] = useState(
     value ? `${value}` : ''
@@ -90,8 +93,9 @@ function CurrencyQuestion({ question, value, onChange }: QuestionRendererProps) 
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-lg font-medium text-muted-foreground">{currency}</span>
+      <span className="text-lg font-medium text-muted-foreground" aria-hidden="true">{currency}</span>
       <Input
+        aria-labelledby={labelledBy}
         type="number"
         placeholder="0.00"
         value={displayValue}
@@ -108,7 +112,7 @@ function CurrencyQuestion({ question, value, onChange }: QuestionRendererProps) 
  * Scale question: Rate on a numeric scale
  * Uses a slider or button grid depending on scale range
  */
-function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
+function ScaleQuestion({ question, value, onChange, labelledBy }: QuestionRendererProps) {
   const min = question.metadata?.min ?? 1;
   const max = question.metadata?.max ?? 5;
   const step = question.metadata?.step ?? 1;
@@ -120,11 +124,12 @@ function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
       <div className="space-y-4 py-4">
         <div className="flex justify-between text-sm text-muted-foreground">
           <span>{min}</span>
-          <span className="text-lg font-semibold text-primary">{value ?? '—'}</span>
+          <span className="text-lg font-semibold text-primary">{String(value ?? '—')}</span>
           <span>{max}</span>
         </div>
         <Slider
-          value={[value ?? min]}
+          aria-labelledby={labelledBy}
+          value={[(value as number) ?? min]}
           onValueChange={(vals) => onChange(vals[0])}
           min={min}
           max={max}
@@ -144,7 +149,7 @@ function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
 
   // Use button grid for smaller ranges
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div role="group" aria-labelledby={labelledBy} className="grid grid-cols-5 gap-2">
       {Array.from({ length: max - min + 1 }).map((_, idx) => {
         const buttonValue = min + idx;
         const isSelected = value === buttonValue;
@@ -152,6 +157,8 @@ function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
         return (
           <motion.button
             key={buttonValue}
+            type="button"
+            aria-pressed={isSelected}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => onChange(buttonValue)}
@@ -172,10 +179,12 @@ function ScaleQuestion({ question, value, onChange }: QuestionRendererProps) {
 /**
  * Yes/No question: Simple binary choice
  */
-function YesNoQuestion({ value, onChange }: Omit<QuestionRendererProps, 'question'>) {
+function YesNoQuestion({ value, onChange, labelledBy }: Omit<QuestionRendererProps, 'question'>) {
   return (
-    <div className="flex items-center gap-4">
+    <div role="group" aria-labelledby={labelledBy} className="flex items-center gap-4">
       <motion.button
+        type="button"
+        aria-pressed={value === 'yes'}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => onChange('yes')}
@@ -188,6 +197,8 @@ function YesNoQuestion({ value, onChange }: Omit<QuestionRendererProps, 'questio
         Yes
       </motion.button>
       <motion.button
+        type="button"
+        aria-pressed={value === 'no'}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => onChange('no')}
@@ -207,7 +218,7 @@ function YesNoQuestion({ value, onChange }: Omit<QuestionRendererProps, 'questio
  * Main renderer component
  * Routes to appropriate question type component
  */
-export function QuestionRenderer({ question, value, onChange }: QuestionRendererProps) {
+export function QuestionRenderer({ question, value, onChange, labelledBy }: QuestionRendererProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -215,19 +226,19 @@ export function QuestionRenderer({ question, value, onChange }: QuestionRenderer
       className="mt-4"
     >
       {question.type === 'frequency' && (
-        <FrequencyQuestion question={question} value={value} onChange={onChange} />
+        <FrequencyQuestion question={question} value={value} onChange={onChange} labelledBy={labelledBy} />
       )}
 
       {question.type === 'currency' && (
-        <CurrencyQuestion question={question} value={value} onChange={onChange} />
+        <CurrencyQuestion question={question} value={value} onChange={onChange} labelledBy={labelledBy} />
       )}
 
       {question.type === 'scale' && (
-        <ScaleQuestion question={question} value={value} onChange={onChange} />
+        <ScaleQuestion question={question} value={value} onChange={onChange} labelledBy={labelledBy} />
       )}
 
       {question.type === 'yesno' && (
-        <YesNoQuestion question={question} value={value} onChange={onChange} />
+        <YesNoQuestion value={value} onChange={onChange} labelledBy={labelledBy} />
       )}
 
       {/* Help text for weight/importance */}
