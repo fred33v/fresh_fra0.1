@@ -10,7 +10,7 @@ import type {
 } from './types.js';
 import { hasDatabase } from './helpers.js';
 import {
-  assessmentsById, auditEvents, incidentsById, keypassesByCode, riskRegisterById, seniorManagersById, usersByEmail,
+  assessmentsById, auditEvents, counterFraudRecordsById, incidentsById, keypassesByCode, riskRegisterById, seniorManagersById, usersByEmail,
 } from './stores.js';
 import {
   dbListAssessmentsByOrganisation, dbListKeypassesByOrganisation, dbListRisks, dbListUsersByOrganisation,
@@ -18,6 +18,8 @@ import {
 import {
   dbListAuditEvents, dbListIncidents, dbListSeniorManagers, dbListTrainingRecords, type TrainingRecord,
 } from './db/compliance.js';
+import { dbListCounterFraudRecords } from './db/counter-fraud.js';
+import { recordsOf, type CounterFraudRecord } from './counter-fraud.js';
 import { latestSubmittedByUser, scoreAssessment, type AssessmentRisk, type RiskPriority } from './assessment-risk.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -31,12 +33,14 @@ export type OrgComplianceData = {
   incidents: ComplianceIncident[];
   seniorManagers: SeniorManager[];
   training: TrainingRecord[];
+  /** Strategy, losses, investigators, detection, gifts, conflicts and policies (GovS 013 components 2, 8–10, 12) */
+  records: CounterFraudRecord[];
   auditEventCount: number;
 };
 
 export async function loadComplianceData(orgId: string): Promise<OrgComplianceData> {
   if (hasDatabase()) {
-    const [users, assessments, keypasses, risks, incidents, seniorManagers, training, audit] = await Promise.all([
+    const [users, assessments, keypasses, risks, incidents, seniorManagers, training, records, audit] = await Promise.all([
       dbListUsersByOrganisation(orgId),
       dbListAssessmentsByOrganisation(orgId),
       dbListKeypassesByOrganisation(orgId),
@@ -44,9 +48,10 @@ export async function loadComplianceData(orgId: string): Promise<OrgComplianceDa
       dbListIncidents(orgId),
       dbListSeniorManagers(orgId),
       dbListTrainingRecords(orgId),
+      dbListCounterFraudRecords(orgId),
       dbListAuditEvents(orgId, 1, 0),
     ]);
-    return { users, assessments, keypasses, risks, incidents, seniorManagers, training, auditEventCount: audit.total };
+    return { users, assessments, keypasses, risks, incidents, seniorManagers, training, records, auditEventCount: audit.total };
   }
 
   const users = Array.from(usersByEmail.values()).filter((u) => u.organisationId === orgId);
@@ -61,6 +66,7 @@ export async function loadComplianceData(orgId: string): Promise<OrgComplianceDa
       .filter((m) => m.organisationId === orgId)
       .map((m) => ({ ...m, userName: nameById.get(m.userId) })),
     training: [], // workshop progress is only stored in the database
+    records: Array.from(counterFraudRecordsById.values()).filter((r) => r.organisationId === orgId),
     auditEventCount: auditEvents.filter((e: AuditEvent) => e.organisationId === orgId).length,
   };
 }
@@ -151,6 +157,11 @@ export type ComplianceMetrics = {
   keypassesIssued: number;
   keypassesUsed: number;
   auditEvents: number;
+  lossIdentifiedGbp: number;
+  lossRecoveredGbp: number;
+  lossesNotReported: number;
+  activeInvestigators: number;
+  detectionCompletedInYear: number;
 };
 
 export function computeMetrics(data: OrgComplianceData, now = Date.now()): ComplianceMetrics {
@@ -185,6 +196,23 @@ export function computeMetrics(data: OrgComplianceData, now = Date.now()): Compl
     keypassesIssued: data.keypasses.filter((k) => k.status !== 'revoked').length,
     keypassesUsed: data.keypasses.filter((k) => k.status === 'used').length,
     auditEvents: data.auditEventCount,
+    ...counterFraudMetrics(data.records, now),
+  };
+}
+
+const todayOf = (now: number) => new Date(now).toISOString().slice(0, 10);
+const withinYear = (date: string | undefined, now: number) => !!date && daysAgo(date, now) <= 365;
+
+function counterFraudMetrics(records: CounterFraudRecord[], now: number) {
+  const today = todayOf(now);
+  const losses = recordsOf(records, 'loss');
+  return {
+    lossIdentifiedGbp: losses.reduce((s, l) => s + l.data.amountGbp, 0),
+    lossRecoveredGbp: losses.reduce((s, l) => s + l.data.recoveredGbp, 0),
+    // Losses identified over 30 days ago that have not been reported to the centre
+    lossesNotReported: losses.filter((l) => !l.data.reportedToCentreAt && daysAgo(l.data.identifiedAt, now) > 30).length,
+    activeInvestigators: recordsOf(records, 'investigator').filter((i) => !i.data.agreementEndsAt || i.data.agreementEndsAt >= today).length,
+    detectionCompletedInYear: recordsOf(records, 'detection').filter((d) => d.data.status === 'completed' && withinYear(d.data.completedAt, now)).length,
   };
 }
 
@@ -285,7 +313,105 @@ export function evaluateGovS013(data: OrgComplianceData, m: ComplianceMetrics, n
     m.auditEvents > 0
       ? { id: 'govs-6', name: 'Records and audit trail', status: 'met', evidence: `${m.auditEvents} audit event(s) retained for this organisation.` }
       : { id: 'govs-6', name: 'Records and audit trail', status: 'not_met', evidence: 'No audit events recorded.', recommendation: 'Use the platform for assessments and reviews so actions are logged.' },
+
+    strategyRequirement(data.records, now),
+    lossRequirement(data.records, m),
+    investigatorRequirement(data.records, m),
+    detectionRequirement(data.records, m),
+    giftsAndInterestsRequirement(data.records, now),
   ];
 
   return { score: scoreOf(requirements), requirements };
+}
+
+// ── GovS 013 components held as counter-fraud records ───────────
+
+const fmtGbp = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
+// "2026-09-15" → "15 September 2026"; dates are calendar days, so read them in UTC
+const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** Component 2: an approved strategy whose period covers today. */
+function strategyRequirement(records: CounterFraudRecord[], now: number): Requirement {
+  const today = todayOf(now);
+  const strategies = recordsOf(records, 'strategy');
+  const current = strategies.find((s) => s.data.status !== 'draft' && s.data.periodStart <= today && s.data.periodEnd >= today);
+  const name = 'Counter fraud strategy';
+  if (current) {
+    return {
+      id: 'govs-7', name, status: 'met',
+      evidence: `"${current.data.title}" approved ${current.data.approvedAt ? fmtDay(current.data.approvedAt) : ''}, covering ${fmtDay(current.data.periodStart)} to ${fmtDay(current.data.periodEnd)}${current.data.submittedToCentreAt ? `; submitted to the centre ${fmtDay(current.data.submittedToCentreAt)}` : ''}.`,
+    };
+  }
+  if (strategies.length > 0) {
+    return {
+      id: 'govs-7', name, status: 'partial',
+      evidence: strategies.some((s) => s.data.status === 'draft') ? 'A strategy is in draft but not yet approved.' : 'The approved strategy does not cover today.',
+      recommendation: 'Approve a counter fraud, bribery and corruption strategy for the current period and submit it to the centre where required.',
+    };
+  }
+  return { id: 'govs-7', name, status: 'not_met', evidence: 'No counter fraud strategy recorded.', recommendation: 'Record the board-approved counter fraud, bribery and corruption strategy.' };
+}
+
+/** Component 8: losses and recoveries recorded and reported to the centre. */
+function lossRequirement(records: CounterFraudRecord[], m: ComplianceMetrics): Requirement {
+  const losses = recordsOf(records, 'loss');
+  const name = 'Identified loss reporting';
+  if (losses.length === 0) {
+    return {
+      id: 'govs-8', name, status: 'partial', evidence: 'No losses or recoveries recorded.',
+      recommendation: 'Record identified fraud, bribery and corruption losses and recoveries, or confirm there were none.',
+    };
+  }
+  const totals = `${losses.length} loss record(s): ${fmtGbp(m.lossIdentifiedGbp)} identified, ${fmtGbp(m.lossRecoveredGbp)} recovered`;
+  return m.lossesNotReported === 0
+    ? { id: 'govs-8', name, status: 'met', evidence: `${totals}; none overdue for reporting to the centre.` }
+    : { id: 'govs-8', name, status: 'partial', evidence: `${totals}; ${m.lossesNotReported} not reported to the centre after 30 days.`, recommendation: 'Report identified losses and recoveries to the centre using the government definitions.' };
+}
+
+/** Component 9: an agreement giving access to trained investigators. */
+function investigatorRequirement(records: CounterFraudRecord[], m: ComplianceMetrics): Requirement {
+  const name = 'Access to trained investigators';
+  if (m.activeInvestigators > 0) {
+    return { id: 'govs-9', name, status: 'met', evidence: `${m.activeInvestigators} investigator arrangement(s) in place.` };
+  }
+  return recordsOf(records, 'investigator').length > 0
+    ? { id: 'govs-9', name, status: 'partial', evidence: 'Every recorded investigator agreement has ended.', recommendation: 'Renew access to accredited counter fraud investigators.' }
+    : { id: 'govs-9', name, status: 'not_met', evidence: 'No investigator access recorded.', recommendation: 'Agree access to investigators meeting the public sector counter fraud standard, in-house or contracted.' };
+}
+
+/** Component 10: detection activity completed in the last 12 months. */
+function detectionRequirement(records: CounterFraudRecord[], m: ComplianceMetrics): Requirement {
+  const name = 'Detection activity';
+  if (m.detectionCompletedInYear > 0) {
+    return { id: 'govs-10', name, status: 'met', evidence: `${m.detectionCompletedInYear} detection exercise(s) completed in the last 12 months.` };
+  }
+  return recordsOf(records, 'detection').some((d) => d.data.status !== 'completed')
+    ? { id: 'govs-10', name, status: 'partial', evidence: 'Detection activity is planned or under way; none completed in the last 12 months.', recommendation: 'Complete detection work in the highest-risk areas and record what it found.' }
+    : { id: 'govs-10', name, status: 'not_met', evidence: 'No detection activity recorded.', recommendation: 'Plan detection activity, such as data matching or loss measurement, in high-risk areas.' };
+}
+
+/** Component 12: current gifts/hospitality and conflict of interest policies, and registers in use. */
+function giftsAndInterestsRequirement(records: CounterFraudRecord[], now: number): Requirement {
+  const today = todayOf(now);
+  const currentPolicy = (type: 'gifts_hospitality' | 'conflicts_of_interest') =>
+    recordsOf(records, 'policy').some((p) => p.data.policyType === type && p.data.reviewDue >= today);
+  const policies = [currentPolicy('gifts_hospitality'), currentPolicy('conflicts_of_interest')].filter(Boolean).length;
+  const registerInUse = recordsOf(records, 'gift_hospitality').some((g) => withinYear(g.data.date, now))
+    || recordsOf(records, 'conflict_of_interest').some((c) => withinYear(c.data.reviewedAt ?? c.data.declaredAt, now));
+  const name = 'Gifts, hospitality and conflicts of interest';
+
+  if (policies === 2 && registerInUse) {
+    return { id: 'govs-11', name, status: 'met', evidence: 'Both policies are within their review date and the registers were used in the last 12 months.' };
+  }
+  if (policies === 0 && !registerInUse) {
+    return { id: 'govs-11', name, status: 'not_met', evidence: 'No gifts and hospitality or conflict of interest policy or register entries recorded.', recommendation: 'Record both policies and start the gifts, hospitality and conflict of interest registers.' };
+  }
+  return {
+    id: 'govs-11', name, status: 'partial',
+    evidence: [
+      policies < 2 ? `${policies} of 2 policies within their review date` : null,
+      registerInUse ? null : 'no register entries or reviews in the last 12 months',
+    ].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase()) + '.',
+    recommendation: 'Keep both policies within their review date and record declarations, or nil returns, at least yearly.',
+  };
 }

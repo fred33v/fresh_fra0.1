@@ -11,13 +11,19 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import { requireAuth, hasPackageEntitlement, hasDatabase, isManagerRole, jsonError } from '../helpers.js';
 import type { AuthContext } from '../helpers.js';
-import { auditEvents, incidentsById, seniorManagersById, usersByEmail } from '../stores.js';
+import { auditEvents, counterFraudRecordsById, incidentsById, seniorManagersById, usersByEmail } from '../stores.js';
 import { csvResponse, wantsCsv } from '../csv.js';
 import { auditLog, dbGetUserById } from '../db/index.js';
 import {
   dbDeleteSeniorManager, dbInsertIncident, dbInsertSeniorManager, dbListAuditEvents, dbListIncidents,
   dbListSeniorManagers, dbResolveIncident, dbUpdateSeniorManager,
 } from '../db/compliance.js';
+import {
+  dbDeleteCounterFraudRecord, dbGetCounterFraudRecord, dbInsertCounterFraudRecord, dbListCounterFraudRecords, dbUpdateCounterFraudRecord,
+} from '../db/counter-fraud.js';
+import {
+  COUNTER_FRAUD_KINDS, isCounterFraudKind, parseRecordData, type CounterFraudKind, type CounterFraudRecord,
+} from '../counter-fraud.js';
 import { listOrgPurchases } from '../entitlements.js';
 import {
   AREA_TO_REGISTER, computeMetrics, employeeRisks, evaluateEccta, evaluateGovS013, loadComplianceData, riskByArea,
@@ -312,6 +318,111 @@ compliance.delete('/senior-management/:id', async (c) => {
   return c.json({ success: true, data: { id, deleted: true } });
 });
 
+// ── Counter-fraud records (GovS 013 components 2, 8, 9, 10, 12) ─
+// Strategy, identified losses, investigator access, detection activity,
+// gifts and hospitality, conflicts of interest and the related policies.
+
+async function listRecords(orgId: string, kind?: CounterFraudKind): Promise<CounterFraudRecord[]> {
+  if (hasDatabase()) return dbListCounterFraudRecords(orgId, kind);
+  return Array.from(counterFraudRecordsById.values())
+    .filter((r) => r.organisationId === orgId && (!kind || r.kind === kind))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+async function getRecord(id: string, orgId: string): Promise<CounterFraudRecord | null> {
+  if (hasDatabase()) return dbGetCounterFraudRecord(id, orgId);
+  const r = counterFraudRecordsById.get(id);
+  return r && r.organisationId === orgId ? r : null;
+}
+
+/** A loss may point at an incident; it must be one of this organisation's. */
+async function incidentBelongsToOrg(incidentId: string | undefined, orgId: string): Promise<boolean> {
+  if (!incidentId) return true;
+  return (await listIncidents(orgId)).some((i) => i.id === incidentId);
+}
+
+compliance.get('/records', async (c) => {
+  const auth = authOf(c);
+  const kind = c.req.query('kind');
+  if (kind && !isCounterFraudKind(kind)) {
+    return jsonError(c, 400, 'INVALID_PARAM', `kind must be one of ${COUNTER_FRAUD_KINDS.join(', ')}`);
+  }
+  const records = await listRecords(auth.organisationId, kind as CounterFraudKind | undefined);
+
+  await logAccess(c, auth, 'records_accessed', { kind: kind ?? 'all' });
+  if (wantsCsv(c)) {
+    if (!kind) return jsonError(c, 400, 'INVALID_PARAM', 'Choose a kind to download as CSV');
+    // One column per field, so the register opens cleanly in a spreadsheet
+    return csvResponse(c, `${kind.replace(/_/g, '-')}-register.csv`,
+      records.map((r) => ({ id: r.id, ...r.data, createdAt: r.createdAt, updatedAt: r.updatedAt })));
+  }
+  return c.json({ success: true, data: records });
+});
+
+compliance.post('/records', async (c) => {
+  const auth = authOf(c);
+  const body = (await c.req.json().catch(() => null)) as { kind?: unknown; data?: unknown } | null;
+  if (!body || typeof body.kind !== 'string' || !isCounterFraudKind(body.kind)) {
+    return jsonError(c, 400, 'VALIDATION_ERROR', `kind must be one of ${COUNTER_FRAUD_KINDS.join(', ')}`);
+  }
+  const parsed = parseRecordData(body.kind, body.data);
+  if (!parsed.ok) return jsonError(c, 400, 'VALIDATION_ERROR', parsed.message);
+  if (body.kind === 'loss' && !(await incidentBelongsToOrg((parsed.data as { incidentId?: string }).incidentId, auth.organisationId))) {
+    return jsonError(c, 400, 'INVALID_INCIDENT', 'The linked incident is not one of your organisation\'s');
+  }
+
+  const now = new Date().toISOString();
+  const record: CounterFraudRecord = {
+    id: crypto.randomUUID(), organisationId: auth.organisationId, kind: body.kind, data: parsed.data,
+    createdByUserId: auth.userId, createdAt: now, updatedAt: now,
+  };
+  if (hasDatabase()) await dbInsertCounterFraudRecord(record);
+  else counterFraudRecordsById.set(record.id, record);
+
+  await logAccess(c, auth, 'record_added', { recordId: record.id, kind: record.kind });
+  return c.json({ success: true, data: record }, 201);
+});
+
+// Changes merge into the record's fields; the result is validated as a whole
+compliance.patch('/records/:id', async (c) => {
+  const auth = authOf(c);
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+  const body = (await c.req.json().catch(() => null)) as { data?: unknown } | null;
+  if (!body || typeof body.data !== 'object' || body.data === null || Array.isArray(body.data)) {
+    return jsonError(c, 400, 'VALIDATION_ERROR', 'Send the fields to change as data');
+  }
+
+  const existing = await getRecord(id, auth.organisationId);
+  if (!existing) return jsonError(c, 404, 'NOT_FOUND', 'Record not found');
+  const parsed = parseRecordData(existing.kind, { ...existing.data, ...body.data });
+  if (!parsed.ok) return jsonError(c, 400, 'VALIDATION_ERROR', parsed.message);
+  if (existing.kind === 'loss' && !(await incidentBelongsToOrg((parsed.data as { incidentId?: string }).incidentId, auth.organisationId))) {
+    return jsonError(c, 400, 'INVALID_INCIDENT', 'The linked incident is not one of your organisation\'s');
+  }
+
+  const updated: CounterFraudRecord = { ...existing, data: parsed.data, updatedAt: new Date().toISOString() };
+  if (hasDatabase()) await dbUpdateCounterFraudRecord(updated);
+  else counterFraudRecordsById.set(id, updated);
+
+  await logAccess(c, auth, 'record_updated', { recordId: id, kind: existing.kind, fields: Object.keys(body.data) });
+  return c.json({ success: true, data: updated });
+});
+
+compliance.delete('/records/:id', async (c) => {
+  const auth = authOf(c);
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+  const existing = await getRecord(id, auth.organisationId);
+  if (!existing) return jsonError(c, 404, 'NOT_FOUND', 'Record not found');
+
+  if (hasDatabase()) await dbDeleteCounterFraudRecord(id, auth.organisationId);
+  else counterFraudRecordsById.delete(id);
+
+  await logAccess(c, auth, 'record_removed', { recordId: id, kind: existing.kind });
+  return c.json({ success: true, data: { id, deleted: true } });
+});
+
 // ── GET /audit-trail — who did what, when ───────────────────────
 compliance.get('/audit-trail', async (c) => {
   const auth = authOf(c);
@@ -348,8 +459,20 @@ compliance.get('/audit-trail', async (c) => {
 
 // ── GET /export — full data export (GDPR / auditor pack) ────────
 // ?format=csv&dataset=<name> returns one dataset as CSV
-const EXPORT_DATASETS = ['assessments', 'keypasses', 'incidents', 'risk_register', 'training', 'senior_management'] as const;
+const EXPORT_DATASETS = [
+  'assessments', 'keypasses', 'incidents', 'risk_register', 'training', 'senior_management', ...COUNTER_FRAUD_KINDS,
+] as const;
 type ExportDataset = (typeof EXPORT_DATASETS)[number];
+
+/** One flat dataset per counter-fraud record kind, a column per field. */
+function recordDatasets(records: CounterFraudRecord[]): Record<CounterFraudKind, Record<string, unknown>[]> {
+  const out = {} as Record<CounterFraudKind, Record<string, unknown>[]>;
+  for (const kind of COUNTER_FRAUD_KINDS) {
+    out[kind] = records.filter((r) => r.kind === kind)
+      .map((r) => ({ id: r.id, ...(r.data as Record<string, unknown>), createdAt: r.createdAt, updatedAt: r.updatedAt }));
+  }
+  return out;
+}
 
 compliance.get('/export', async (c) => {
   const auth = authOf(c);
@@ -376,6 +499,7 @@ compliance.get('/export', async (c) => {
       certificateNumber: trainingByUser.get(u.id)?.certificateNumber ?? null,
     })),
     senior_management: data.seniorManagers,
+    ...recordDatasets(data.records),
   };
 
   await logAccess(c, auth, 'compliance_data_exported', { dataset: csvDataset ?? 'all' });

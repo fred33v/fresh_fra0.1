@@ -30,6 +30,11 @@ export const RETENTION_RULES: RetentionRule[] = [
     expiredWhen: "status IN ('mitigated', 'accepted', 'closed') AND updated_at < $1",
   },
   { table: 'compliance_incidents', label: 'Resolved incidents', keepFor: '6 years', expiredWhen: 'resolved_at IS NOT NULL AND resolved_at < $1' },
+  {
+    // Strategies, policies and investigator arrangements stay until someone removes them
+    table: 'public.counter_fraud_records', label: 'Loss, detection, gifts and ended conflict records', keepFor: '6 years',
+    expiredWhen: "updated_at < $1 AND (kind IN ('loss', 'detection', 'gift_hospitality') OR (kind = 'conflict_of_interest' AND data->>'status' = 'ended'))",
+  },
   { table: 'public.purchases', label: 'Payment records', keepFor: '7 years', expiredWhen: 'created_at < $1' },
   { table: 'public.keypasses', label: 'Expired key-passes', keepFor: '2 years', expiredWhen: 'expires_at < $1' },
   { table: 'public.workshop_feedback', label: 'Workshop feedback', keepFor: '2 years', expiredWhen: 'created_at < $1' },

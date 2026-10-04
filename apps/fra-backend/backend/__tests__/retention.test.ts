@@ -48,6 +48,9 @@ describe('data retention', () => {
     expect(rule('public.risk_register')).toContain("status IN ('mitigated', 'accepted', 'closed')");
     expect(rule('compliance_incidents')).toContain('resolved_at IS NOT NULL');
     expect(rule('public.keypasses')).toContain('expires_at');
+    // Strategies, policies and investigator arrangements are never expired automatically
+    expect(rule('public.counter_fraud_records')).not.toMatch(/'strategy'|'policy'|'investigator'/);
+    expect(rule('public.counter_fraud_records')).toContain("data->>'status' = 'ended'");
   });
 
   it('only counts by default, without deleting anything', async () => {

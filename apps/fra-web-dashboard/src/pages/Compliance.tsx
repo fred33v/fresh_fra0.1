@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertTriangle, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
+import { CounterFraudRecords } from '@/components/enterprise/CounterFraudRecords';
 
 const logger = createLogger('Compliance');
 
@@ -31,6 +32,8 @@ interface Metrics {
   registerRisks: number; openHighRisks: number; highRisksWithoutOwnerOrPlan: number;
   openIncidents: number; openSeriousIncidents: number; seniorManagers: number; seniorManagersReviewedInYear: number;
   keypassesIssued: number; keypassesUsed: number; auditEvents: number;
+  lossIdentifiedGbp?: number; lossRecoveredGbp?: number; lossesNotReported?: number;
+  activeInvestigators?: number; detectionCompletedInYear?: number;
 }
 interface AreaRisk { area: string; employeesFlagged: number; highestPriority: 'high' | 'medium' | 'low'; averageResidual: number; titles: string[] }
 interface Report { generatedAt: string; eccta2023: Framework; govs013: Framework; metrics: Metrics; topRiskAreas: AreaRisk[]; disclaimer: string }
@@ -99,6 +102,10 @@ function Overview({ report }: { report: Report }) {
     { label: 'Open high risks', value: m.openHighRisks, sub: `${m.highRisksWithoutOwnerOrPlan} without owner or plan` },
     { label: 'Open incidents', value: m.openIncidents, sub: `${m.openSeriousIncidents} serious` },
     { label: 'Senior managers reviewed', value: `${m.seniorManagersReviewedInYear}/${m.seniorManagers}`, sub: 'in the last 12 months' },
+    {
+      label: 'Losses identified', value: `£${(m.lossIdentifiedGbp ?? 0).toLocaleString('en-GB')}`,
+      sub: `£${(m.lossRecoveredGbp ?? 0).toLocaleString('en-GB')} recovered · ${m.lossesNotReported ?? 0} not reported`,
+    },
   ];
   return (
     <div className="space-y-6">
@@ -116,7 +123,7 @@ function Overview({ report }: { report: Report }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <FrameworkCard title="ECCTA 2023" subtitle="Failure to prevent fraud — the six principles of reasonable procedures" framework={report.eccta2023} />
-        <FrameworkCard title="GovS 013" subtitle="Counter-fraud functional standard indicators" framework={report.govs013} />
+        <FrameworkCard title="GovS 013" subtitle="Counter-fraud functional standard: the components Stop FRA records" framework={report.govs013} />
       </div>
 
       {report.topRiskAreas.length > 0 && (
@@ -568,6 +575,13 @@ const EXPORTS: { dataset: string; label: string; description: string }[] = [
   { dataset: 'incidents', label: 'Incidents', description: 'Incident log with resolutions' },
   { dataset: 'senior_management', label: 'Senior management', description: 'Accountable managers and review dates' },
   { dataset: 'keypasses', label: 'Key-passes', description: 'Issued key-passes (codes masked)' },
+  { dataset: 'strategy', label: 'Counter fraud strategy', description: 'Strategies, approval and submission dates' },
+  { dataset: 'loss', label: 'Losses and recoveries', description: 'Identified losses, recoveries and reporting dates' },
+  { dataset: 'investigator', label: 'Investigators', description: 'Investigator access and agreement dates' },
+  { dataset: 'detection', label: 'Detection activity', description: 'Planned and completed detection work' },
+  { dataset: 'gift_hospitality', label: 'Gifts and hospitality', description: 'Gifts and hospitality register' },
+  { dataset: 'conflict_of_interest', label: 'Conflicts of interest', description: 'Declared interests and reviews' },
+  { dataset: 'policy', label: 'Policies', description: 'Policies with approval and review dates' },
 ];
 
 function Exports() {
@@ -597,7 +611,7 @@ function Exports() {
 
 // ── Page ────────────────────────────────────────────────────────
 
-const COMPLIANCE_TABS = ['overview', 'gaps', 'incidents', 'senior', 'training', 'audit', 'exports'];
+const COMPLIANCE_TABS = ['overview', 'gaps', 'incidents', 'senior', 'registers', 'training', 'audit', 'exports'];
 
 export default function Compliance() {
   const [report, setReport] = useState<Report | null>(null);
@@ -659,6 +673,7 @@ export default function Compliance() {
             <TabsTrigger value="gaps">Gaps</TabsTrigger>
             <TabsTrigger value="incidents">Incidents</TabsTrigger>
             <TabsTrigger value="senior">Senior management</TabsTrigger>
+            <TabsTrigger value="registers">Counter fraud registers</TabsTrigger>
             <TabsTrigger value="training">Training</TabsTrigger>
             <TabsTrigger value="audit">Audit trail</TabsTrigger>
             <TabsTrigger value="exports">Exports</TabsTrigger>
@@ -670,6 +685,7 @@ export default function Compliance() {
           <TabsContent value="gaps"><Gaps /></TabsContent>
           <TabsContent value="incidents"><Incidents onChange={loadReport} /></TabsContent>
           <TabsContent value="senior"><SeniorManagement employees={employees} onChange={loadReport} /></TabsContent>
+          <TabsContent value="registers"><CounterFraudRecords onChange={loadReport} /></TabsContent>
           <TabsContent value="training"><Training /></TabsContent>
           <TabsContent value="audit"><AuditTrail /></TabsContent>
           <TabsContent value="exports"><Exports /></TabsContent>
