@@ -121,6 +121,24 @@ describe('Following a case', () => {
 });
 
 describe('Handling cases', () => {
+  it('treats a reply to a new report as reviewing it', async () => {
+    const { accessToken, token } = await orgWithIntake();
+    const { reference, accessKey } = await report(token);
+    const stored = caseFor(reference);
+    // An old report waiting for review is flagged
+    stored.receivedAt = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    expect((await json(await get('/compliance/speak-up/reports', accessToken)))[0]).toMatchObject({ status: 'new', overdueForTriage: true });
+
+    const replied = await json(await send('POST', `/compliance/speak-up/reports/${stored.id}/messages`, accessToken, { message: 'Thank you. Which supplier?' }));
+    expect(replied).toMatchObject({ status: 'triage', overdueForTriage: false, acknowledgedAt: expect.any(String) });
+    expect((await json(await publicPost('/status', { reference, accessKey }))).status).not.toBe('Received');
+
+    // Later replies leave the status alone
+    await send('PATCH', `/compliance/speak-up/reports/${stored.id}`, accessToken, { status: 'investigating' });
+    const again = await json(await send('POST', `/compliance/speak-up/reports/${stored.id}/messages`, accessToken, { message: 'Any invoices you can share?' }));
+    expect(again.status).toBe('investigating');
+  });
+
   it('stamps acknowledgement and closure, and assigns only colleagues', async () => {
     const { accessToken, userId, token } = await orgWithIntake();
     const outsider = await createPaidUser();

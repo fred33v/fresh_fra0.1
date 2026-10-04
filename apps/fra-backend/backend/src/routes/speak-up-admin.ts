@@ -170,8 +170,14 @@ admin.post('/reports/:id/messages', async (c) => {
   const text = messageBodySchema.safeParse(((await c.req.json().catch(() => null)) as { message?: unknown } | null)?.message);
   if (!text.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Write a message of up to 5,000 characters');
 
-  await addMessage({ id: crypto.randomUUID(), reportId: report.id, author: 'handler', authorUserId: auth.userId, body: text.data, createdAt: new Date().toISOString() });
+  const now = new Date().toISOString();
+  await addMessage({ id: crypto.randomUUID(), reportId: report.id, author: 'handler', authorUserId: auth.userId, body: text.data, createdAt: now });
   await log(c, auth, 'handler_message', report.id, { reference: report.reference });
+  // Replying to a new report is reviewing it: acknowledge it and move it to triage
+  if (report.status === 'new') {
+    await updateReport({ ...report, status: 'triage', acknowledgedAt: report.acknowledgedAt ?? now, updatedAt: now });
+    await log(c, auth, 'case_updated', report.id, { reference: report.reference, fields: ['status'], status: 'triage', reason: 'handler_reply' });
+  }
   const fresh = await getReport(report.id, auth.organisationId);
   return c.json({ success: true, data: await caseDetail(fresh ?? report, auth.organisationId) }, 201);
 });
