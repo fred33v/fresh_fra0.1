@@ -61,7 +61,7 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 503 NO_DATABASE when DB not configured', async () => {
+    it('saves the profile without a database', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/profile', {
         method: 'PUT',
@@ -72,9 +72,9 @@ describe('Workshop endpoints', () => {
           sector: 'public',
         }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(200);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.data).toMatchObject({ full_name: 'Test User', organization_name: 'Test Org', sector: 'public' });
     });
 
     it('rejects invalid sector value', async () => {
@@ -156,16 +156,16 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('creates a session with a join code without a database', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ title: 'Workshop Session' }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(201);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.data).toMatchObject({ is_active: true, current_slide: 0, session_code: expect.stringMatching(/^[0-9A-F]{6}$/) });
     });
   });
 
@@ -231,16 +231,16 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ title: 'Updated Title' }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -254,15 +254,15 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/end', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -276,15 +276,15 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/join', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -296,15 +296,14 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns count 0 when no database', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/participants', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.success).toBe(true);
-      expect(json.data.count).toBe(0);
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -340,16 +339,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('starts progress without a database', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({}),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(201);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.data).toMatchObject({ current_section: 0, completed_sections: [], completed_at: null });
     });
   });
 
@@ -377,31 +376,30 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/progress/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ currentSection: 2 }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
   // ── GET /workshop/sessions/:sessionId/polls ─────────────────
 
   describe('GET /workshop/sessions/:sessionId/polls', () => {
-    it('returns empty array when no database', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.success).toBe(true);
-      expect(json.data).toEqual([]);
+      expect(json.error.code).toBe('NOT_FOUND');
     });
 
     it('rejects request without auth', async () => {
@@ -413,15 +411,14 @@ describe('Workshop endpoints', () => {
   // ── GET /workshop/sessions/:sessionId/polls/active ──────────
 
   describe('GET /workshop/sessions/:sessionId/polls/active', () => {
-    it('returns null when no database', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls/active', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.success).toBe(true);
-      expect(json.data).toBeNull();
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -449,16 +446,16 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/polls', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ question: 'Test?', options: ['A', 'B'] }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -484,16 +481,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ isActive: false }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -519,31 +516,30 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/polls/00000000-0000-0000-0000-000000000001/respond', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ selectedOption: 0 }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
   // ── GET /workshop/sessions/:sessionId/questions ─────────────
 
   describe('GET /workshop/sessions/:sessionId/questions', () => {
-    it('returns empty array when no database', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/questions', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.success).toBe(true);
-      expect(json.data).toEqual([]);
+      expect(json.error.code).toBe('NOT_FOUND');
     });
 
     it('rejects request without auth', async () => {
@@ -574,16 +570,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('refuses questions from someone who has not joined the session', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/sessions/00000000-0000-0000-0000-000000000001/questions', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ questionText: 'How does fraud work?' }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(403);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('FORBIDDEN');
     });
   });
 
@@ -599,16 +595,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/questions/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ isAnswered: true }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -622,15 +618,15 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/questions/00000000-0000-0000-0000-000000000001/upvote', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -666,16 +662,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('saves an action plan without a database', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/action-plans', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ actionItems: [{ task: 'Review policy' }] }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(201);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.data).toMatchObject({ user_id: expect.any(String), generated_at: expect.any(String) });
     });
   });
 
@@ -691,16 +687,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('returns 404 for a session, poll or record that does not exist', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/action-plans/00000000-0000-0000-0000-000000000001', {
         method: 'PATCH',
         headers: authHeaders(accessToken),
         body: JSON.stringify({ actionItems: [] }),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(404);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -736,16 +732,16 @@ describe('Workshop endpoints', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 503 when DB not configured', async () => {
+    it('refuses a certificate until the workshop is completed', async () => {
       const { accessToken } = await createPaidUser();
       const res = await app.request('http://localhost/api/v1/workshop/certificates', {
         method: 'POST',
         headers: authHeaders(accessToken),
         body: JSON.stringify({}),
       });
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(400);
       const json = (await res.json()) as any;
-      expect(json.error.code).toBe('NO_DATABASE');
+      expect(json.error.code).toBe('NOT_COMPLETED');
     });
   });
 

@@ -12,6 +12,7 @@ import { hasDatabase } from './helpers.js';
 import {
   assessmentsById, auditEvents, counterFraudRecordsById, incidentsById, keypassesByCode, riskRegisterById, seniorManagersById, usersByEmail,
 } from './stores.js';
+import { memTrainingRecords } from './workshop-store.js';
 import {
   dbListAssessmentsByOrganisation, dbListKeypassesByOrganisation, dbListRisks, dbListUsersByOrganisation,
 } from './db/index.js';
@@ -75,7 +76,7 @@ export async function loadComplianceData(orgId: string): Promise<OrgComplianceDa
     seniorManagers: Array.from(seniorManagersById.values())
       .filter((m) => m.organisationId === orgId)
       .map((m) => ({ ...m, userName: nameById.get(m.userId) })),
-    training: [], // workshop progress is only stored in the database
+    training: memTrainingRecords(users.map((u) => u.id)),
     records: Array.from(counterFraudRecordsById.values()).filter((r) => r.organisationId === orgId),
     speakUp: await loadSpeakUp(orgId),
     auditEventCount: auditEvents.filter((e: AuditEvent) => e.organisationId === orgId).length,

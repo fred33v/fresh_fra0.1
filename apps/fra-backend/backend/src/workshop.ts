@@ -16,6 +16,11 @@ import { rateLimit, getClientIp } from './middleware.js';
 import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
 import { requirePackage } from './entitlements.js';
+import {
+  workshopProfiles, workshopSessions, sessionParticipants, workshopProgress, polls, pollResponses, questions,
+  questionUpvotes, actionPlans, certificates, newId, nowIso, memSessionRole, memParticipantCount, memFindProgress,
+  latestFirst, type SessionRow,
+} from './workshop-store.js';
 
 function requireUUID(c: Context, name: string): string | Response {
   const value = c.req.param(name);
@@ -159,7 +164,7 @@ workshop.get('/profile', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return c.json({ success: true, data: null });
+  if (!hasDatabase()) return c.json({ success: true, data: workshopProfiles.get(auth.userId) ?? null });
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -187,10 +192,20 @@ workshop.put('/profile', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid profile data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
+  const { fullName, organizationName, sector, jobTitle } = parsed.data;
+
+  if (!hasDatabase()) {
+    const existing = workshopProfiles.get(auth.userId);
+    const now = nowIso();
+    const row = {
+      id: existing?.id ?? newId(), user_id: auth.userId, full_name: fullName, organization_name: organizationName, sector,
+      job_title: jobTitle ?? null, created_at: existing?.created_at ?? now, updated_at: now,
+    };
+    workshopProfiles.set(auth.userId, row);
+    return c.json({ success: true, data: row });
+  }
 
   const pool = getDbPool();
-  const { fullName, organizationName, sector, jobTitle } = parsed.data;
 
   const res = await pool.query(
     `INSERT INTO workshop_profiles (user_id, full_name, organization_name, sector, job_title, updated_at)
@@ -226,9 +241,14 @@ workshop.get('/sessions', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return c.json({ success: true, data: [] });
-
   const isActiveParam = c.req.query('isActive');
+
+  if (!hasDatabase()) {
+    const rows = [...workshopSessions.values()].filter((sn) => sn.facilitator_id === auth.userId
+      && (isActiveParam !== 'true' && isActiveParam !== 'false' ? true : sn.is_active === (isActiveParam === 'true')));
+    return c.json({ success: true, data: latestFirst(rows, 'created_at') });
+  }
+
   const pool = getDbPool();
 
   if (isActiveParam === 'true' || isActiveParam === 'false') {
@@ -259,16 +279,23 @@ workshop.post('/sessions', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Title is required');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
   const sessionCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
 
-  const pool = getDbPool();
-  const res = await pool.query(
-    `INSERT INTO workshop_sessions (facilitator_id, session_code, title, is_active, current_slide)
-     VALUES ($1, $2, $3, true, 0) RETURNING *`,
-    [auth.userId, sessionCode, parsed.data.title]
-  );
+  let res: { rows: SessionRow[] };
+  if (hasDatabase()) {
+    res = await getDbPool().query(
+      `INSERT INTO workshop_sessions (facilitator_id, session_code, title, is_active, current_slide)
+       VALUES ($1, $2, $3, true, 0) RETURNING *`,
+      [auth.userId, sessionCode, parsed.data.title]
+    );
+  } else {
+    const row: SessionRow = {
+      id: newId(), facilitator_id: auth.userId, session_code: sessionCode, title: parsed.data.title,
+      current_slide: 0, is_active: true, created_at: nowIso(), ended_at: null,
+    };
+    workshopSessions.set(row.id, row);
+    res = { rows: [row] };
+  }
 
   await auditLog({
     eventType: 'workshop.session_create', actorId: auth.userId, actorEmail: auth.email,
@@ -287,7 +314,12 @@ workshop.get('/sessions/:id', async (c) => {
   const id = requireUUID(c, 'id');
   if (id instanceof Response) return id;
 
-  if (!hasDatabase()) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+  if (!hasDatabase()) {
+    const session = workshopSessions.get(id);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(id, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    return c.json({ success: true, data: session });
+  }
 
   const pool = getDbPool();
   const res = await pool.query('SELECT * FROM workshop_sessions WHERE id = $1 LIMIT 1', [id]);
@@ -312,10 +344,15 @@ workshop.get('/sessions/code/:code', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
-
   const sanitisedCode = c.req.param('code').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   if (!sanitisedCode) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid session code');
+
+  if (!hasDatabase()) {
+    const session = [...workshopSessions.values()].find((sn) => sn.session_code === sanitisedCode);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    const { id, title, is_active, created_at } = session;
+    return c.json({ success: true, data: { id, title, is_active, created_at } });
+  }
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -342,11 +379,25 @@ workshop.patch('/sessions/:id', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid update data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const sessionId = requireUUID(c, 'id');
   if (sessionId instanceof Response) return sessionId;
+
+  if (!hasDatabase()) {
+    const session = workshopSessions.get(sessionId);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (session.facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+    const { currentSlide, isActive, title } = parsed.data;
+    if (currentSlide === undefined && isActive === undefined && title === undefined) {
+      return jsonError(c, 400, 'VALIDATION_ERROR', 'No fields to update');
+    }
+    if (currentSlide !== undefined) session.current_slide = currentSlide;
+    if (isActive !== undefined) session.is_active = isActive;
+    if (title !== undefined) session.title = title;
+    broadcastToSession(sessionId, 'session_update', session);
+    return c.json({ success: true, data: session });
+  }
+
+  const pool = getDbPool();
 
   // Verify ownership
   const check = await pool.query('SELECT facilitator_id FROM workshop_sessions WHERE id = $1', [sessionId]);
@@ -382,20 +433,28 @@ workshop.post('/sessions/:id/end', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const sessionId = requireUUID(c, 'id');
   if (sessionId instanceof Response) return sessionId;
 
-  const check = await pool.query('SELECT facilitator_id FROM workshop_sessions WHERE id = $1', [sessionId]);
-  if (!check.rows[0]) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
-  if (check.rows[0].facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+  let res: { rows: SessionRow[] };
+  if (hasDatabase()) {
+    const pool = getDbPool();
+    const check = await pool.query('SELECT facilitator_id FROM workshop_sessions WHERE id = $1', [sessionId]);
+    if (!check.rows[0]) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (check.rows[0].facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
 
-  const res = await pool.query(
-    'UPDATE workshop_sessions SET is_active = false, ended_at = now() WHERE id = $1 RETURNING *',
-    [sessionId]
-  );
+    res = await pool.query(
+      'UPDATE workshop_sessions SET is_active = false, ended_at = now() WHERE id = $1 RETURNING *',
+      [sessionId]
+    );
+  } else {
+    const session = workshopSessions.get(sessionId);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (session.facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+    session.is_active = false;
+    session.ended_at = nowIso();
+    res = { rows: [session] };
+  }
 
   broadcastToSession(sessionId, 'session_update', res.rows[0]);
 
@@ -415,11 +474,22 @@ workshop.post('/sessions/:id/join', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const sessionId = requireUUID(c, 'id');
   if (sessionId instanceof Response) return sessionId;
+
+  if (!hasDatabase()) {
+    const session = workshopSessions.get(sessionId);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!session.is_active) return jsonError(c, 400, 'SESSION_ENDED', 'Session is no longer active');
+    if (!sessionParticipants.has(sessionId)) sessionParticipants.set(sessionId, new Map());
+    const members = sessionParticipants.get(sessionId)!;
+    if (!members.has(auth.userId)) members.set(auth.userId, nowIso());
+    const participantCount = members.size;
+    broadcastToSession(sessionId, 'participant_joined', { participantCount });
+    return c.json({ success: true, data: { participantCount } });
+  }
+
+  const pool = getDbPool();
 
   // Verify session exists and is active
   const check = await pool.query('SELECT id, is_active FROM workshop_sessions WHERE id = $1', [sessionId]);
@@ -449,7 +519,11 @@ workshop.get('/sessions/:id/participants', async (c) => {
   const id = requireUUID(c, 'id');
   if (id instanceof Response) return id;
 
-  if (!hasDatabase()) return c.json({ success: true, data: { count: 0 } });
+  if (!hasDatabase()) {
+    if (!workshopSessions.has(id)) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(id, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    return c.json({ success: true, data: { count: memParticipantCount(id) } });
+  }
 
   const pool = getDbPool();
 
@@ -483,14 +557,15 @@ workshop.get('/progress', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return c.json({ success: true, data: null });
-
-  const pool = getDbPool();
   const sessionId = c.req.query('sessionId');
 
   if (sessionId && !isValidUUID(sessionId)) {
     return jsonError(c, 400, 'INVALID_PARAM', 'Invalid sessionId format');
   }
+
+  if (!hasDatabase()) return c.json({ success: true, data: memFindProgress(auth.userId, sessionId ?? null) ?? null });
+
+  const pool = getDbPool();
 
   let res;
   if (sessionId) {
@@ -519,7 +594,17 @@ workshop.post('/progress', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
+  if (!hasDatabase()) {
+    const existing = memFindProgress(auth.userId, parsed.data.sessionId ?? null);
+    if (existing) return c.json({ success: true, data: existing });
+    const now = nowIso();
+    const row = {
+      id: newId(), user_id: auth.userId, session_id: parsed.data.sessionId ?? null, current_section: 0,
+      completed_sections: [], quiz_scores: {}, scenario_choices: {}, completed_at: null, created_at: now, updated_at: now,
+    };
+    workshopProgress.set(row.id, row);
+    return c.json({ success: true, data: row }, 201);
+  }
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -564,11 +649,24 @@ workshop.patch('/progress/:id', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid progress data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const progressId = requireUUID(c, 'id');
   if (progressId instanceof Response) return progressId;
+
+  if (!hasDatabase()) {
+    const row = workshopProgress.get(progressId);
+    if (!row) return jsonError(c, 404, 'NOT_FOUND', 'Progress not found');
+    if (row.user_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your progress');
+    const d = parsed.data;
+    if (d.currentSection !== undefined) row.current_section = d.currentSection;
+    if (d.completedSections !== undefined) row.completed_sections = d.completedSections;
+    if (d.quizScores !== undefined) row.quiz_scores = d.quizScores;
+    if (d.scenarioChoices !== undefined) row.scenario_choices = d.scenarioChoices;
+    if (d.completedAt !== undefined) row.completed_at = d.completedAt;
+    row.updated_at = nowIso();
+    return c.json({ success: true, data: row });
+  }
+
+  const pool = getDbPool();
 
   // Verify ownership
   const check = await pool.query('SELECT user_id FROM workshop_progress WHERE id = $1', [progressId]);
@@ -603,7 +701,11 @@ workshop.get('/sessions/:sessionId/polls', async (c) => {
   const sid = requireUUID(c, 'sessionId');
   if (sid instanceof Response) return sid;
 
-  if (!hasDatabase()) return c.json({ success: true, data: [] });
+  if (!hasDatabase()) {
+    if (!workshopSessions.has(sid)) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(sid, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    return c.json({ success: true, data: latestFirst([...polls.values()].filter((pl) => pl.session_id === sid), 'created_at') });
+  }
 
   const pool = getDbPool();
 
@@ -630,7 +732,11 @@ workshop.get('/sessions/:sessionId/polls/active', async (c) => {
   const sid = requireUUID(c, 'sessionId');
   if (sid instanceof Response) return sid;
 
-  if (!hasDatabase()) return c.json({ success: true, data: null });
+  if (!hasDatabase()) {
+    if (!workshopSessions.has(sid)) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(sid, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    return c.json({ success: true, data: [...polls.values()].find((pl) => pl.session_id === sid && pl.is_active) ?? null });
+  }
 
   const pool = getDbPool();
 
@@ -664,11 +770,20 @@ workshop.post('/sessions/:sessionId/polls', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Question and at least 2 options required');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const sessionId = requireUUID(c, 'sessionId');
   if (sessionId instanceof Response) return sessionId;
+
+  if (!hasDatabase()) {
+    const session = workshopSessions.get(sessionId);
+    if (!session) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (session.facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+    const row = { id: newId(), session_id: sessionId, question: parsed.data.question, options: parsed.data.options, is_active: true, created_at: nowIso() };
+    polls.set(row.id, row);
+    broadcastToSession(sessionId, 'poll_created', row);
+    return c.json({ success: true, data: row }, 201);
+  }
+
+  const pool = getDbPool();
 
   // Verify facilitator
   const check = await pool.query('SELECT facilitator_id FROM workshop_sessions WHERE id = $1', [sessionId]);
@@ -696,11 +811,19 @@ workshop.patch('/polls/:pollId', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const pollId = requireUUID(c, 'pollId');
   if (pollId instanceof Response) return pollId;
+
+  if (!hasDatabase()) {
+    const poll = polls.get(pollId);
+    if (!poll) return jsonError(c, 404, 'NOT_FOUND', 'Poll not found');
+    if (workshopSessions.get(poll.session_id)?.facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+    poll.is_active = parsed.data.isActive;
+    if (!parsed.data.isActive) broadcastToSession(poll.session_id, 'poll_closed', { id: pollId });
+    return c.json({ success: true, data: poll });
+  }
+
+  const pool = getDbPool();
 
   // Get poll + verify facilitator
   const pollCheck = await pool.query(
@@ -734,11 +857,25 @@ workshop.post('/polls/:pollId/respond', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'selectedOption required');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const pollId = requireUUID(c, 'pollId');
   if (pollId instanceof Response) return pollId;
+
+  if (!hasDatabase()) {
+    const poll = polls.get(pollId);
+    if (!poll) return jsonError(c, 404, 'NOT_FOUND', 'Poll not found');
+    if (!poll.is_active) return jsonError(c, 400, 'POLL_CLOSED', 'Poll is no longer active');
+    if (!memSessionRole(poll.session_id, auth.userId)) {
+      return jsonError(c, 403, 'FORBIDDEN', 'You must join the session before responding to polls');
+    }
+    if (parsed.data.selectedOption >= poll.options.length) {
+      return jsonError(c, 400, 'VALIDATION_ERROR', 'selectedOption out of range');
+    }
+    if (!pollResponses.has(pollId)) pollResponses.set(pollId, new Map());
+    pollResponses.get(pollId)!.set(auth.userId, parsed.data.selectedOption);
+    return c.json({ success: true });
+  }
+
+  const pool = getDbPool();
 
   // Verify poll exists and is active
   const pollCheck = await pool.query('SELECT is_active, options, session_id FROM polls WHERE id = $1', [pollId]);
@@ -786,7 +923,13 @@ workshop.get('/sessions/:sessionId/questions', async (c) => {
   const sid = requireUUID(c, 'sessionId');
   if (sid instanceof Response) return sid;
 
-  if (!hasDatabase()) return c.json({ success: true, data: [] });
+  if (!hasDatabase()) {
+    if (!workshopSessions.has(sid)) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(sid, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    const rows = [...questions.values()].filter((q) => q.session_id === sid)
+      .sort((a, b) => b.upvotes - a.upvotes || b.created_at.localeCompare(a.created_at));
+    return c.json({ success: true, data: rows });
+  }
 
   const pool = getDbPool();
 
@@ -817,11 +960,23 @@ workshop.post('/sessions/:sessionId/questions', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'questionText required');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const sessionId = requireUUID(c, 'sessionId');
   if (sessionId instanceof Response) return sessionId;
+
+  if (!hasDatabase()) {
+    if (!memSessionRole(sessionId, auth.userId)) {
+      return jsonError(c, 403, 'FORBIDDEN', 'You must join the session before posting questions');
+    }
+    const row = {
+      id: newId(), session_id: sessionId, user_id: auth.userId, question_text: parsed.data.questionText,
+      upvotes: 0, is_answered: false, created_at: nowIso(),
+    };
+    questions.set(row.id, row);
+    broadcastToSession(sessionId, 'question_added', row);
+    return c.json({ success: true, data: row }, 201);
+  }
+
+  const pool = getDbPool();
 
   // Verify user is a participant or facilitator of the session
   const participantCheck = await pool.query(
@@ -856,11 +1011,19 @@ workshop.patch('/questions/:questionId', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const questionId = requireUUID(c, 'questionId');
   if (questionId instanceof Response) return questionId;
+
+  if (!hasDatabase()) {
+    const question = questions.get(questionId);
+    if (!question) return jsonError(c, 404, 'NOT_FOUND', 'Question not found');
+    if (workshopSessions.get(question.session_id)?.facilitator_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your session');
+    question.is_answered = parsed.data.isAnswered;
+    broadcastToSession(question.session_id, 'question_updated', question);
+    return c.json({ success: true, data: question });
+  }
+
+  const pool = getDbPool();
 
   // Get question + verify facilitator
   const qCheck = await pool.query(
@@ -887,11 +1050,22 @@ workshop.post('/questions/:questionId/upvote', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const questionId = requireUUID(c, 'questionId');
   if (questionId instanceof Response) return questionId;
+
+  if (!hasDatabase()) {
+    const question = questions.get(questionId);
+    if (!question) return jsonError(c, 404, 'NOT_FOUND', 'Question not found');
+    if (!memSessionRole(question.session_id, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
+    // A second upvote from the same person takes the first back, as in the database version
+    const key = `${questionId}:${auth.userId}`;
+    if (questionUpvotes.delete(key)) question.upvotes = Math.max(question.upvotes - 1, 0);
+    else { questionUpvotes.add(key); question.upvotes += 1; }
+    broadcastToSession(question.session_id, 'question_updated', question);
+    return c.json({ success: true, data: question });
+  }
+
+  const pool = getDbPool();
 
   // Verify the user belongs to the session this question is in
   const qSession = await pool.query(
@@ -959,7 +1133,10 @@ workshop.get('/action-plans', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return c.json({ success: true, data: null });
+  if (!hasDatabase()) {
+    const latest = latestFirst([...actionPlans.values()].filter((ap) => ap.user_id === auth.userId), 'generated_at')[0];
+    return c.json({ success: true, data: latest ?? null });
+  }
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -988,7 +1165,14 @@ workshop.post('/action-plans', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid action plan data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
+  if (!hasDatabase()) {
+    const row = {
+      id: newId(), user_id: auth.userId, session_id: parsed.data.sessionId ?? null,
+      action_items: parsed.data.actionItems ?? [], commitments: parsed.data.commitments ?? [], generated_at: nowIso(),
+    };
+    actionPlans.set(row.id, row);
+    return c.json({ success: true, data: row }, 201);
+  }
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -1017,11 +1201,22 @@ workshop.patch('/action-plans/:id', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid data');
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
   const planId = requireUUID(c, 'id');
   if (planId instanceof Response) return planId;
+
+  if (!hasDatabase()) {
+    const plan = actionPlans.get(planId);
+    if (!plan) return jsonError(c, 404, 'NOT_FOUND', 'Action plan not found');
+    if (plan.user_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your action plan');
+    if (parsed.data.actionItems === undefined && parsed.data.commitments === undefined) {
+      return jsonError(c, 400, 'VALIDATION_ERROR', 'No fields to update');
+    }
+    if (parsed.data.actionItems !== undefined) plan.action_items = parsed.data.actionItems;
+    if (parsed.data.commitments !== undefined) plan.commitments = parsed.data.commitments;
+    return c.json({ success: true, data: plan });
+  }
+
+  const pool = getDbPool();
 
   // Verify ownership
   const check = await pool.query('SELECT user_id FROM action_plans WHERE id = $1', [planId]);
@@ -1052,7 +1247,10 @@ workshop.get('/certificates', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) return c.json({ success: true, data: null });
+  if (!hasDatabase()) {
+    const latest = latestFirst([...certificates.values()].filter((ct) => ct.user_id === auth.userId), 'issued_at')[0];
+    return c.json({ success: true, data: latest ?? null });
+  }
 
   const pool = getDbPool();
   const res = await pool.query(
@@ -1073,31 +1271,41 @@ workshop.post('/certificates', async (c) => {
   const schema = z.object({ sessionId: z.string().uuid().optional() });
   const parsed = schema.safeParse(await c.req.json().catch(() => ({})));
 
-  if (!hasDatabase()) return jsonError(c, 503, 'NO_DATABASE', 'Database not configured');
-
-  const pool = getDbPool();
-
-  // Check if already has a certificate
-  const existing = await pool.query('SELECT * FROM certificates WHERE user_id = $1 LIMIT 1', [auth.userId]);
-  if (existing.rows[0]) return c.json({ success: true, data: existing.rows[0] });
-
-  // Verify workshop completion before issuing certificate
-  const progress = await pool.query(
-    'SELECT completed_at FROM workshop_progress WHERE user_id = $1 AND completed_at IS NOT NULL LIMIT 1',
-    [auth.userId]
-  );
-  if (!progress.rows[0]) {
-    return jsonError(c, 400, 'NOT_COMPLETED', 'Workshop must be completed before generating a certificate');
-  }
-
   // Generate certificate number server-side
   const certNumber = `FRA-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  let issued: unknown;
 
-  const res = await pool.query(
-    `INSERT INTO certificates (user_id, session_id, certificate_number)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [auth.userId, parsed.data?.sessionId ?? null, certNumber]
-  );
+  if (hasDatabase()) {
+    const pool = getDbPool();
+
+    // Check if already has a certificate
+    const existing = await pool.query('SELECT * FROM certificates WHERE user_id = $1 LIMIT 1', [auth.userId]);
+    if (existing.rows[0]) return c.json({ success: true, data: existing.rows[0] });
+
+    // Verify workshop completion before issuing certificate
+    const progress = await pool.query(
+      'SELECT completed_at FROM workshop_progress WHERE user_id = $1 AND completed_at IS NOT NULL LIMIT 1',
+      [auth.userId]
+    );
+    if (!progress.rows[0]) {
+      return jsonError(c, 400, 'NOT_COMPLETED', 'Workshop must be completed before generating a certificate');
+    }
+
+    const res = await pool.query(
+      `INSERT INTO certificates (user_id, session_id, certificate_number)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [auth.userId, parsed.data?.sessionId ?? null, certNumber]
+    );
+    issued = res.rows[0];
+  } else {
+    const existing = [...certificates.values()].find((ct) => ct.user_id === auth.userId);
+    if (existing) return c.json({ success: true, data: existing });
+    const completed = [...workshopProgress.values()].some((wp) => wp.user_id === auth.userId && wp.completed_at);
+    if (!completed) return jsonError(c, 400, 'NOT_COMPLETED', 'Workshop must be completed before generating a certificate');
+    const row = { id: newId(), user_id: auth.userId, session_id: parsed.data?.sessionId ?? null, certificate_number: certNumber, issued_at: nowIso() };
+    certificates.set(row.id, row);
+    issued = row;
+  }
 
   await auditLog({
     eventType: 'workshop.certificate_generate', actorId: auth.userId, actorEmail: auth.email,
@@ -1105,7 +1313,7 @@ workshop.post('/certificates', async (c) => {
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
   });
 
-  return c.json({ success: true, data: res.rows[0] }, 201);
+  return c.json({ success: true, data: issued }, 201);
 });
 
 // ── SSE Events endpoint ──────────────────────────────────────
@@ -1149,6 +1357,9 @@ workshop.get('/sessions/:sessionId/events', async (c) => {
         return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
       }
     }
+  } else {
+    if (!workshopSessions.has(sessionId)) return jsonError(c, 404, 'NOT_FOUND', 'Session not found');
+    if (!memSessionRole(sessionId, auth.userId)) return jsonError(c, 403, 'FORBIDDEN', 'Not a member of this session');
   }
 
   return streamSSE(c, async (stream) => {
