@@ -15,6 +15,7 @@ module.exports = {
     '!**/jest.polyfills.js',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  resolver: '<rootDir>/jest-resolver.js',
   setupFiles: ['<rootDir>/jest.setup-early.js', '<rootDir>/jest.polyfills.js'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testMatch: [
@@ -26,8 +27,9 @@ module.exports = {
     '.*/Libraries/NativeComponent/ViewConfigIgnore(\\.js)?$': '<rootDir>/__mocks__/react-native/Libraries/NativeComponent/ViewConfigIgnore.js',
     '\\.svg$': '<rootDir>/__mocks__/svgMock.js',
     '\\.(png|jpg|jpeg|gif)$': '<rootDir>/__mocks__/fileMock.js',
-    '^@stopfra/ui-core/(.*)$': '<rootDir>/../../packages/ui-core/dist/$1/index.js',
-    '^@stopfra/ui-core$': '<rootDir>/../../packages/ui-core/dist/index.js',
+    // Shared packages are read from source, so a fresh checkout needs no build step first
+    '^@stopfra/ui-core/(.*)$': '<rootDir>/../../packages/ui-core/src/$1',
+    '^@stopfra/ui-core$': '<rootDir>/../../packages/ui-core/src/index.ts',
     '^@stopfra/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
     '^@/(.*)$': '<rootDir>/$1',
     '^@/components/(.*)$': '<rootDir>/components/$1',

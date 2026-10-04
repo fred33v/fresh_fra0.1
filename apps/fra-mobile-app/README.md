@@ -21,33 +21,30 @@ Whenever you make a change in your local code editor and push it to GitHub, it w
 
 ### **Use your preferred code editor**
 
-If you want to work locally using your own code editor, you can clone this repo and push changes. Pushed changes will also be reflected in Rork.
+This app lives in the Stop FRA pnpm monorepo and uses the shared `@stopfra/shared` and `@stopfra/ui-core` packages from `packages/`. Install from the repository root with pnpm, not from this folder: installing here (for example with `bun i` or `npm i`) does not link those packages.
 
-If you are new to coding and unsure which editor to use, we recommend Cursor. If you're familiar with terminals, try Claude Code.
-
-The only requirement is having Node.js & Bun installed - [install Node.js with nvm](https://github.com/nvm-sh/nvm) and [install Bun](https://bun.sh/docs/installation)
-
-Follow these steps:
+You need Node.js 20 or later and pnpm 9 (`corepack enable` sets up the version the repo pins). The shared packages are read from source, so there is no build step before starting the app, and the Rork toolkit is optional: the Metro config uses it only when it is installed.
 
 ```bash
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Step 1: Clone the repository and install everything from the root
+git clone <YOUR_GIT_URL> fresh_fra0.1
+cd fresh_fra0.1
+pnpm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Step 2: Point the app at the API (the backend runs on port 3000 with `pnpm dev:backend`)
+cp apps/fra-mobile-app/.env.example apps/fra-mobile-app/.env
 
-# Step 3: Install the necessary dependencies.
-bun i
+# Step 3: Start the app
+pnpm --filter @stopfra/mobile-app exec expo start   # press "i" for iOS Simulator, "a" for Android, "w" for web
+# or, to reach a phone outside your network: pnpm dev:mobile (uses an Expo tunnel)
 
-# Step 4: Start the instant web preview of your Rork app in your browser, with auto-reloading of your changes
-bun run start-web
-
-# Step 5: Start iOS preview
-# Option A (recommended):
-bun run start  # then press "i" in the terminal to open iOS Simulator
-# Option B (if supported by your environment):
-bun run start -- --ios
+# Checks
+pnpm --filter @stopfra/mobile-app typecheck
+pnpm --filter @stopfra/mobile-app test
+pnpm --filter @stopfra/mobile-app lint
 ```
+
+`EXPO_PUBLIC_API_URL` in `.env` sets the API address. Without it, development builds use `localhost:3000` (`10.0.2.2:3000` on the Android emulator); on a physical phone, set it to your computer's network address.
 
 ### **Edit a file directly in GitHub**
 
@@ -70,36 +67,30 @@ This project is built with the most popular native mobile cross-platform technic
 
 ### **On your phone (Recommended)**
 
-1. **iOS**: Download the [Rork app from the App Store](https://apps.apple.com/app/rork) or [Expo Go](https://apps.apple.com/app/expo-go/id982107779)
+1. **iOS**: Download [Expo Go](https://apps.apple.com/app/expo-go/id982107779) or the [Rork app](https://apps.apple.com/app/rork)
 2. **Android**: Download the [Expo Go app from Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
-3. Run `bun run start` and scan the QR code from your development server
+3. Run `pnpm dev:mobile` from the repository root and scan the QR code
 
 ### **In your browser**
 
-Run `bun start-web` to test in a web browser. Note: The browser preview is great for quick testing, but some native features may not be available.
+Run `pnpm --filter @stopfra/mobile-app start:web`. The browser preview is good for quick checks, but some native features are not available.
 
-### **iOS Simulator / Android Emulator**
+### **iOS Simulator / Android Emulator (native builds)**
 
-You can test Rork apps in Expo Go or Rork iOS app. You don't need XCode or Android Studio for most features.
+Expo Go covers most features. Card payment hands back to the app through its `fra-mobile://` address, which needs a native build; in Expo Go, close the payment browser by hand and the app still confirms the payment.
 
-**When do you need Custom Development Builds?**
+To build the native app locally:
 
-- Native authentication (Face ID, Touch ID, Apple Sign In)
-- In-app purchases and subscriptions
-- Push notifications
-- Custom native modules
-
-Learn more: [Expo Custom Development Builds Guide](https://docs.expo.dev/develop/development-builds/introduction/)
-
-If you have XCode (iOS) or Android Studio installed:
+- **iOS** needs Xcode and CocoaPods (`brew install cocoapods`, or `sudo gem install cocoapods`)
+- **Android** needs Android Studio, which provides Java and the Android SDK (set `ANDROID_HOME`)
 
 ```bash
-# iOS Simulator
-bun run start -- --ios
-
-# Android Emulator
-bun run start -- --android
+cd apps/fra-mobile-app
+pnpm exec expo run:ios       # generates ios/, installs pods, builds and opens the simulator
+pnpm exec expo run:android   # generates android/ and builds for the emulator
 ```
+
+The generated `ios/` and `android/` folders are not committed; `pnpm exec expo prebuild --clean` recreates them. To check that the JavaScript bundles without any native tools, run `pnpm exec expo export --platform ios` (or `android`).
 
 ## How can I deploy this project?
 
@@ -108,7 +99,7 @@ bun run start -- --android
 1. **Install EAS CLI**:
 
    ```bash
-   bun i -g @expo/eas-cli
+   npm i -g eas-cli
    ```
 
 2. **Configure your project**:
@@ -211,7 +202,7 @@ For advanced native features, you'll need to create a Custom Development Build i
 
 ```bash
 # Install EAS CLI
-bun i -g @expo/eas-cli
+npm i -g eas-cli
 
 # Configure your project for development builds
 eas build:configure
@@ -221,7 +212,7 @@ eas build --profile development --platform ios
 eas build --profile development --platform android
 
 # Install the development build on your device and start developing
-bun start --dev-client
+pnpm --filter @stopfra/mobile-app start:dev
 ```
 
 **Learn more:**
@@ -296,13 +287,13 @@ For mobile apps, you'll configure your app's deep linking scheme in `app.json`.
 ### **App not loading on device?**
 
 1. Make sure your phone and computer are on the same WiFi network
-2. Try using tunnel mode: `bun start -- --tunnel`
+2. Try using tunnel mode: `pnpm dev:mobile` from the repository root
 3. Check if your firewall is blocking the connection
 
 ### **Build failing?**
 
-1. Clear your cache: `bunx expo start --clear`
-2. Delete `node_modules` and reinstall: `rm -rf node_modules && bun install`
+1. Clear your cache: `pnpm --filter @stopfra/mobile-app exec expo start --clear`
+2. Delete `node_modules` and reinstall: `pnpm clean && pnpm install` from the repository root
 3. Check [Expo's troubleshooting guide](https://docs.expo.dev/troubleshooting/build-errors/)
 
 ### **Need help with native features?**

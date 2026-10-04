@@ -57,7 +57,7 @@ export default function EmployeeAccessCard({
         <Text style={styles.employeeAccessTitle}>Employee Access Codes</Text>
       </View>
       <Text style={styles.employeeAccessDescription}>
-        Give each employee one code. They enter it in the app under "Use company access code" to complete their own assessment.
+        Give each employee one code. They enter it in the app under “Use company access code” to complete their own assessment.
       </Text>
 
       {codes.length > 0 ? (
