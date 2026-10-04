@@ -266,6 +266,24 @@ describe('Profile', () => {
       });
     });
 
+    it('shows the current department, pre-fills it, and can clear it', async () => {
+      setupAuth({ user: makeUser({ department: 'Finance' }) });
+      mockedApi.patch.mockResolvedValueOnce({} as never);
+      const user = userEvent.setup();
+      renderProfile();
+
+      expect(screen.getByText('Finance')).toBeInTheDocument();
+      await user.click(screen.getByText('Edit Profile'));
+      const field = screen.getByLabelText('Department');
+      expect(field).toHaveValue('Finance');
+      await user.clear(field);
+      await user.click(screen.getByText('Save Changes'));
+
+      await waitFor(() => {
+        expect(mockedApi.patch).toHaveBeenCalledWith('/api/v1/auth/profile', { department: '' });
+      });
+    });
+
     it('shows error toast when save fails', async () => {
       mockedApi.patch.mockRejectedValueOnce(new Error('Server error'));
       const user = userEvent.setup();

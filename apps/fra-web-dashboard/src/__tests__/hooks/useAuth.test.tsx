@@ -43,6 +43,7 @@ function makeUser(overrides?: Partial<AuthUser>): AuthUser {
     name: 'Alice Smith',
     role: 'employee',
     organisationId: 'org-1',
+    department: null,
     createdAt: '2025-01-01T00:00:00Z',
     ...overrides,
   };

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { User, Mail, Shield, Building2, Pencil, Loader2 } from 'lucide-react';
+import { User, Users, Mail, Shield, Building2, Pencil, Loader2 } from 'lucide-react';
 
 interface ProfileUpdateResponse {
   userId: string;
@@ -34,14 +34,15 @@ export default function Profile() {
 
   const handleEditStart = () => {
     setName(displayName);
-    setDepartment('');
+    setDepartment(user.department ?? '');
     setIsEditing(true);
   };
 
   const handleSave = async () => {
     const updates: Record<string, string> = {};
     if (name.trim() && name.trim() !== displayName) updates.name = name.trim();
-    if (department !== '') updates.department = department;
+    // Sent whenever it changes, so a department can also be cleared
+    if (department.trim() !== (user.department ?? '')) updates.department = department.trim();
 
     if (Object.keys(updates).length === 0) {
       setIsEditing(false);
@@ -100,6 +101,13 @@ export default function Profile() {
                 <p className="font-medium">{roleBadge}</p>
               </div>
             </div>
+            <div className="flex items-center gap-3">
+              <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <p className="text-sm text-muted-foreground">Department</p>
+                <p className="font-medium">{user.department || 'Not set'}</p>
+              </div>
+            </div>
             {profile?.organization_name && (
               <div className="flex items-center gap-3">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -122,6 +130,7 @@ export default function Profile() {
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"

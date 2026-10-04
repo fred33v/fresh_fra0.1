@@ -10,6 +10,7 @@ export interface AuthUser {
   name: string;
   role: string;
   organisationId: string;
+  department?: string | null;
   createdAt: string;
 }
 
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.name,
         role: data.role,
         organisationId: data.organisationId,
+        department: data.department ?? null,
         createdAt: data.createdAt,
       });
       setProfile(mapProfile(data.profile));

@@ -50,6 +50,7 @@ export function publicUser(user: User) {
     name: user.name,
     role: user.role,
     organisationId: user.organisationId,
+    department: user.department ?? null,
     createdAt: user.createdAt,
   };
 }
