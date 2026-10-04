@@ -27,6 +27,8 @@ import {
 } from '../counter-fraud.js';
 import { listOrgPurchases } from '../entitlements.js';
 import speakUpAdmin from './speak-up-admin.js';
+import { buildEvidencePack } from '../evidence-pack.js';
+import { rateLimit } from '../middleware.js';
 import {
   AREA_TO_REGISTER, computeMetrics, employeeRisks, evaluateEccta, evaluateGovS013, loadComplianceData, riskByArea,
 } from '../compliance-evidence.js';
@@ -519,6 +521,22 @@ compliance.get('/export', async (c) => {
   return c.json({
     success: true,
     data: { organisationId: auth.organisationId, exportedAt: new Date().toISOString(), ...datasets },
+  });
+});
+
+// ── GET /evidence-pack — ECCTA 2023 evidence pack as one ZIP ────
+compliance.get('/evidence-pack', async (c) => {
+  const limited = await rateLimit('compliance:evidence-pack', { windowMs: 60_000, max: 5 })(c);
+  if (limited instanceof Response) return limited;
+  const auth = authOf(c);
+  // The PDF summary needs a browser; tests take the HTML summary only
+  const pack = await buildEvidencePack(auth.organisationId, auth.email, { includePdf: process.env.NODE_ENV !== 'test' });
+
+  await logAccess(c, auth, 'evidence_pack_exported', { files: pack.files.length, pdf: pack.pdf });
+  return c.body(new Uint8Array(pack.zip), 200, {
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="${pack.filename}"`,
+    'Cache-Control': 'no-store',
   });
 });
 

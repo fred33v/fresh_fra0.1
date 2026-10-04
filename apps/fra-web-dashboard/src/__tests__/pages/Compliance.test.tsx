@@ -111,4 +111,18 @@ describe('Compliance page', () => {
     await userEvent.click(within(panel).getByRole('button', { name: 'Download Risk register CSV' }));
     expect(mockedApi.download).toHaveBeenCalledWith('/api/v1/compliance/export?format=csv&dataset=risk_register', 'compliance-risk_register.csv');
   });
+
+  it('downloads the ECCTA evidence pack as one ZIP and shows progress while it is prepared', async () => {
+    let finish!: () => void;
+    mockedApi.download.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    renderCompliance();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Exports' }));
+    const panel = await screen.findByRole('tabpanel');
+    expect(within(panel).getByText('ECCTA 2023 evidence pack')).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Download evidence pack' }));
+    expect(mockedApi.download).toHaveBeenCalledWith('/api/v1/compliance/evidence-pack', expect.stringMatching(/^eccta-evidence-pack-\d{4}-\d{2}-\d{2}\.zip$/));
+    expect(within(panel).getByRole('button', { name: 'Preparing evidence pack…' })).toBeDisabled();
+    finish();
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Download evidence pack' })).toBeEnabled());
+  });
 });

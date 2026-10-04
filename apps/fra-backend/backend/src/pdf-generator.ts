@@ -48,56 +48,46 @@ export interface PDFGenerationOptions {
 }
 
 /**
- * Generate PDF report from assessment data
- * Uses Puppeteer to render HTML as PDF
+ * Render trusted-layout HTML (which may contain user-entered text) to an A4 PDF.
+ * The page runs with no scripts and no network, so injected markup cannot reach
+ * internal addresses or run code.
  */
-export async function generateAssessmentPdf(options: PDFGenerationOptions): Promise<Buffer> {
+export async function renderHtmlToPdf(html: string): Promise<Buffer> {
   let browser = null;
-  
   try {
-    // Launch browser in headless mode
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
-
     const page = await browser.newPage();
-    // The report is static HTML built from user-entered text: no scripts, and no requests
-    // leave the renderer (so injected markup could not reach internal addresses)
     await page.setJavaScriptEnabled(false);
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       if (req.url().startsWith('data:') || req.url() === 'about:blank') req.continue();
       else req.abort();
     });
-
-    // Create HTML content for the report
-    const htmlContent = createReportHTML(options);
-
-    // Load HTML and render to PDF
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    
-    const pdfBuffer = await page.pdf({
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({
       format: 'A4',
-      margin: {
-        top: '1cm',
-        right: '1cm',
-        bottom: '1cm',
-        left: '1cm',
-      },
+      margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
       printBackground: true,
     });
-
     await page.close();
-    return pdfBuffer;
+    return Buffer.from(pdf);
   } catch (error) {
     logger.error('PDF generation failed', { error: error instanceof Error ? error.message : String(error) });
     throw new Error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    if (browser) await browser.close();
   }
+}
+
+/**
+ * Generate PDF report from assessment data
+ * Uses Puppeteer to render HTML as PDF
+ */
+export async function generateAssessmentPdf(options: PDFGenerationOptions): Promise<Buffer> {
+  return renderHtmlToPdf(createReportHTML(options));
 }
 
 function createReportHTML(options: PDFGenerationOptions): string {

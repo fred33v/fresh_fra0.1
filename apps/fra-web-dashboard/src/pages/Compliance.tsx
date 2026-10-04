@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, Download, Printer } from 'lucide-react';
+import { AlertTriangle, Download, FileArchive, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusLabel, type ComplianceStatus } from '@/components/enterprise/ComplianceStatus';
 import { CounterFraudRecords, LeadershipRegisters } from '@/components/enterprise/CounterFraudRecords';
@@ -60,6 +60,27 @@ async function downloadCsv(path: string, filename: string) {
   } catch (err: unknown) {
     toast.error(err instanceof Error ? err.message : 'Download failed');
   }
+}
+
+/** One ZIP of the eight ECCTA evidence items, with a PDF summary of the six principles. */
+function EvidencePackButton({ size = 'sm' }: { size?: 'sm' | 'default' }) {
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    setBusy(true);
+    try {
+      await api.download('/api/v1/compliance/evidence-pack', `eccta-evidence-pack-${new Date().toISOString().slice(0, 10)}.zip`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button size={size} onClick={download} disabled={busy} className="print:hidden">
+      {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <FileArchive className="mr-2 h-4 w-4" aria-hidden="true" />}
+      {busy ? 'Preparing evidence pack…' : 'Download evidence pack'}
+    </Button>
+  );
 }
 
 // ── Overview / board report ─────────────────────────────────────
@@ -598,6 +619,16 @@ function Exports() {
         <CardDescription>Download your organisation's records as CSV for auditors, regulators or subject access requests.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/40 bg-primary/5 p-4">
+          <div>
+            <p className="font-medium">ECCTA 2023 evidence pack</p>
+            <p className="text-sm text-muted-foreground">
+              One ZIP file: a summary of the six reasonable-procedures principles, and your records for each of the eight evidence items as CSV.
+              Speak-up report text and assessment answers are left out.
+            </p>
+          </div>
+          <EvidencePackButton />
+        </div>
         {EXPORTS.map((e) => (
           <div key={e.dataset} className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div>
@@ -660,9 +691,12 @@ export default function Compliance() {
               ECCTA 2023 and GovS 013 position{report ? ` · generated ${new Date(report.generatedAt).toLocaleString('en-GB')}` : ''}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={printReport} className="print:hidden" disabled={!report}>
-            <Printer className="mr-2 h-4 w-4" aria-hidden="true" /> Print board report
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={printReport} className="print:hidden" disabled={!report}>
+              <Printer className="mr-2 h-4 w-4" aria-hidden="true" /> Print board report
+            </Button>
+            <EvidencePackButton />
+          </div>
         </div>
 
         {error && (
