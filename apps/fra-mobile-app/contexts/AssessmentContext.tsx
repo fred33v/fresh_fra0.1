@@ -2,6 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import NetInfo from '@react-native-community/netinfo';
+import * as WebBrowser from 'expo-web-browser';
 import type { AssessmentData, AssessmentStatus, PackageType, PaymentStatus, FeedbackData, RiskRegisterItem, RiskPriority } from '@/types/assessment';
 import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
@@ -29,6 +30,11 @@ interface SyncQueueItem {
   data: Partial<AssessmentData>;
   retryCount: number;
 }
+
+/** Where the payment hand-off page sends buyers back to the app (see the web app's CheckoutComplete page). */
+const PAYMENT_RETURN_URL = 'fra-mobile://payment-complete';
+const PAYMENT_CHECKS = 5;
+const PAYMENT_CHECK_MS = 2000;
 
 export const [AssessmentProvider, useAssessment] = createContextHook(() => {
   const logger = createLogger('Assessment');
@@ -441,8 +447,11 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
     return status === 'submitted' ? '/payment' : '/organisation';
   }, [startNewAssessment, selectPackage]);
 
-  const processPayment = useCallback(async (cardDetails: { number: string; expiry: string; cvc: string; name: string }) => {
-    logger.info('Processing payment with card ending:', cardDetails.number.slice(-4));
+  /**
+   * Pays on Stripe's hosted page in the in-app browser: card details never pass through the app.
+   * The server then checks with Stripe before the package is switched on.
+   */
+  const processPayment = useCallback(async () => {
     const packageType = assessment.payment.packageType;
     if (!packageType) {
       throw new Error('No package selected');
@@ -455,25 +464,43 @@ export const [AssessmentProvider, useAssessment] = createContextHook(() => {
           ? 'pkg_training'
           : 'pkg_full';
 
+    const paymentError = (code: string, message: string) => Object.assign(new Error(message), { code });
+
     try {
-      const purchase = await apiService.post<{ purchaseId: string; paymentIntentId: string }>(
+      const purchase = await apiService.post<{ purchaseId: string; checkoutUrl: string | null; paymentIntentId?: string }>(
         API_CONFIG.ENDPOINTS.PURCHASES.CREATE,
-        { packageId },
+        { packageId, client: 'mobile' },
         { requiresAuth: true }
       );
 
       if (!purchase.success || !purchase.data?.purchaseId) {
-        throw new Error(purchase.error?.message || 'Failed to create purchase');
+        throw paymentError(purchase.error?.code ?? 'PURCHASE_FAILED', purchase.error?.message || 'Failed to create purchase');
       }
 
-      const confirmed = await apiService.post<{ status: string }>(
+      let attempts = 1;
+      if (purchase.data.checkoutUrl) {
+        // Returns when Stripe hands back to fra-mobile://payment-complete, or the buyer closes the browser
+        const result = await WebBrowser.openAuthSessionAsync(purchase.data.checkoutUrl, PAYMENT_RETURN_URL);
+        if (result.type === 'success' && result.url.includes('cancelled=1')) {
+          throw paymentError('PAYMENT_CANCELLED', 'Payment was cancelled');
+        }
+        // Stripe can return the buyer a moment before the payment settles
+        attempts = PAYMENT_CHECKS;
+      }
+
+      let confirmed = await apiService.post<{ status: string }>(
         API_CONFIG.ENDPOINTS.PURCHASES.CONFIRM(purchase.data.purchaseId),
         { paymentIntentId: purchase.data.paymentIntentId },
         { requiresAuth: true }
       );
+      for (let i = 1; i < attempts && !confirmed.success && confirmed.error?.code === 'PAYMENT_PENDING'; i++) {
+        await new Promise((resolve) => setTimeout(resolve, PAYMENT_CHECK_MS));
+        confirmed = await apiService.post<{ status: string }>(
+          API_CONFIG.ENDPOINTS.PURCHASES.CONFIRM(purchase.data.purchaseId), {}, { requiresAuth: true });
+      }
 
       if (!confirmed.success) {
-        throw new Error(confirmed.error?.message || 'Failed to confirm purchase');
+        throw paymentError(confirmed.error?.code ?? 'CONFIRM_FAILED', confirmed.error?.message || 'Failed to confirm purchase');
       }
 
       const transactionId = purchase.data.purchaseId as string;

@@ -12,6 +12,9 @@ jest.mock('react-native/Libraries/NativeComponent/ViewConfigIgnore', () => ({
 // properly handles Flow/TypeScript in React Native source files now.
 
 // Mock Expo modules
+// Native in-app browser (Stripe Checkout); tests that pay set its result themselves
+jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn(), openBrowserAsync: jest.fn(), maybeCompleteAuthSession: jest.fn() }));
+
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
     push: jest.fn(),

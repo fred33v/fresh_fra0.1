@@ -11,9 +11,12 @@ import { renderHook, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AssessmentProvider, useAssessment } from '@/contexts/AssessmentContext';
 import { apiService } from '@/services/api.service';
+import * as WebBrowser from 'expo-web-browser';
 import { createEmptyAssessment } from '@/utils/assessment';
 
 // ── Mocks ──────────────────────────────────────────────────
+
+jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn() }));
 
 jest.mock('@/services/api.service', () => ({
   apiService: {
@@ -526,12 +529,7 @@ describe('AssessmentContext', () => {
 
       await expect(
         act(async () => {
-          await result.current.processPayment({
-            number: '4111111111111111',
-            expiry: '12/26',
-            cvc: '123',
-            name: 'Test User',
-          });
+          await result.current.processPayment();
         }),
       ).rejects.toThrow('No package selected');
     });
@@ -560,18 +558,49 @@ describe('AssessmentContext', () => {
 
       let payResult;
       await act(async () => {
-        payResult = await result.current.processPayment({
-          number: '4111111111111111',
-          expiry: '12/26',
-          cvc: '123',
-          name: 'Test User',
-        });
+        payResult = await result.current.processPayment();
       });
 
       expect(payResult?.success).toBe(true);
       expect(payResult?.transactionId).toBe('pur-123');
       expect(result.current.assessment.status).toBe('paid');
       expect(result.current.assessment.payment.status).toBe('success');
+    });
+
+    it('pays on Stripe in the in-app browser and confirms with the server', async () => {
+      (apiService.isAuthenticated).mockReturnValue(true);
+      (WebBrowser.openAuthSessionAsync).mockResolvedValueOnce({ type: 'success', url: 'fra-mobile://payment-complete' });
+      (apiService.post)
+        .mockResolvedValueOnce({ success: true, data: { purchaseId: 'pur-123', checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1' } })
+        .mockResolvedValueOnce({ success: true, data: { status: 'succeeded' } });
+
+      const { result } = renderHook(() => useAssessment(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      act(() => { result.current.selectPackage('with-awareness', 1799); });
+
+      await act(async () => { await result.current.processPayment(); });
+
+      expect(apiService.post).toHaveBeenNthCalledWith(1, expect.any(String), { packageId: 'pkg_training', client: 'mobile' }, { requiresAuth: true });
+      expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_1', 'fra-mobile://payment-complete');
+      expect(result.current.assessment.status).toBe('paid');
+    });
+
+    it('does not mark the assessment paid when the buyer cancels on Stripe', async () => {
+      (apiService.isAuthenticated).mockReturnValue(true);
+      (WebBrowser.openAuthSessionAsync).mockResolvedValueOnce({ type: 'success', url: 'fra-mobile://payment-complete?cancelled=1' });
+      (apiService.post).mockResolvedValueOnce({ success: true, data: { purchaseId: 'pur-123', checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1' } });
+
+      const { result } = renderHook(() => useAssessment(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      act(() => { result.current.selectPackage('health-check', 795); });
+
+      let caught: any;
+      await act(async () => { try { await result.current.processPayment(); } catch (e) { caught = e; } });
+
+      expect(caught?.code).toBe('PAYMENT_CANCELLED');
+      expect(apiService.post).toHaveBeenCalledTimes(1);
+      expect(result.current.assessment.status).not.toBe('paid');
+      expect(result.current.assessment.payment.status).toBe('failed');
     });
 
     it('sets payment status to failed on API error', async () => {
@@ -594,12 +623,7 @@ describe('AssessmentContext', () => {
       let caughtError;
       await act(async () => {
         try {
-          await result.current.processPayment({
-            number: '4111111111111111',
-            expiry: '12/26',
-            cvc: '123',
-            name: 'Test',
-          });
+          await result.current.processPayment();
         } catch (e) {
           caughtError = e;
         }

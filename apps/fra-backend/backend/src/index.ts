@@ -169,6 +169,14 @@ function validateProductionEnv(): void {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     errors.push('STRIPE_WEBHOOK_SECRET must be set');
   }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    errors.push('STRIPE_SECRET_KEY must be set (card payments are refused without it)');
+  } else if (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
+    warnings.push('STRIPE_SECRET_KEY is a test key — no real payments will be taken');
+  }
+  if (!process.env.WEB_APP_URL?.startsWith('https://')) {
+    errors.push('WEB_APP_URL must be set to the web app\'s https:// address (Stripe returns buyers there)');
+  }
 
   // Recommended (warn)
   if (!process.env.UPSTASH_REDIS_REST_URL) {

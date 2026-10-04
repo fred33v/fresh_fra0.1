@@ -54,6 +54,8 @@ export type Purchase = {
   status: PurchaseStatus;
   paymentIntentId?: string;
   clientSecret?: string;
+  /** Stripe Checkout Session paying for this purchase (when Stripe is configured). */
+  checkoutSessionId?: string;
   amountCents: number;
   currency: string;
   createdAt: string;
@@ -451,6 +453,8 @@ export const paymentCreateIntentSchema = z.object({
 
 export const purchasesCreateSchema = z.object({
   packageId: packageIdSchema,
+  /** Where Stripe returns the buyer: the web checkout page, or a page telling them to go back to the app */
+  client: z.enum(['web', 'mobile']).optional(),
 });
 
 export const purchasesConfirmSchema = z.object({

@@ -25,6 +25,7 @@ const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
 const PackageEnterprise = lazy(() => import("./pages/PackageEnterprise"));
 const Checkout = lazy(() => import("./pages/Checkout"));
+const CheckoutComplete = lazy(() => import("./pages/CheckoutComplete"));
 const EmployerDashboard = lazy(() => import("./pages/EmployerDashboard"));
 const RiskRegister = lazy(() => import("./pages/RiskRegister"));
 const Integrations = lazy(() => import("./pages/Integrations"));
@@ -75,6 +76,7 @@ const App = () => (
                 <Route path="/package/professional" element={<PackageProfessional />} />
                 <Route path="/package/enterprise" element={<PackageEnterprise />} />
                 <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout/complete" element={<CheckoutComplete />} />
                 <Route path="/facilitator" element={<ProtectedRoute requiredRole="facilitator"><Facilitator /></ProtectedRoute>} />
                 <Route path="/employer" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><EmployerDashboard /></ProtectedRoute>} />
                 <Route path="/risk-register" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><RiskRegister /></PackageGate></ProtectedRoute>} />

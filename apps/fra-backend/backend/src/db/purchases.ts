@@ -4,8 +4,8 @@ import type { Purchase, Package, PurchaseStatus } from '../types.js';
 export async function dbInsertPurchase(p: Purchase): Promise<void> {
   const pool = getDbPool();
   await pool.query(
-    'insert into public.purchases (id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, amount_cents, currency, created_at, confirmed_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-    [p.id, p.organisationId, p.userId, p.packageId, p.status, p.paymentIntentId ?? null, p.clientSecret ?? null, p.amountCents, p.currency, p.createdAt, p.confirmedAt ?? null]
+    'insert into public.purchases (id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, checkout_session_id, amount_cents, currency, created_at, confirmed_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+    [p.id, p.organisationId, p.userId, p.packageId, p.status, p.paymentIntentId ?? null, p.clientSecret ?? null, p.checkoutSessionId ?? null, p.amountCents, p.currency, p.createdAt, p.confirmedAt ?? null]
   );
 }
 
@@ -13,15 +13,16 @@ export async function dbGetPurchaseById(id: string): Promise<Purchase | null> {
   const pool = getDbPool();
   const res = await pool.query<{
     id: string; organisation_id: string; user_id: string; package_id: string; status: string;
-    payment_intent_id: string | null; client_secret: string | null; amount_cents: number;
+    payment_intent_id: string | null; client_secret: string | null; checkout_session_id: string | null; amount_cents: number;
     currency: string; created_at: string; confirmed_at: string | null;
-  }>('select id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, amount_cents, currency, created_at, confirmed_at from public.purchases where id = $1 limit 1', [id]);
+  }>('select id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, checkout_session_id, amount_cents, currency, created_at, confirmed_at from public.purchases where id = $1 limit 1', [id]);
   const row = res.rows[0];
   if (!row) return null;
   return {
     id: row.id, organisationId: row.organisation_id, userId: row.user_id,
     packageId: row.package_id, status: row.status as PurchaseStatus,
     paymentIntentId: row.payment_intent_id ?? undefined, clientSecret: row.client_secret ?? undefined,
+    checkoutSessionId: row.checkout_session_id ?? undefined,
     amountCents: row.amount_cents, currency: row.currency,
     createdAt: new Date(row.created_at).toISOString(),
     confirmedAt: row.confirmed_at ? new Date(row.confirmed_at).toISOString() : undefined,
@@ -40,17 +41,30 @@ export async function dbUpdatePurchaseStatus(id: string, status: PurchaseStatus,
   return res.rowCount ?? 0;
 }
 
+export async function dbSetPurchaseCheckoutSession(id: string, sessionId: string): Promise<void> {
+  await getDbPool().query('update public.purchases set checkout_session_id = $1 where id = $2', [sessionId, id]);
+}
+
+/** Marks a pending purchase paid, recording Stripe's PaymentIntent. Returns 0 if it was no longer pending. */
+export async function dbMarkPurchasePaid(id: string, confirmedAt: string, paymentIntentId: string | null): Promise<number> {
+  const res = await getDbPool().query(
+    `update public.purchases set status = 'succeeded', confirmed_at = $1, payment_intent_id = coalesce($2, payment_intent_id)
+     where id = $3 and status = 'requires_confirmation'`, [confirmedAt, paymentIntentId, id]);
+  return res.rowCount ?? 0;
+}
+
 export async function dbListPurchasesByOrganisation(orgId: string): Promise<Purchase[]> {
   const pool = getDbPool();
   const res = await pool.query<{
     id: string; organisation_id: string; user_id: string; package_id: string; status: string;
-    payment_intent_id: string | null; client_secret: string | null; amount_cents: number;
+    payment_intent_id: string | null; client_secret: string | null; checkout_session_id: string | null; amount_cents: number;
     currency: string; created_at: string; confirmed_at: string | null;
-  }>('select id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, amount_cents, currency, created_at, confirmed_at from public.purchases where organisation_id = $1 order by created_at desc', [orgId]);
+  }>('select id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, checkout_session_id, amount_cents, currency, created_at, confirmed_at from public.purchases where organisation_id = $1 order by created_at desc', [orgId]);
   return res.rows.map((row) => ({
     id: row.id, organisationId: row.organisation_id, userId: row.user_id,
     packageId: row.package_id, status: row.status as PurchaseStatus,
     paymentIntentId: row.payment_intent_id ?? undefined, clientSecret: row.client_secret ?? undefined,
+    checkoutSessionId: row.checkout_session_id ?? undefined,
     amountCents: row.amount_cents, currency: row.currency,
     createdAt: new Date(row.created_at).toISOString(),
     confirmedAt: row.confirmed_at ? new Date(row.confirmed_at).toISOString() : undefined,

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,51 +10,8 @@ export default function PaymentScreen() {
   const router = useRouter();
   const { assessment, processPayment } = useAssessment();
   const { allocateKeyPasses, isAuthenticated } = useAuth();
-  const [cardNumber, setCardNumber] = useState('');
-  // Digits only; shown as MM/YY when the field is not being edited
-  const [expiry, setExpiry] = useState('');
-  const [expiryFocused, setExpiryFocused] = useState(false);
-  const [cvc, setCvc] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const processingRef = useRef(false);
-
-  const formatCardNumber = (text: string) => {
-    const cleaned = text.replace(/\s/g, '');
-    const chunks = cleaned.match(/.{1,4}/g);
-    return chunks ? chunks.join(' ') : cleaned;
-  };
-
-  // Formatting is applied only outside editing: inserting the slash as the user types
-  // moves the caret (digits land out of order) and undoes a backspace over the slash
-  const formatExpiry = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length > 2) {
-      return cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4);
-    }
-    return cleaned;
-  };
-
-  const handleCardNumberChange = (text: string) => {
-    const cleaned = text.replace(/\s/g, '');
-    if (cleaned.length <= 16) {
-      setCardNumber(formatCardNumber(cleaned));
-    }
-  };
-
-  const handleExpiryChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length <= 4) {
-      setExpiry(cleaned);
-    }
-  };
-
-  const handleCvcChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length <= 3) {
-      setCvc(cleaned);
-    }
-  };
 
   const handlePayment = async () => {
     if (processingRef.current) return;
@@ -71,24 +28,11 @@ export default function PaymentScreen() {
       );
       return;
     }
-    if (!cardNumber || !expiry || !cvc || !cardholderName) {
-      Alert.alert('Missing Information', 'Please fill in all card details');
-      return;
-    }
-    if (expiry.length !== 4) {
-      Alert.alert('Check expiry date', 'Enter the expiry date as MM/YY, for example 12/30.');
-      return;
-    }
 
     processingRef.current = true;
     setIsProcessing(true);
     try {
-      await processPayment({
-        number: cardNumber.replace(/\s/g, ''),
-        expiry: formatExpiry(expiry),
-        cvc,
-        name: cardholderName,
-      });
+      await processPayment();
 
       if (assessment.payment.packageType) {
         const keyPassResult = await allocateKeyPasses(assessment.payment.packageType, assessment.organisation.employeeCount);
@@ -105,7 +49,14 @@ export default function PaymentScreen() {
       router.push('/confirmation');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '';
-      if (message.includes('TIMEOUT') || message.includes('timed out')) {
+      const code = (error as { code?: string } | null)?.code ?? '';
+      if (code === 'PAYMENT_CANCELLED' || code === 'PAYMENT_NOT_COMPLETED') {
+        Alert.alert('Payment not completed', 'You have not been charged. You can try again when you are ready.');
+      } else if (code === 'PAYMENT_PENDING') {
+        Alert.alert('Payment still processing', 'Stripe has not confirmed your payment yet. Your package will switch on automatically when it does, so you do not need to pay again.');
+      } else if (code === 'DUPLICATE_PURCHASE') {
+        Alert.alert('Already purchased', 'Your organisation already has this package.');
+      } else if (message.includes('TIMEOUT') || message.includes('timed out')) {
         Alert.alert('Request Timed Out', 'The payment request timed out. Please check your connection and try again.');
       } else if (message.includes('NETWORK') || message.includes('Network')) {
         Alert.alert('Network Error', 'Please check your internet connection and try again.');
@@ -169,68 +120,12 @@ export default function PaymentScreen() {
         <View style={styles.formSection}>
           <View style={styles.sectionHeader}>
             <CreditCard size={20} color={colors.govBlue} />
-            <Text style={styles.sectionTitle} accessibilityRole="header">Card Details</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">Pay by card</Text>
           </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Card number</Text>
-            <TextInput
-              style={styles.input}
-              value={cardNumber}
-              onChangeText={handleCardNumberChange}
-              placeholder="1234 5678 9012 3456"
-              placeholderTextColor={colors.govGrey3}
-              keyboardType="number-pad"
-              maxLength={19}
-              accessibilityLabel="Card number"
-            />
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.field, styles.halfField]}>
-              <Text style={styles.label}>Expiry date</Text>
-              <TextInput
-                style={styles.input}
-                value={expiryFocused ? expiry : formatExpiry(expiry)}
-                onChangeText={handleExpiryChange}
-                onFocus={() => setExpiryFocused(true)}
-                onBlur={() => setExpiryFocused(false)}
-                placeholder="MM/YY"
-                placeholderTextColor={colors.govGrey3}
-                keyboardType="number-pad"
-                maxLength={5}
-                accessibilityLabel="Expiry date"
-              />
-            </View>
-
-            <View style={[styles.field, styles.halfField]}>
-              <Text style={styles.label}>CVC</Text>
-              <TextInput
-                style={styles.input}
-                value={cvc}
-                onChangeText={handleCvcChange}
-                placeholder="123"
-                placeholderTextColor={colors.govGrey3}
-                keyboardType="number-pad"
-                maxLength={3}
-                secureTextEntry
-                accessibilityLabel="CVC"
-              />
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Cardholder name</Text>
-            <TextInput
-              style={styles.input}
-              value={cardholderName}
-              onChangeText={setCardholderName}
-              placeholder="Name as it appears on card"
-              placeholderTextColor={colors.govGrey3}
-              autoCapitalize="words"
-              accessibilityLabel="Cardholder name"
-            />
-          </View>
+          <Text style={styles.stripeNote}>
+            You will enter your card details on Stripe’s secure page, then come back to the app.
+            We never see or store your card number. You will get a receipt by email.
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -239,17 +134,17 @@ export default function PaymentScreen() {
           disabled={isProcessing}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={isProcessing ? 'Processing payment' : `Pay ${assessment.payment.price.toLocaleString()} pounds`}
+          accessibilityLabel={isProcessing ? 'Waiting for payment' : 'Continue to secure payment'}
         >
           {isProcessing ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.payButtonText}>Pay £{assessment.payment.price.toLocaleString()}</Text>
+            <Text style={styles.payButtonText}>Continue to secure payment</Text>
           )}
         </TouchableOpacity>
 
         <Text style={styles.disclaimer}>
-          Payments are processed securely. Your card details are not stored in the app.
+          Payments are processed securely by Stripe. Your card details never pass through the app.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -279,6 +174,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: colors.govGreen,
+  },
+  stripeNote: {
+    fontSize: 15,
+    color: colors.govGrey1,
+    lineHeight: 21,
   },
   signInNotice: {
     borderLeftWidth: 4,

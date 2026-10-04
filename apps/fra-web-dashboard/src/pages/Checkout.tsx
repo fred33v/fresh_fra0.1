@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { motion } from 'framer-motion';
@@ -25,14 +25,10 @@ export default function Checkout() {
   const selectedPackage = getPackage(rawPackageName === 'Health-Check' ? 'Starter' : rawPackageName ?? '');
   const price = selectedPackage?.priceGbp ?? 0;
 
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<ReactNode | null>(null);
+  const cancelled = searchParams.get('cancelled') === '1';
 
   const packageName = selectedPackage?.name ?? null;
 
@@ -43,73 +39,42 @@ export default function Checkout() {
   const vat = price * 0.20;
   const total = price * 1.20;
 
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    const digits = cardNumber.replace(/\s/g, '');
-    if (!digits || digits.length < 13 || digits.length > 19 || !/^\d+$/.test(digits)) {
-      errors.cardNumber = 'Enter a valid card number (13-19 digits)';
-    }
-
-    if (!expiry || !/^\d{2}\/\d{2}$/.test(expiry)) {
-      errors.expiry = 'Enter a valid expiry (MM/YY)';
-    } else {
-      const [mm, yy] = expiry.split('/').map(Number);
-      if (mm < 1 || mm > 12) {
-        errors.expiry = 'Month must be 01-12';
-      } else {
-        const now = new Date();
-        const expiryDate = new Date(2000 + yy, mm);
-        if (expiryDate <= now) {
-          errors.expiry = 'Card has expired';
-        }
-      }
-    }
-
-    if (!cvc || !/^\d{3,4}$/.test(cvc)) {
-      errors.cvc = 'Enter a valid CVC (3-4 digits)';
-    }
-
-    if (!cardholderName.trim()) {
-      errors.cardholder = 'Enter the cardholder name';
-    }
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
+  // Card details are entered on Stripe's hosted page, never here
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isProcessing) return;
     setPaymentError(null);
-
-    if (!validateForm()) return;
-
     setIsProcessing(true);
     try {
-      const packageId = selectedPackage.id;
-      const { purchaseId, paymentIntentId } = await api.post<{
+      const purchase = await api.post<{
         purchaseId: string;
-        paymentIntentId: string;
-        clientSecret: string;
-        packageId: string;
-        organisationId: string;
-        status: string;
-      }>('/api/v1/purchases', { packageId });
+        checkoutUrl: string | null;
+        simulated?: boolean;
+        paymentIntentId?: string;
+      }>('/api/v1/purchases', { packageId: selectedPackage.id, client: 'web' });
 
-      await api.post<{ purchaseId: string; status: string }>(
-        `/api/v1/purchases/${purchaseId}/confirm`,
-        { paymentIntentId },
-      );
-
-      setIsSuccess(true);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'DUPLICATE_PURCHASE') {
-        setPaymentError('You already have an active subscription for this package.');
-      } else {
-        setPaymentError('Payment failed. Please check your card details and try again.');
+      if (purchase.checkoutUrl) {
+        window.location.assign(purchase.checkoutUrl);
+        return; // stay "processing" while the browser leaves for Stripe
       }
-    } finally {
+
+      // Local development without Stripe keys: the server simulates the payment
+      await api.post(`/api/v1/purchases/${purchase.purchaseId}/confirm`, { paymentIntentId: purchase.paymentIntentId });
+      setIsSuccess(true);
+      setIsProcessing(false);
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : '';
+      if (code === 'DUPLICATE_PURCHASE') {
+        setPaymentError('You already have an active subscription for this package.');
+      } else if (code === 'UNAUTHORIZED') {
+        setPaymentError(
+          <>Sign in or create your organisation account to continue. <Link className="underline font-medium" to={`/auth?package=${encodeURIComponent(packageName)}`}>Sign in</Link></>,
+        );
+      } else if (code === 'PAYMENTS_UNAVAILABLE' || code === 'PAYMENT_PROVIDER_ERROR') {
+        setPaymentError('The secure payment page could not be opened. Please try again in a few minutes.');
+      } else {
+        setPaymentError('Something went wrong starting your payment. Please try again.');
+      }
       setIsProcessing(false);
     }
   };
@@ -267,120 +232,41 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handlePayment} className="space-y-4" noValidate>
+                    {cancelled && !paymentError && (
+                      <div role="status" className="rounded-md border bg-muted/50 p-3 text-sm">
+                        Payment was cancelled and you have not been charged. You can try again when you are ready.
+                      </div>
+                    )}
                     {paymentError && (
                       <div role="alert" className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                        <AlertCircle className="h-4 w-4 shrink-0" />
-                        {paymentError}
+                        <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>{paymentError}</span>
                       </div>
                     )}
 
-                    <div>
-                      <label htmlFor="card-number" className="block text-sm font-medium mb-1.5">
-                        Card Number
-                      </label>
-                      <div className="relative">
-                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <input
-                          id="card-number"
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="1234 5678 9012 3456"
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          maxLength={19}
-                          aria-required="true"
-                          aria-invalid={!!fieldErrors.cardNumber}
-                          aria-describedby={fieldErrors.cardNumber ? 'card-number-error' : undefined}
-                          className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 pl-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${fieldErrors.cardNumber ? 'border-destructive' : 'border-input'}`}
-                        />
-                      </div>
-                      {fieldErrors.cardNumber && (
-                        <p id="card-number-error" role="alert" className="mt-1 text-xs text-destructive">{fieldErrors.cardNumber}</p>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="expiry" className="block text-sm font-medium mb-1.5">
-                          Expiry
-                        </label>
-                        <input
-                          id="expiry"
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="MM/YY"
-                          value={expiry}
-                          onChange={(e) => setExpiry(e.target.value)}
-                          maxLength={5}
-                          aria-required="true"
-                          aria-invalid={!!fieldErrors.expiry}
-                          aria-describedby={fieldErrors.expiry ? 'expiry-error' : undefined}
-                          className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${fieldErrors.expiry ? 'border-destructive' : 'border-input'}`}
-                        />
-                        {fieldErrors.expiry && (
-                          <p id="expiry-error" role="alert" className="mt-1 text-xs text-destructive">{fieldErrors.expiry}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label htmlFor="cvc" className="block text-sm font-medium mb-1.5">
-                          CVC
-                        </label>
-                        <input
-                          id="cvc"
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="123"
-                          value={cvc}
-                          onChange={(e) => setCvc(e.target.value)}
-                          maxLength={4}
-                          aria-required="true"
-                          aria-invalid={!!fieldErrors.cvc}
-                          aria-describedby={fieldErrors.cvc ? 'cvc-error' : undefined}
-                          className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${fieldErrors.cvc ? 'border-destructive' : 'border-input'}`}
-                        />
-                        {fieldErrors.cvc && (
-                          <p id="cvc-error" role="alert" className="mt-1 text-xs text-destructive">{fieldErrors.cvc}</p>
-                        )}
+                    <div className="flex items-start gap-3 rounded-md border p-4 text-sm">
+                      <CreditCard className="h-5 w-5 shrink-0 text-muted-foreground mt-0.5" aria-hidden="true" />
+                      <div className="space-y-1">
+                        <p className="font-medium">Pay by card on Stripe's secure page</p>
+                        <p className="text-muted-foreground">
+                          You will enter your card details with Stripe, our payment provider, then come back here.
+                          We never see or store your card number. You will get a receipt by email.
+                        </p>
                       </div>
                     </div>
 
-                    <div>
-                      <label htmlFor="cardholder" className="block text-sm font-medium mb-1.5">
-                        Cardholder Name
-                      </label>
-                      <input
-                        id="cardholder"
-                        type="text"
-                        placeholder="Name on card"
-                        value={cardholderName}
-                        onChange={(e) => setCardholderName(e.target.value)}
-                        aria-required="true"
-                        aria-invalid={!!fieldErrors.cardholder}
-                        aria-describedby={fieldErrors.cardholder ? 'cardholder-error' : undefined}
-                        className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${fieldErrors.cardholder ? 'border-destructive' : 'border-input'}`}
-                      />
-                      {fieldErrors.cardholder && (
-                        <p id="cardholder-error" role="alert" className="mt-1 text-xs text-destructive">{fieldErrors.cardholder}</p>
-                      )}
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      size="lg"
-                      disabled={isProcessing}
-                    >
+                    <Button type="submit" className="w-full" size="lg" disabled={isProcessing}>
                       {isProcessing ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                          Opening secure payment…
                         </>
-                      ) : `Pay \u00A3${total.toFixed(2)}`}
+                      ) : `Continue to payment \u00B7 \u00A3${total.toFixed(2)}`}
                     </Button>
 
                     <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                       <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Secure payment</span>
+                      <span>Payments processed securely by Stripe</span>
                     </div>
                   </form>
                 </CardContent>

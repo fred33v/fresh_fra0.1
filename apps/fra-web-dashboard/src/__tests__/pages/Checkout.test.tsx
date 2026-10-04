@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Checkout from '@/pages/Checkout';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 // ── Mocks ──────────────────────────────────────────────────
 
@@ -40,13 +40,6 @@ function renderCheckout(searchParams = '?package=Professional') {
   );
 }
 
-async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText('Card Number'), '4242424242424242');
-  await user.type(screen.getByLabelText('Expiry'), '12/30');
-  await user.type(screen.getByLabelText('CVC'), '123');
-  await user.type(screen.getByLabelText('Cardholder Name'), 'Alice Smith');
-}
-
 // ── Tests ──────────────────────────────────────────────────
 
 const mockPurchaseResponse = {
@@ -59,6 +52,7 @@ const mockPurchaseResponse = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(api.post).mockResolvedValue(mockPurchaseResponse);
 });
 
@@ -147,19 +141,19 @@ describe('Checkout', () => {
   // ── Payment form display ────────────────────
 
   describe('payment form display', () => {
-    it('shows all form fields', () => {
+    it('collects no card details on this page', () => {
       renderCheckout();
 
-      expect(screen.getByLabelText('Card Number')).toBeInTheDocument();
-      expect(screen.getByLabelText('Expiry')).toBeInTheDocument();
-      expect(screen.getByLabelText('CVC')).toBeInTheDocument();
-      expect(screen.getByLabelText('Cardholder Name')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Card Number')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('CVC')).not.toBeInTheDocument();
+      expect(screen.getByText("Pay by card on Stripe's secure page")).toBeInTheDocument();
+      expect(screen.getByText(/We never see or store your card number/)).toBeInTheDocument();
     });
 
-    it('shows pay button with total amount', () => {
+    it('shows the continue button with the total amount', () => {
       renderCheckout('?package=Professional');
 
-      expect(screen.getByRole('button', { name: /Pay £2158\.80/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continue to payment · £2158\.80/ })).toBeInTheDocument();
     });
 
     it('shows breadcrumb navigation', () => {
@@ -177,235 +171,87 @@ describe('Checkout', () => {
       expect(screen.getByText('Confirmation')).toBeInTheDocument();
     });
 
-    it('shows secure payment badge', () => {
+    it('says who processes the payment', () => {
       renderCheckout();
 
-      expect(screen.getByText('Secure payment')).toBeInTheDocument();
+      expect(screen.getByText('Payments processed securely by Stripe')).toBeInTheDocument();
+    });
+
+    it('tells a buyer who cancelled on Stripe that nothing was charged', () => {
+      renderCheckout('?package=Professional&cancelled=1');
+
+      expect(screen.getByRole('status')).toHaveTextContent('Payment was cancelled and you have not been charged');
     });
   });
 
-  // ── Form validation ─────────────────────────
+  // ── Payment ─────────────────────────────────
 
-  describe('form validation', () => {
-    it('shows error for empty card number', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid card number (13-19 digits)')).toBeInTheDocument();
+  describe('payment', () => {
+    const assign = vi.fn();
+    beforeEach(() => {
+      assign.mockReset();
+      Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } });
     });
 
-    it('shows error for short card number', async () => {
+    it('sends the buyer to Stripe and stays busy while the page changes', async () => {
       const user = userEvent.setup();
-      renderCheckout();
+      vi.mocked(api.post).mockResolvedValueOnce({ purchaseId: 'purchase-1', checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1' });
+      renderCheckout('?package=Enterprise');
 
-      await user.type(screen.getByLabelText('Card Number'), '1234');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
+      await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
 
-      expect(screen.getByText('Enter a valid card number (13-19 digits)')).toBeInTheDocument();
+      expect(api.post).toHaveBeenCalledWith('/api/v1/purchases', { packageId: 'pkg_full', client: 'web' });
+      expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_1');
+      expect(api.post).toHaveBeenCalledTimes(1); // no confirm: the server checks with Stripe on return
+      expect(screen.getByRole('button', { name: /Opening secure payment/ })).toBeDisabled();
     });
 
-    it('shows error for non-digit card number', async () => {
+    it('confirms straight away when the server simulates payment (local development)', async () => {
       const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('Card Number'), 'abcdefghijklm');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid card number (13-19 digits)')).toBeInTheDocument();
-    });
-
-    it('shows error for empty expiry', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid expiry (MM/YY)')).toBeInTheDocument();
-    });
-
-    it('shows error for invalid expiry format', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('Expiry'), '1234');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid expiry (MM/YY)')).toBeInTheDocument();
-    });
-
-    it('shows error for invalid month', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('Expiry'), '13/30');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Month must be 01-12')).toBeInTheDocument();
-    });
-
-    it('shows error for expired card', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('Expiry'), '01/20');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Card has expired')).toBeInTheDocument();
-    });
-
-    it('shows error for empty CVC', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid CVC (3-4 digits)')).toBeInTheDocument();
-    });
-
-    it('shows error for invalid CVC', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('CVC'), '12');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter a valid CVC (3-4 digits)')).toBeInTheDocument();
-    });
-
-    it('shows error for empty cardholder name', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Enter the cardholder name')).toBeInTheDocument();
-    });
-
-    it('shows all field errors at once', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      const alerts = screen.getAllByRole('alert');
-      expect(alerts.length).toBe(4);
-    });
-
-    it('sets aria-invalid on fields with errors', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByLabelText('Card Number')).toHaveAttribute('aria-invalid', 'true');
-      expect(screen.getByLabelText('Expiry')).toHaveAttribute('aria-invalid', 'true');
-      expect(screen.getByLabelText('CVC')).toHaveAttribute('aria-invalid', 'true');
-      expect(screen.getByLabelText('Cardholder Name')).toHaveAttribute('aria-invalid', 'true');
-    });
-
-    it('clears errors when form is resubmitted with valid data', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      // Submit with empty form to trigger errors
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-      expect(screen.getByText('Enter a valid card number (13-19 digits)')).toBeInTheDocument();
-
-      // Fill valid data and resubmit — errors should clear even while processing
-      await fillValidForm(user);
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.queryByText('Enter a valid card number (13-19 digits)')).not.toBeInTheDocument();
-    });
-  });
-
-  // ── Payment processing ──────────────────────
-
-  describe('payment processing', () => {
-    it('shows processing state during payment', async () => {
-      const user = userEvent.setup();
-      // Make the API call hang so the processing state remains visible
-      vi.mocked(api.post).mockImplementationOnce(() => new Promise(() => {}));
-      renderCheckout();
-
-      await fillValidForm(user);
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.getByText('Processing...')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Processing/ })).toBeDisabled();
-    });
-
-    it('shows success screen after payment completes', async () => {
-      const user = userEvent.setup();
+      vi.mocked(api.post)
+        .mockResolvedValueOnce({ purchaseId: 'purchase-1', checkoutUrl: null, simulated: true, paymentIntentId: 'pi_sim' })
+        .mockResolvedValueOnce({ status: 'succeeded' });
       renderCheckout('?package=Professional');
 
-      await fillValidForm(user);
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
+      await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
 
-      await waitFor(() => {
-        expect(screen.getByText('Payment Successful!')).toBeInTheDocument();
-      }, { timeout: 3000 });
-      expect(screen.getByText(/Professional package is now active/)).toBeInTheDocument();
-    }, 10000);
-
-    it('shows correct total on success screen', async () => {
-      const user = userEvent.setup();
-      renderCheckout('?package=Professional');
-
-      await fillValidForm(user);
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Confirmed')).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await waitFor(() => expect(screen.getByText('Payment Successful!')).toBeInTheDocument());
+      expect(api.post).toHaveBeenLastCalledWith('/api/v1/purchases/purchase-1/confirm', { paymentIntentId: 'pi_sim' });
       expect(screen.getByText('£2158.80')).toBeInTheDocument();
-    }, 10000);
-
-    it('shows navigation links on success screen', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await fillValidForm(user);
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      await waitFor(() => {
-        expect(screen.getByRole('link', { name: 'Go to Dashboard' })).toBeInTheDocument();
-      }, { timeout: 3000 });
       expect(screen.getByRole('link', { name: 'Go to Dashboard' })).toHaveAttribute('href', '/dashboard');
-      expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', '/');
-    }, 10000);
-  });
-
-  // ── Edge cases ──────────────────────────────
-
-  describe('edge cases', () => {
-    it('accepts 4-digit CVC', async () => {
-      const user = userEvent.setup();
-      renderCheckout();
-
-      await user.type(screen.getByLabelText('Card Number'), '4242424242424242');
-      await user.type(screen.getByLabelText('Expiry'), '12/30');
-      await user.type(screen.getByLabelText('CVC'), '1234');
-      await user.type(screen.getByLabelText('Cardholder Name'), 'Alice Smith');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
-
-      expect(screen.queryByText('Enter a valid CVC (3-4 digits)')).not.toBeInTheDocument();
-      expect(screen.getByText('Payment Successful!')).toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
     });
 
-    it('accepts card number with spaces', async () => {
+    it('asks a signed-out buyer to sign in, keeping their package', async () => {
       const user = userEvent.setup();
+      vi.mocked(api.post).mockRejectedValueOnce(new ApiError('UNAUTHORIZED', 'Missing or invalid access token'));
+      renderCheckout('?package=Professional');
+
+      await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Sign in or create your organisation account to continue.');
+      expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth?package=Professional');
+      expect(screen.getByRole('button', { name: /Continue to payment/ })).toBeEnabled();
+    });
+
+    it('explains a duplicate subscription', async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.post).mockRejectedValueOnce(new ApiError('DUPLICATE_PURCHASE', 'exists'));
       renderCheckout();
 
-      await user.type(screen.getByLabelText('Card Number'), '4242 4242 4242 4242');
-      await user.type(screen.getByLabelText('Expiry'), '12/30');
-      await user.type(screen.getByLabelText('CVC'), '123');
-      await user.type(screen.getByLabelText('Cardholder Name'), 'Alice Smith');
-      await user.click(screen.getByRole('button', { name: /Pay/ }));
+      await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
 
-      expect(screen.queryByText('Enter a valid card number (13-19 digits)')).not.toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent('You already have an active subscription for this package.');
+    });
+
+    it('explains when Stripe cannot be reached', async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.post).mockRejectedValueOnce(new ApiError('PAYMENT_PROVIDER_ERROR', 'down'));
+      renderCheckout();
+
+      await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('The secure payment page could not be opened.');
     });
   });
 });
