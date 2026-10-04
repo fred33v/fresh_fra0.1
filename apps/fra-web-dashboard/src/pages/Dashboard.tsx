@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { Layout } from '@/components/layout/Layout';
+import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -83,6 +84,9 @@ export default function Dashboard() {
             </div>
           )}
         </motion.div>
+
+        {/* Quarterly reassessment is an organisation task, for the people who run the account */}
+        {(user.role === 'employer' || user.role === 'admin') && <ReassessmentBanner />}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Workshop Card */}

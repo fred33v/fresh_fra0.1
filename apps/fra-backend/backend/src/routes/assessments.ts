@@ -12,6 +12,7 @@ import { getAssessmentAllowance } from '../entitlements.js';
 import { ASSESSMENT_MODULES, buildAssessmentResults } from '../assessment-modules.js';
 import { emitOrgEvent } from '../webhooks-out.js';
 import { scoreAssessment } from '../assessment-risk.js';
+import { organisationReassessmentStatus } from '../reassessment.js';
 
 // Answers stay out of webhook payloads; integrations fetch detail via the API if needed
 function notifySubmitted(a: Assessment) {
@@ -127,6 +128,15 @@ assessments.post('/assessments', async (c) => {
 });
 
 // Registered before /assessments/:id so "modules" is not treated as an ID
+// When the organisation's quarterly reassessment is due (Professional and Enterprise)
+assessments.get('/assessments/reassessment', async (c) => {
+  const limited = await rateLimit('assessments:reassessment', { windowMs: 60_000, max: 60 })(c);
+  if (limited instanceof Response) return limited;
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  return c.json({ success: true, data: await organisationReassessmentStatus(auth.organisationId) });
+});
+
 assessments.get('/assessments/modules', async (c) => {
   const limited = await rateLimit('assessments:modules', { windowMs: 60_000, max: 60 })(c);
   if (limited instanceof Response) return limited;

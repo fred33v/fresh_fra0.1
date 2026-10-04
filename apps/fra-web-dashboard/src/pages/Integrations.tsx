@@ -39,6 +39,7 @@ const EVENT_LABELS: Record<string, string> = {
   'risk.created': 'Risk created',
   'risk.updated': 'Risk updated',
   'risk.high_priority': 'Risk became high priority',
+  'reassessment.due': 'Quarterly reassessment due or overdue',
 };
 
 const formatDate = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');

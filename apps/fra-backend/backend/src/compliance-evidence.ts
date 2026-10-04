@@ -19,7 +19,7 @@ import {
   dbListAuditEvents, dbListIncidents, dbListSeniorManagers, dbListTrainingRecords, type TrainingRecord,
 } from './db/compliance.js';
 import { dbListCounterFraudRecords } from './db/counter-fraud.js';
-import { recordsOf, type CounterFraudRecord } from './counter-fraud.js';
+import { dueDiligenceStatus, recordsOf, type CounterFraudRecord } from './counter-fraud.js';
 import { getIntakeByOrg, listReports } from './speak-up-store.js';
 import { TRIAGE_DAYS, type SpeakUpReport } from './speak-up.js';
 import { latestSubmittedByUser, scoreAssessment, type AssessmentRisk, type RiskPriority } from './assessment-risk.js';
@@ -181,6 +181,8 @@ export type ComplianceMetrics = {
   speakUpReportsInYear: number;
   speakUpOpen: number;
   speakUpOverdueForTriage: number;
+  associatedPersons: number;
+  associatedPersonsOutstanding: number;
 };
 
 export function computeMetrics(data: OrgComplianceData, now = Date.now()): ComplianceMetrics {
@@ -219,6 +221,8 @@ export function computeMetrics(data: OrgComplianceData, now = Date.now()): Compl
     speakUpReportsInYear: data.speakUp.reports.filter((r) => withinYear(r.receivedAt, now)).length,
     speakUpOpen: data.speakUp.reports.filter((r) => r.status !== 'closed').length,
     speakUpOverdueForTriage: data.speakUp.reports.filter((r) => r.status === 'new' && daysAgo(r.receivedAt, now) > TRIAGE_DAYS).length,
+    associatedPersons: recordsOf(data.records, 'associated_person').length,
+    associatedPersonsOutstanding: recordsOf(data.records, 'associated_person').filter((a) => dueDiligenceOutstanding(a, now)).length,
   };
 }
 
@@ -267,13 +271,7 @@ export function evaluateEccta(data: OrgComplianceData, m: ComplianceMetrics, now
         ? { id: 'eccta-3', name: 'Proportionate risk-based prevention procedures', status: 'met', evidence: `${m.registerRisks} risk(s) in the register; every open high risk has an owner and an action plan.` }
         : { id: 'eccta-3', name: 'Proportionate risk-based prevention procedures', status: 'partial', evidence: `${m.highRisksWithoutOwnerOrPlan} open high risk(s) lack an owner or an action plan.`, recommendation: 'Assign an owner and an action plan to every open high risk.' },
 
-    m.employeesAssessed === 0
-      ? { id: 'eccta-4', name: 'Due diligence', status: 'not_met', evidence: 'No assessment evidence on supplier and third-party controls.', recommendation: 'Complete the procurement module of the assessment.' }
-      : !supplierFlagged
-        ? { id: 'eccta-4', name: 'Due diligence', status: 'met', evidence: 'Assessments do not flag supplier fraud risk.' }
-        : procurementInRegister
-          ? { id: 'eccta-4', name: 'Due diligence', status: 'partial', evidence: 'Supplier fraud risk is flagged; procurement controls are recorded in the risk register.', recommendation: 'Evidence supplier due diligence checks and review their effectiveness.' }
-          : { id: 'eccta-4', name: 'Due diligence', status: 'not_met', evidence: 'Supplier fraud risk is flagged but no procurement controls are recorded.', recommendation: 'Add procurement risks with their due diligence controls to the risk register.' },
+    dueDiligenceRequirement(data, m, now, supplierFlagged, procurementInRegister),
 
     m.trainingCoverage >= 80
       ? { id: 'eccta-5', name: 'Communication (including training)', status: 'met', evidence: `${m.trainingCoverage}% of staff have completed fraud awareness training.` }
@@ -470,5 +468,40 @@ function reportingRoutesRequirement(data: OrgComplianceData, m: ComplianceMetric
     recommendation: m.speakUpOverdueForTriage
       ? `Review every new report within ${TRIAGE_DAYS} days.`
       : 'Offer reporting routes to staff, contractors and the public, including an anonymous one such as the speak-up link.',
+  };
+}
+
+// ── ECCTA principle 4: due diligence on associated persons ──────
+
+/** Due diligence is outstanding when required checks are missing, or a medium or high risk relationship was not reviewed in 12 months. */
+function dueDiligenceOutstanding(a: CounterFraudRecord<'associated_person'>, now: number): boolean {
+  return !dueDiligenceStatus(a.data).complete || (a.data.riskLevel !== 'low' && !withinYear(a.data.reviewedAt, now));
+}
+
+function dueDiligenceRequirement(
+  data: OrgComplianceData, m: ComplianceMetrics, now: number, supplierFlagged: boolean, procurementInRegister: boolean,
+): Requirement {
+  const name = 'Due diligence';
+  const id = 'eccta-4';
+  if (m.associatedPersons > 0) {
+    const highRisk = recordsOf(data.records, 'associated_person').filter((a) => a.data.riskLevel === 'high').length;
+    return m.associatedPersonsOutstanding === 0
+      ? { id, name, status: 'met', evidence: `${m.associatedPersons} associated person(s) recorded (${highRisk} high risk); due diligence is complete for each, and medium and high risk relationships were reviewed in the last 12 months.` }
+      : { id, name, status: 'partial', evidence: `${m.associatedPersonsOutstanding} of ${m.associatedPersons} associated person(s) have outstanding due diligence checks or a review older than 12 months.`, recommendation: 'Complete the checks each relationship\'s risk level requires and review medium and high risk relationships every year.' };
+  }
+  // No associated persons recorded: the assessment can show risk, but cannot evidence due diligence
+  const record = 'Record the agents, contractors, suppliers and others who act for you, with the due diligence done on each.';
+  if (m.employeesAssessed === 0) {
+    return { id, name, status: 'not_met', evidence: 'No associated persons recorded and no assessment evidence on third-party controls.', recommendation: record };
+  }
+  if (supplierFlagged && !procurementInRegister) {
+    return { id, name, status: 'not_met', evidence: 'Supplier fraud risk is flagged, but no procurement controls or associated persons are recorded.', recommendation: record };
+  }
+  return {
+    id, name, status: 'partial',
+    evidence: supplierFlagged
+      ? 'Supplier fraud risk is flagged and procurement controls are recorded, but no associated persons or due diligence records are held.'
+      : 'Assessments do not flag supplier fraud risk, but no associated persons or due diligence records are held.',
+    recommendation: record,
   };
 }

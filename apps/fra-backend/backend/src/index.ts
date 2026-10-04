@@ -6,6 +6,7 @@ import { getRedis } from './redis.js';
 import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
 import { createLogger } from './logger.js';
 import { scheduleRetention } from './retention.js';
+import { scheduleReassessmentReminders } from './reassessment.js';
 import { usingDevRefreshSecret, refreshSecret } from './types.js';
 import { applyGlobalMiddleware, applyApiMiddleware } from './middleware.js';
 
@@ -193,10 +194,13 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const server = serve({ fetch: app.fetch, port, hostname });
   // Daily data-retention job (dry run unless RETENTION_ENABLED=true); needs the database
   const stopRetention = hasDatabase() ? scheduleRetention() : () => {};
+  // Daily quarterly-reassessment reminders (audit trail and reassessment.due webhooks)
+  const stopReminders = scheduleReassessmentReminders();
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully`);
     stopRetention();
+    stopReminders();
     server.close(async () => {
       await closeDbPool();
       logger.info('Shutdown complete');

@@ -3,8 +3,9 @@
 // derived from assessments: counter fraud strategy (2), identified
 // loss (8), investigator access (9), detection activity (10), and
 // gifts, hospitality and conflict of interest registers with their
-// policies (12), and the reporting routes (7) beside the speak-up
-// intake. One table holds every kind; each kind validates its own fields.
+// policies (12), the reporting routes (7) beside the speak-up intake,
+// and the associated persons whose due diligence ECCTA principle 4 expects.
+// One table holds every kind; each kind validates its own fields.
 // ============================================================
 
 import { z } from 'zod';
@@ -25,6 +26,28 @@ export const DETECTION_STATUSES = ['planned', 'in_progress', 'completed'] as con
 export const INTEREST_TYPES = ['financial', 'non_financial_professional', 'non_financial_personal', 'indirect'] as const;
 export const ROUTE_CHANNELS = ['online_form', 'phone', 'email', 'post', 'in_person', 'external'] as const;
 export const ROUTE_AUDIENCES = ['staff', 'staff_and_contractors', 'everyone'] as const;
+export const ASSOCIATE_TYPES = ['agent', 'contractor', 'supplier', 'subsidiary', 'intermediary', 'joint_venture', 'other'] as const;
+export const ASSOCIATE_RISK_LEVELS = ['low', 'medium', 'high'] as const;
+export type AssociateRisk = (typeof ASSOCIATE_RISK_LEVELS)[number];
+
+/** Due-diligence checks, in the order they are shown. */
+export const DUE_DILIGENCE_CHECKS = {
+  identityVerified: 'Identity verified',
+  ownershipChecked: 'Ownership and control checked',
+  sanctionsScreened: 'Sanctions and adverse media screened',
+  referencesChecked: 'References or track record checked',
+  contractClauses: 'Anti-fraud clauses in the contract',
+  trainingProvided: 'Fraud prevention expectations communicated or trained',
+} as const;
+export type DueDiligenceCheck = keyof typeof DUE_DILIGENCE_CHECKS;
+
+/** Checks each risk level needs: proportionate, as the Home Office guidance expects. */
+export const REQUIRED_CHECKS: Record<AssociateRisk, DueDiligenceCheck[]> = {
+  low: ['identityVerified'],
+  medium: ['identityVerified', 'ownershipChecked', 'sanctionsScreened', 'contractClauses'],
+  high: ['identityVerified', 'ownershipChecked', 'sanctionsScreened', 'referencesChecked', 'contractClauses', 'trainingProvided'],
+};
+
 export const POLICY_TYPES = ['counter_fraud', 'response_plan', 'gifts_hospitality', 'conflicts_of_interest', 'whistleblowing'] as const;
 
 const strategy = z.object({
@@ -118,6 +141,23 @@ const reportingRoute = z.object({
   publishedAt: isoDate.optional(),
 }).strict();
 
+const checkAnswer = z.enum(['yes', 'no', 'not_applicable']).default('no');
+
+const associatedPerson = z.object({
+  name: text(200),
+  associateType: z.enum(ASSOCIATE_TYPES),
+  servicesProvided: text(1000),
+  riskLevel: z.enum(ASSOCIATE_RISK_LEVELS),
+  identityVerified: checkAnswer,
+  ownershipChecked: checkAnswer,
+  sanctionsScreened: checkAnswer,
+  referencesChecked: checkAnswer,
+  contractClauses: checkAnswer,
+  trainingProvided: checkAnswer,
+  reviewedAt: isoDate.optional(),
+  notes: note(2000),
+}).strict();
+
 export const RECORD_SCHEMAS = {
   strategy,
   loss,
@@ -127,6 +167,7 @@ export const RECORD_SCHEMAS = {
   conflict_of_interest: conflictOfInterest,
   policy,
   reporting_route: reportingRoute,
+  associated_person: associatedPerson,
 } as const;
 
 export type CounterFraudKind = keyof typeof RECORD_SCHEMAS;
@@ -158,4 +199,24 @@ export function parseRecordData(kind: CounterFraudKind, data: unknown):
 
 export function recordsOf<K extends CounterFraudKind>(records: CounterFraudRecord[], kind: K): CounterFraudRecord<K>[] {
   return records.filter((r): r is CounterFraudRecord<K> => r.kind === kind);
+}
+
+export type DueDiligenceStatus = {
+  required: number;
+  done: number;
+  complete: boolean;
+  /** Labels of the required checks not yet done */
+  outstanding: string[];
+};
+
+/** How far an associated person's due diligence has got against what their risk level requires. */
+export function dueDiligenceStatus(data: RecordData<'associated_person'>): DueDiligenceStatus {
+  const required = REQUIRED_CHECKS[data.riskLevel];
+  const outstanding = required.filter((c) => data[c] !== 'yes' && data[c] !== 'not_applicable');
+  return {
+    required: required.length,
+    done: required.length - outstanding.length,
+    complete: outstanding.length === 0,
+    outstanding: outstanding.map((c) => DUE_DILIGENCE_CHECKS[c]),
+  };
 }

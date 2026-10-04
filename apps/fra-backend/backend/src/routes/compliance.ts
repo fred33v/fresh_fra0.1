@@ -22,7 +22,8 @@ import {
   dbDeleteCounterFraudRecord, dbGetCounterFraudRecord, dbInsertCounterFraudRecord, dbListCounterFraudRecords, dbUpdateCounterFraudRecord,
 } from '../db/counter-fraud.js';
 import {
-  COUNTER_FRAUD_KINDS, isCounterFraudKind, parseRecordData, type CounterFraudKind, type CounterFraudRecord,
+  COUNTER_FRAUD_KINDS, dueDiligenceStatus, isCounterFraudKind, parseRecordData, type CounterFraudKind, type CounterFraudRecord,
+  type RecordData,
 } from '../counter-fraud.js';
 import { listOrgPurchases } from '../entitlements.js';
 import speakUpAdmin from './speak-up-admin.js';
@@ -336,6 +337,13 @@ async function getRecord(id: string, orgId: string): Promise<CounterFraudRecord 
   return r && r.organisationId === orgId ? r : null;
 }
 
+/** Associated persons carry their due-diligence status, worked out here so every client agrees. */
+function withDerived(r: CounterFraudRecord) {
+  return r.kind === 'associated_person'
+    ? { ...r, derived: { dueDiligence: dueDiligenceStatus(r.data as RecordData<'associated_person'>) } }
+    : r;
+}
+
 /** A loss may point at an incident; it must be one of this organisation's. */
 async function incidentBelongsToOrg(incidentId: string | undefined, orgId: string): Promise<boolean> {
   if (!incidentId) return true;
@@ -357,7 +365,7 @@ compliance.get('/records', async (c) => {
     return csvResponse(c, `${kind.replace(/_/g, '-')}-register.csv`,
       records.map((r) => ({ id: r.id, ...r.data, createdAt: r.createdAt, updatedAt: r.updatedAt })));
   }
-  return c.json({ success: true, data: records });
+  return c.json({ success: true, data: records.map(withDerived) });
 });
 
 compliance.post('/records', async (c) => {
@@ -381,7 +389,7 @@ compliance.post('/records', async (c) => {
   else counterFraudRecordsById.set(record.id, record);
 
   await logAccess(c, auth, 'record_added', { recordId: record.id, kind: record.kind });
-  return c.json({ success: true, data: record }, 201);
+  return c.json({ success: true, data: withDerived(record) }, 201);
 });
 
 // Changes merge into the record's fields; the result is validated as a whole
@@ -407,7 +415,7 @@ compliance.patch('/records/:id', async (c) => {
   else counterFraudRecordsById.set(id, updated);
 
   await logAccess(c, auth, 'record_updated', { recordId: id, kind: existing.kind, fields: Object.keys(body.data) });
-  return c.json({ success: true, data: updated });
+  return c.json({ success: true, data: withDerived(updated) });
 });
 
 compliance.delete('/records/:id', async (c) => {

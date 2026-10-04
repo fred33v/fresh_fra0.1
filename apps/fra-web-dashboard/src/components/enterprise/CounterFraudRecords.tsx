@@ -19,14 +19,19 @@ import { toast } from 'sonner';
 
 const logger = createLogger('CounterFraudRecords');
 
-export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy' | 'reporting_route';
+export type RecordKind = 'strategy' | 'loss' | 'investigator' | 'detection' | 'gift_hospitality' | 'conflict_of_interest' | 'policy' | 'reporting_route' | 'associated_person';
 type Data = Record<string, string | number | undefined>;
-interface CounterFraudRecord { id: string; kind: RecordKind; data: Data; createdAt: string; updatedAt: string }
+interface DueDiligence { required: number; done: number; complete: boolean; outstanding: string[] }
+interface CounterFraudRecord {
+  id: string; kind: RecordKind; data: Data; createdAt: string; updatedAt: string;
+  /** Worked out by the server for associated persons */
+  derived?: { dueDiligence?: DueDiligence };
+}
 
 type FieldType = 'text' | 'textarea' | 'date' | 'gbp' | 'count' | 'email' | 'url' | 'select';
 interface Field { name: string; label: string; type: FieldType; required?: boolean; options?: Record<string, string>; hint?: string }
 interface QuickAction { label: string; when: (d: Data) => boolean; change: (today: string) => Data }
-interface Column { label: string; value: (d: Data) => React.ReactNode; numeric?: boolean }
+interface Column { label: string; value: (d: Data, r: CounterFraudRecord) => React.ReactNode; numeric?: boolean }
 interface KindConfig {
   kind: RecordKind; tab: string; component: string; title: string; description: string;
   fields: Field[]; columns: Column[]; actions?: QuickAction[]; addLabel: string;
@@ -50,6 +55,14 @@ const COI_STATUS = { active: 'Active', ended: 'Ended' };
 const CHANNEL = { online_form: 'Online form', phone: 'Phone line', email: 'Email', post: 'Post', in_person: 'In person', external: 'External body' };
 const AUDIENCE = { staff: 'Staff', staff_and_contractors: 'Staff and contractors', everyone: 'Everyone, including the public' };
 const YES_NO = { yes: 'Yes', no: 'No' };
+const ASSOCIATE_TYPE = {
+  agent: 'Agent', contractor: 'Contractor', supplier: 'Supplier', subsidiary: 'Subsidiary', intermediary: 'Intermediary',
+  joint_venture: 'Joint venture partner', other: 'Other',
+};
+const ASSOCIATE_RISK = { medium: 'Medium', low: 'Low', high: 'High' };
+// "No" first, so a check is only recorded as done when someone says so
+const CHECK = { no: 'No', yes: 'Yes', not_applicable: 'Not applicable' };
+const yearAgo = () => new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
 const POLICY_TYPE = {
   counter_fraud: 'Counter fraud policy', response_plan: 'Fraud response plan', gifts_hospitality: 'Gifts and hospitality',
   conflicts_of_interest: 'Conflicts of interest', whistleblowing: 'Whistleblowing',
@@ -220,6 +233,44 @@ const RECORD_KINDS: KindConfig[] = [
       { label: 'Document', value: docLink },
     ],
   },
+  {
+    kind: 'associated_person', tab: 'Associated persons', component: 'ECCTA principle 4', title: 'Associated persons and due diligence', addLabel: 'Add associated person',
+    description: 'Everyone who provides services for or on behalf of you: agents, contractors, subsidiaries and suppliers. Low risk needs identity verified; medium also ownership, sanctions screening and contract clauses; high needs all six checks.',
+    fields: [
+      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'associateType', label: 'Relationship', type: 'select', required: true, options: ASSOCIATE_TYPE },
+      { name: 'riskLevel', label: 'Fraud risk', type: 'select', required: true, options: ASSOCIATE_RISK },
+      { name: 'identityVerified', label: 'Identity verified', type: 'select', required: true, options: CHECK },
+      { name: 'ownershipChecked', label: 'Ownership and control checked', type: 'select', required: true, options: CHECK },
+      { name: 'sanctionsScreened', label: 'Sanctions and adverse media screened', type: 'select', required: true, options: CHECK },
+      { name: 'referencesChecked', label: 'References or track record checked', type: 'select', required: true, options: CHECK },
+      { name: 'contractClauses', label: 'Anti-fraud clauses in the contract', type: 'select', required: true, options: CHECK },
+      { name: 'trainingProvided', label: 'Expectations communicated or trained', type: 'select', required: true, options: CHECK },
+      { name: 'reviewedAt', label: 'Last reviewed', type: 'date' },
+      { name: 'servicesProvided', label: 'What they do for or on behalf of you', type: 'textarea', required: true },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+    ],
+    columns: [
+      { label: 'Name', value: (d) => <>{d.name}<span className="block text-xs text-muted-foreground">{label(ASSOCIATE_TYPE)(d.associateType)}</span></> },
+      { label: 'Does for you', value: (d) => d.servicesProvided },
+      { label: 'Risk', value: (d) => label(ASSOCIATE_RISK)(d.riskLevel) },
+      {
+        label: 'Due diligence', value: (_d, r) => {
+          const dd = r.derived?.dueDiligence;
+          if (!dd) return '—';
+          return dd.complete
+            ? <Badge variant="outline" className="text-green-700 border-green-700/30">Complete</Badge>
+            : <><Badge variant="outline" className="text-destructive border-destructive/30">{dd.done} of {dd.required} checks</Badge><span className="block text-xs text-muted-foreground mt-1">Outstanding: {dd.outstanding.join(', ')}</span></>;
+        },
+      },
+      {
+        label: 'Reviewed', value: (d) => (d.riskLevel !== 'low' && (!d.reviewedAt || String(d.reviewedAt) < yearAgo())
+          ? <Badge variant="outline" className="text-destructive border-destructive/30">{d.reviewedAt ? `Due (last ${fmtDate(d.reviewedAt)})` : 'Review due'}</Badge>
+          : fmtDate(d.reviewedAt)),
+      },
+    ],
+    actions: [{ label: 'Reviewed today', when: () => true, change: (t) => ({ reviewedAt: t }) }],
+  },
 ];
 
 /** Reporting routes sit with the speak-up case log (GovS 013 component 7), not in the registers tabs. */
@@ -384,7 +435,7 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
               {records.map((r) => (
                 <TableRow key={r.id}>
                   {config.columns.map((c) => (
-                    <TableCell key={c.label} className={c.numeric ? 'text-right tabular-nums' : 'max-w-sm'}>{c.value(r.data)}</TableCell>
+                    <TableCell key={c.label} className={c.numeric ? 'text-right tabular-nums' : 'max-w-sm'}>{c.value(r.data, r)}</TableCell>
                   ))}
                   <TableCell className="text-right whitespace-nowrap print:hidden">
                     {config.actions?.filter((a) => a.when(r.data)).map((a) => (

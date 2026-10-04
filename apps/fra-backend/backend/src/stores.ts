@@ -65,6 +65,8 @@ export const counterFraudRecordsById = new Map<string, CounterFraudRecord>();
 export const speakUpIntakeByOrg = new Map<string, SpeakUpIntake>();
 export const speakUpReportsById = new Map<string, SpeakUpReport>();
 export const speakUpMessages: SpeakUpMessage[] = [];
+/** `orgId:dueDate:kind` of reassessment reminders already sent */
+export const reassessmentRemindersSent = new Set<string>();
 
 // Bounded audit log for no-database mode (the database keeps the full history)
 export const auditEvents: AuditEvent[] = [];

@@ -75,4 +75,20 @@ describe('CounterFraudRecords', () => {
     await user.click(await screen.findByRole('button', { name: /CSV/ }));
     expect(mockedApi.download).toHaveBeenCalledWith('/api/v1/compliance/records?kind=conflict_of_interest&format=csv', 'conflict-of-interest-register.csv');
   });
+
+  it('shows each associated person\'s due-diligence status from the server', async () => {
+    const user = userEvent.setup();
+    mockedApi.get.mockImplementation(async (path: string) => (path.includes('kind=associated_person') ? [{
+      id: 'p1', kind: 'associated_person', createdAt: '2026-09-01T10:00:00Z', updatedAt: '2026-09-01T10:00:00Z',
+      data: { name: 'Acme Logistics Ltd', associateType: 'contractor', riskLevel: 'medium', servicesProvided: 'Collects payments for us', identityVerified: 'yes' },
+      derived: { dueDiligence: { required: 4, done: 1, complete: false, outstanding: ['Ownership and control checked', 'Sanctions and adverse media screened', 'Anti-fraud clauses in the contract'] } },
+    }] : []));
+    render(<CounterFraudRecords onChange={vi.fn()} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Associated persons' }));
+    expect(await screen.findByText('Acme Logistics Ltd')).toBeInTheDocument();
+    expect(screen.getByText('1 of 4 checks')).toBeInTheDocument();
+    expect(screen.getByText(/Outstanding: Ownership and control checked/)).toBeInTheDocument();
+    expect(screen.getByText('Review due')).toBeInTheDocument();
+  });
 });

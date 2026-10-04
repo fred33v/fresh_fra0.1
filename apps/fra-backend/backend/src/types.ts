@@ -98,7 +98,7 @@ export type RiskRegisterEntry = {
   updatedAt: string;
 };
 
-export const WEBHOOK_EVENTS = ['assessment.submitted', 'assessment.high_risk', 'keypass.used', 'risk.created', 'risk.updated', 'risk.high_priority'] as const;
+export const WEBHOOK_EVENTS = ['assessment.submitted', 'assessment.high_risk', 'keypass.used', 'risk.created', 'risk.updated', 'risk.high_priority', 'reassessment.due'] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 export type WebhookEndpoint = {
