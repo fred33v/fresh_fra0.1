@@ -214,7 +214,7 @@ export default function Checkout() {
 
                   <div className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-4 py-1.5 text-xs font-semibold text-primary-foreground/90 backdrop-blur">
                     <Shield className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>GovS-013 & ECCTA 2023 Compliant</span>
+                    <span>Built for GovS 013 & ECCTA 2023</span>
                   </div>
                 </CardContent>
               </Card>
@@ -268,6 +268,10 @@ export default function Checkout() {
                       <Lock className="h-3.5 w-3.5" aria-hidden="true" />
                       <span>Payments processed securely by Stripe</span>
                     </div>
+                    <p className="text-xs text-center text-muted-foreground">
+                      By continuing you agree to the <Link to="/terms" className="underline">terms of service</Link>, including
+                      the terms on payment and cancellation.
+                    </p>
                   </form>
                 </CardContent>
               </Card>

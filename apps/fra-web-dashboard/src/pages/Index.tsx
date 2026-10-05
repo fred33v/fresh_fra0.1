@@ -148,7 +148,7 @@ export default function Index() {
 
               <div className="inline-flex items-center gap-2 rounded bg-[#003078]/40 px-4 py-2 text-sm font-semibold text-white mb-8">
                 <Shield className="h-4 w-4 text-[#ffdd00]" aria-hidden="true" />
-                <span>GovS-013 & ECCTA 2023 Compliant</span>
+                <span>Built for GovS 013 & ECCTA 2023</span>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
@@ -555,9 +555,9 @@ export default function Index() {
             <div>
               <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Compliance</h3>
               <ul className="space-y-2">
-                <li className="text-sm text-[#b1b4b6]">GovS-013 Aligned</li>
-                <li className="text-sm text-[#b1b4b6]">ECCTA 2023 Compliant</li>
-                <li className="text-sm text-[#b1b4b6]">GDPR Compliant</li>
+                <li className="text-sm text-[#b1b4b6]">GovS 013 aligned</li>
+                <li className="text-sm text-[#b1b4b6]">Supports ECCTA 2023 reasonable procedures</li>
+                <li className="text-sm text-[#b1b4b6]">Built for UK GDPR</li>
               </ul>
             </div>
             {/* Column 3: Contact */}
@@ -585,6 +585,10 @@ export default function Index() {
               <Shield className="h-5 w-5 text-white" aria-hidden="true" />
               <span className="font-bold text-white">FRAUD-RISK.CO.UK</span>
             </div>
+            <nav aria-label="Legal" className="flex gap-4 text-sm">
+              <Link to="/privacy" className="text-[#b1b4b6] hover:text-white">Privacy notice</Link>
+              <Link to="/terms" className="text-[#b1b4b6] hover:text-white">Terms of service</Link>
+            </nav>
             <p className="text-sm text-[#b1b4b6]">
               © {new Date().getFullYear()} FRAUD-RISK.CO.UK. All rights reserved.
             </p>

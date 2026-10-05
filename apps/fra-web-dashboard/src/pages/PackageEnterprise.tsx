@@ -67,7 +67,7 @@ export default function PackageEnterprise() {
             >
               <div className="inline-flex items-center gap-2 rounded-full bg-accent/20 px-4 py-1.5 text-sm font-medium text-accent mb-6">
                 <Shield className="h-4 w-4" />
-                <span>GovS-013 & ECCTA 2023 Compliant</span>
+                <span>Built for GovS 013 & ECCTA 2023</span>
               </div>
 
               <h1 className="text-4xl font-bold tracking-tight text-primary-foreground sm:text-5xl lg:text-6xl mb-6">

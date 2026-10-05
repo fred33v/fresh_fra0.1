@@ -84,7 +84,7 @@ describe('Index', () => {
     it('shows compliance badge', () => {
       renderIndex();
 
-      expect(screen.getByText('GovS-013 & ECCTA 2023 Compliant')).toBeInTheDocument();
+      expect(screen.getByText('Built for GovS 013 & ECCTA 2023')).toBeInTheDocument();
     });
 
     it('shows "Get Started" link to the package chooser when not authenticated', () => {

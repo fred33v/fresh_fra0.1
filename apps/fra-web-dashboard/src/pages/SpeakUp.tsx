@@ -212,6 +212,7 @@ function ReportForm() {
         </CardContent>
       </Card>
       <p className="text-sm text-center"><Link className="underline" to="/speak-up/status">Already reported? Follow your report</Link></p>
+      <p className="text-xs text-center text-muted-foreground"><Link className="underline" to="/privacy#speak-up">How your report is protected</Link></p>
     </Shell>
   );
 }

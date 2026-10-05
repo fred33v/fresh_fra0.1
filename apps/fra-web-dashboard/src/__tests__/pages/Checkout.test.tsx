@@ -134,7 +134,7 @@ describe('Checkout', () => {
     it('shows compliance badge', () => {
       renderCheckout('?package=Professional');
 
-      expect(screen.getByText('GovS-013 & ECCTA 2023 Compliant')).toBeInTheDocument();
+      expect(screen.getByText('Built for GovS 013 & ECCTA 2023')).toBeInTheDocument();
     });
   });
 
