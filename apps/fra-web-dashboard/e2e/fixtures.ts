@@ -6,7 +6,7 @@
  * and stands up a deterministic test assessment id.
  */
 
-import { test as base, expect, Page } from '@playwright/test';
+import { test as base, expect, Page, Locator } from '@playwright/test';
 
 export type TestFixtures = {
   authenticatedPage: Page;
@@ -108,7 +108,7 @@ export async function isPageLoaded(page: Page): Promise<boolean> {
 export async function findElement(
   page: Page,
   ...selectors: string[]
-): Promise<any | null> {
+): Promise<Locator | null> {
   for (const selector of selectors) {
     try {
       const element = page.locator(selector);

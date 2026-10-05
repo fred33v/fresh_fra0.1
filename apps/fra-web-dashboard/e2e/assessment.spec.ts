@@ -82,7 +82,7 @@ test.describe('Assessment Workflow', () => {
     try {
       if (role === 'radio' || role === 'checkbox') {
         await firstInput.click({ timeout: 1000 });
-      } else if (type === 'select' || (await firstInput.evaluate(el => (el as any).tagName)) === 'SELECT') {
+      } else if (type === 'select' || (await firstInput.evaluate((el) => (el as Element).tagName)) === 'SELECT') {
         const option = await firstInput.locator('option').first();
         if (option) {
           await firstInput.selectOption(await option.getAttribute('value') || '');
