@@ -22,6 +22,7 @@ import {
 } from '../db/index.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { createLogger } from '../logger.js';
+import { passwordChangedEmail, passwordResetEmail, sendEmailInBackground } from '../email.js';
 
 const logger = createLogger('auth');
 
@@ -415,6 +416,8 @@ auth.post('/auth/forgot-password', async (c) => {
   if (user) {
     resetToken = crypto.randomUUID();
     await setPasswordResetToken(resetToken, user.id);
+    // In the background, so the response time does not reveal whether the account exists
+    sendEmailInBackground(passwordResetEmail(user.email, user.name, resetToken), { userId: user.id, kind: 'password_reset' });
 
     await auditLog({
       eventType: 'auth.forgot_password', actorEmail: emailLc,
@@ -478,6 +481,7 @@ auth.post('/auth/reset-password', async (c) => {
     resourceType: 'user', resourceId: user.id, ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
   });
+  sendEmailInBackground(passwordChangedEmail(user.email, user.name), { userId: user.id, kind: 'password_changed' });
 
   return c.json({ success: true });
 });

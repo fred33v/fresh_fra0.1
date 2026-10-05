@@ -354,15 +354,18 @@ describe('Auth', () => {
       renderAuth('/auth?mode=reset');
 
       expect(screen.getByText('Set a new password')).toBeInTheDocument();
-      expect(screen.getByLabelText('Reset Token')).toBeInTheDocument();
+      expect(screen.getByLabelText('Reset code')).toBeVisible();
       expect(screen.getByLabelText('New Password')).toBeInTheDocument();
       expect(screen.getByLabelText('Confirm New Password')).toBeInTheDocument();
     });
 
-    it('pre-fills token from URL query param', () => {
+    it('takes the token from the emailed link and only asks for the new password', () => {
       renderAuth('/auth?mode=reset&token=abc123');
 
-      expect(screen.getByLabelText('Reset Token')).toHaveValue('abc123');
+      expect(screen.getByText('Choose a new password for your account')).toBeInTheDocument();
+      // Still in the form, so it is sent with the new password, but not shown
+      expect(screen.getByLabelText('Reset code')).toHaveValue('abc123');
+      expect(screen.getByLabelText('Reset code').closest('.hidden')).not.toBeNull();
     });
 
     it('shows success message on successful reset', async () => {

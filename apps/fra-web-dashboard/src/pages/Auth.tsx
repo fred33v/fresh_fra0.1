@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { safeReturnPath } from '@/lib/return-path';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -72,6 +72,8 @@ export default function Auth() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  // Arriving from the emailed link: the token is already filled in, so only the new password is asked for
+  const tokenFromLink = !!searchParams.get('token');
   const [resetSuccess, setResetSuccess] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
@@ -419,7 +421,7 @@ export default function Auth() {
                   <CardHeader className="space-y-1">
                     <CardTitle className="text-2xl">Set a new password</CardTitle>
                     <CardDescription>
-                      Enter your reset token and choose a new password
+                      {tokenFromLink ? 'Choose a new password for your account' : 'Enter the reset code from your email and choose a new password'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -443,10 +445,10 @@ export default function Auth() {
                             control={resetForm.control}
                             name="token"
                             render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Reset Token</FormLabel>
+                              <FormItem className={tokenFromLink ? 'hidden' : undefined}>
+                                <FormLabel>Reset code</FormLabel>
                                 <FormControl>
-                                  <Input autoComplete="one-time-code" placeholder="Paste your reset token" {...field} />
+                                  <Input autoComplete="one-time-code" placeholder="Paste the code from your email" {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -625,6 +627,10 @@ export default function Auth() {
                           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                           Create Account
                         </Button>
+                        <p className="text-xs text-center text-muted-foreground">
+                          By creating an account you agree to the <Link to="/terms" className="underline">terms of service</Link> and
+                          confirm you have read the <Link to="/privacy" className="underline">privacy notice</Link>.
+                        </p>
                       </form>
                     </Form>
                     <div className="mt-6 text-center text-sm">

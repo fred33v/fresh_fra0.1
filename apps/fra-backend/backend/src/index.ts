@@ -174,6 +174,13 @@ function validateProductionEnv(): void {
   } else if (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
     warnings.push('STRIPE_SECRET_KEY is a test key — no real payments will be taken');
   }
+  if (!process.env.SMTP_HOST) {
+    errors.push('SMTP_HOST must be set (password reset emails cannot be sent without it)');
+  } else if (process.env.SMTP_REQUIRE_TLS === 'false') {
+    errors.push('SMTP_REQUIRE_TLS=false is for local mail catchers only; email must be sent over TLS in production');
+  } else if (!process.env.EMAIL_FROM) {
+    warnings.push('EMAIL_FROM is not set — emails come from no-reply@fraud-risk.co.uk');
+  }
   if (!process.env.WEB_APP_URL?.startsWith('https://')) {
     errors.push('WEB_APP_URL must be set to the web app\'s https:// address (Stripe returns buyers there)');
   }
