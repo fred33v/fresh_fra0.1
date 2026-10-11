@@ -1,6 +1,7 @@
-import dotenv from 'dotenv';
+// Must stay the first import: modules below read process.env when they load
+import 'dotenv/config';
 import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { getDbPool, closeDbPool } from './db.js';
 import { getRedis } from './redis.js';
 import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
@@ -26,8 +27,6 @@ import organisationRoutes from './routes/organisations.js';
 import speakUpRoutes from './routes/speak-up.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
-
-dotenv.config();
 
 const app = new Hono();
 
@@ -60,7 +59,11 @@ app.notFound((c) => {
 });
 
 // ── Health check (verifies DB + Redis connectivity) ─────────────
-app.get('/health', async (c) => {
+// Served at /health and at /api/v1/health, which the load balancer and deploy script probe
+app.get('/health', healthCheck);
+app.get('/api/v1/health', healthCheck);
+
+async function healthCheck(c: Context) {
   const checks: Record<string, string> = {};
   let healthy = true;
 
@@ -99,7 +102,7 @@ app.get('/health', async (c) => {
     version: process.env.APP_VERSION ?? '2.0.0',
     commit: process.env.GIT_SHA ?? undefined,
   }, healthy ? 200 : 503);
-});
+}
 
 // ── API routes ──────────────────────────────────────────────────
 const api = app.basePath('/api/v1');
@@ -156,12 +159,21 @@ function validateProductionEnv(): void {
   // Required (fatal)
   if (!process.env.DATABASE_URL) {
     errors.push('DATABASE_URL must be set');
+  } else if (!process.env.DATABASE_URL.includes('sslmode=require')) {
+    warnings.push('DATABASE_URL has no sslmode=require — database traffic is not encrypted');
   }
   if (usingDevJwtSecret) {
     errors.push('JWT_SECRET must not use the development default');
   }
   if (usingDevRefreshSecret) {
     errors.push('JWT_REFRESH_SECRET must not use the development default');
+  }
+  const jwtSecretValue = process.env.JWT_SECRET ?? '';
+  const refreshSecretValue = process.env.JWT_REFRESH_SECRET ?? '';
+  if (jwtSecretValue.length < 32 || refreshSecretValue.length < 32) {
+    errors.push('JWT_SECRET and JWT_REFRESH_SECRET must each be at least 32 characters (e.g. openssl rand -hex 32)');
+  } else if (jwtSecretValue === refreshSecretValue) {
+    errors.push('JWT_SECRET and JWT_REFRESH_SECRET must be different');
   }
   if (!process.env.CORS_ORIGINS) {
     errors.push('CORS_ORIGINS must be set');
@@ -185,10 +197,13 @@ function validateProductionEnv(): void {
     errors.push('WEB_APP_URL must be set to the web app\'s https:// address (Stripe returns buyers there)');
   }
 
-  // Recommended (warn)
-  if (!process.env.UPSTASH_REDIS_REST_URL) {
-    warnings.push('UPSTASH_REDIS_REST_URL is not set — rate limiting will use in-memory fallback');
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    // Without Redis, password-reset links and login lockouts live in one process's memory
+    // and are lost on every restart or deploy
+    errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set');
   }
+
+  // Recommended (warn)
   if (!process.env.S3_BUCKET) {
     warnings.push('S3_BUCKET is not set — file uploads will be unavailable');
   }

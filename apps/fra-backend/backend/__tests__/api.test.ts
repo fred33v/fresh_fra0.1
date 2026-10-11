@@ -13,6 +13,13 @@ describe('Backend API', () => {
     expect(typeof body.uptime).toBe('number');
   });
 
+  it('GET /api/v1/health (the load balancer health check) returns ok', async () => {
+    const res = await app.request('http://localhost/api/v1/health');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.status).toBe('ok');
+  });
+
   it('auth signup/login/assessments flow', async () => {
     const email = `test+${Date.now()}@example.com`;
 
