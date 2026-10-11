@@ -145,3 +145,9 @@ variable "ssh_allowed_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "backup_retention_days" {
+  description = "Days to keep nightly database backups in S3"
+  type        = number
+  default     = 35
+}

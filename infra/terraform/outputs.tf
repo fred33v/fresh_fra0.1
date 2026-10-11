@@ -51,3 +51,8 @@ output "dashboard_url" {
   description = "Web dashboard URL"
   value       = "https://${var.dashboard_subdomain}.${var.domain_name}"
 }
+
+output "s3_backups_bucket" {
+  description = "S3 bucket holding nightly database backups"
+  value       = aws_s3_bucket.backups.bucket
+}

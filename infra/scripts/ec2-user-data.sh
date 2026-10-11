@@ -21,6 +21,10 @@ npm --version
 dnf install -y nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite \
   libXdamage libXrandr mesa-libgbm pango alsa-lib
 
+# --- Database client and cron for nightly backups (backup-database.sh) ---
+dnf install -y postgresql17 cronie
+systemctl enable --now crond
+
 # --- Install nginx ---
 dnf install -y nginx
 systemctl enable nginx
