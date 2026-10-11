@@ -246,6 +246,16 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Log what would otherwise vanish. After an uncaught exception the process state is
+  // unknown, so exit and let systemd restart it.
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', { error: reason instanceof Error ? reason.stack : String(reason) });
+  });
+  process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception, exiting', { error: err.stack ?? String(err) });
+    process.exit(1);
+  });
 }
 
 export default app;

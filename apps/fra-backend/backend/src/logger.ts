@@ -30,7 +30,8 @@ function log(level: LogLevel, context: string, message: string, data?: Record<st
 export function createLogger(context: string): Logger {
   return {
     debug: (message, data) => { if (!isProduction) log('debug', context, message, data); },
-    info: (message, data) => { if (!isProduction) log('info', context, message, data); },
+    // Info stays on in production: it carries the request log and startup messages
+    info: (message, data) => log('info', context, message, data),
     warn: (message, data) => log('warn', context, message, data),
     error: (message, data) => log('error', context, message, data),
   };
