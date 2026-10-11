@@ -172,13 +172,6 @@ keypasses.post('/keypasses/use', async (c) => {
 
   if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
 
-  // In-memory path: claim immediately to prevent TOCTOU race across async gaps
-  // (bcrypt.hash below yields the event loop, allowing concurrent requests to pass the check)
-  if (!hasDatabase()) {
-    kp.status = 'used';
-    kp.usedAt = now;
-  }
-
   if (nowMs > expiresAt) {
     // Within grace period — allow but log warning
     logger.warn('Keypass used during grace period', { code, expiresAt: kp.expiresAt });
@@ -187,28 +180,33 @@ keypasses.post('/keypasses/use', async (c) => {
   const email = (parsed.data.email ?? `employee+${kp.code.toLowerCase()}@example.com`).toLowerCase();
   const name = parsed.data.name ?? email.split('@')[0];
 
-  let user: User | null | undefined;
-  if (hasDatabase()) {
-    user = await dbGetUserByEmail(email);
-  } else {
-    user = usersByEmail.get(email);
+  const existing = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
+
+  // A keypass only ever creates a new employee account. Signing in to an existing
+  // account with nothing but a keypass and an email would hand out that account's
+  // tokens without a password.
+  if (existing) return jsonError(c, 409, 'EMAIL_IN_USE', 'An account with this email already exists. Sign in instead.');
+
+  // In-memory path: claim immediately to prevent TOCTOU race across async gaps
+  // (bcrypt.hash below yields the event loop, allowing concurrent requests to pass the check)
+  if (!hasDatabase()) {
+    kp.status = 'used';
+    kp.usedAt = now;
   }
 
-  if (!user) {
-    user = {
-      id: crypto.randomUUID(),
-      email,
-      name,
-      passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
-      role: 'employee',
-      organisationId: kp.organisationId,
-      createdAt: now,
-    };
-    if (hasDatabase()) {
-      await dbInsertUser(user);
-    } else {
-      usersByEmail.set(email, user);
-    }
+  const user: User = {
+    id: crypto.randomUUID(),
+    email,
+    name,
+    passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
+    role: 'employee',
+    organisationId: kp.organisationId,
+    createdAt: now,
+  };
+  if (hasDatabase()) {
+    await dbInsertUser(user);
+  } else {
+    usersByEmail.set(email, user);
   }
 
   if (!hasDatabase()) kp.usedByUserId = user.id;
