@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.40"
+    }
   }
 
   # Remote state - update bucket name after initial creation
@@ -31,6 +35,11 @@ provider "aws" {
       Environment = var.environment
     })
   }
+}
+
+# The domain's DNS is hosted on Cloudflare
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 # ACM certificates must be in us-east-1 for CloudFront
@@ -552,83 +561,79 @@ resource "aws_acm_certificate" "dashboard" {
 }
 
 # ============================================================
-# Route53 DNS (7.9)
+# DNS on Cloudflare (7.9)
+# Records are DNS-only (not proxied) so ACM, the ALB and CloudFront see real traffic.
 # ============================================================
 
-data "aws_route53_zone" "main" {
-  name         = var.domain_name
-  private_zone = false
+data "cloudflare_zone" "main" {
+  name = var.domain_name
 }
 
 # API DNS validation records
-resource "aws_route53_record" "api_cert_validation" {
+resource "cloudflare_record" "api_cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.api.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
+      name   = trimsuffix(dvo.resource_record_name, ".")
+      record = trimsuffix(dvo.resource_record_value, ".")
       type   = dvo.resource_record_type
     }
   }
 
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = data.cloudflare_zone.main.id
   name    = each.value.name
   type    = each.value.type
+  content = each.value.record
   ttl     = 60
-  records = [each.value.record]
+  proxied = false
 }
 
 resource "aws_acm_certificate_validation" "api" {
   certificate_arn         = aws_acm_certificate.api.arn
-  validation_record_fqdns = [for record in aws_route53_record.api_cert_validation : record.fqdn]
+  validation_record_fqdns = [for record in cloudflare_record.api_cert_validation : record.hostname]
 }
 
 # Dashboard DNS validation records
-resource "aws_route53_record" "dashboard_cert_validation" {
+resource "cloudflare_record" "dashboard_cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.dashboard.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
+      name   = trimsuffix(dvo.resource_record_name, ".")
+      record = trimsuffix(dvo.resource_record_value, ".")
       type   = dvo.resource_record_type
     }
   }
 
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = data.cloudflare_zone.main.id
   name    = each.value.name
   type    = each.value.type
+  content = each.value.record
   ttl     = 60
-  records = [each.value.record]
+  proxied = false
 }
 
 resource "aws_acm_certificate_validation" "dashboard" {
   provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.dashboard.arn
-  validation_record_fqdns = [for record in aws_route53_record.dashboard_cert_validation : record.fqdn]
+  validation_record_fqdns = [for record in cloudflare_record.dashboard_cert_validation : record.hostname]
 }
 
 # api.fraud-risk.co.uk -> ALB (7.9)
-resource "aws_route53_record" "api" {
-  zone_id = data.aws_route53_zone.main.zone_id
+resource "cloudflare_record" "api" {
+  zone_id = data.cloudflare_zone.main.id
   name    = "${var.api_subdomain}.${var.domain_name}"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.api.dns_name
-    zone_id                = aws_lb.api.zone_id
-    evaluate_target_health = true
-  }
+  type    = "CNAME"
+  content = aws_lb.api.dns_name
+  ttl     = 300
+  proxied = false
 }
 
 # app.fraud-risk.co.uk -> CloudFront
-resource "aws_route53_record" "dashboard" {
-  zone_id = data.aws_route53_zone.main.zone_id
+resource "cloudflare_record" "dashboard" {
+  zone_id = data.cloudflare_zone.main.id
   name    = "${var.dashboard_subdomain}.${var.domain_name}"
-  type    = "A"
-
-  alias {
-    name                   = aws_cloudfront_distribution.dashboard.domain_name
-    zone_id                = aws_cloudfront_distribution.dashboard.hosted_zone_id
-    evaluate_target_health = false
-  }
+  type    = "CNAME"
+  content = aws_cloudfront_distribution.dashboard.domain_name
+  ttl     = 300
+  proxied = false
 }
 
 # ============================================================
@@ -992,7 +997,7 @@ resource "aws_cloudwatch_metric_alarm" "backup_missing" {
 
 # ============================================================
 # Email: Amazon SES sends sign-up confirmations and password resets
-# The domain is verified with DKIM records in Route 53, bounces use mail.<domain> so the
+# The domain is verified with DKIM records on Cloudflare, bounces use mail.<domain> so the
 # domain's own SPF and MX records are untouched, and the SMTP login is written straight
 # to Parameter Store for start.sh to load.
 # New SES accounts can only send to verified addresses until production access is
@@ -1003,13 +1008,14 @@ resource "aws_sesv2_email_identity" "domain" {
   email_identity = var.domain_name
 }
 
-resource "aws_route53_record" "ses_dkim" {
+resource "cloudflare_record" "ses_dkim" {
   count   = 3
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = data.cloudflare_zone.main.id
   name    = "${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.domain_name}"
   type    = "CNAME"
+  content = "${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"
   ttl     = 1800
-  records = ["${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"]
+  proxied = false
 }
 
 resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
@@ -1018,20 +1024,63 @@ resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
   behavior_on_mx_failure = "USE_DEFAULT_VALUE"
 }
 
-resource "aws_route53_record" "ses_mail_from_mx" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = "mail.${var.domain_name}"
-  type    = "MX"
-  ttl     = 1800
-  records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]
+resource "cloudflare_record" "ses_mail_from_mx" {
+  zone_id  = data.cloudflare_zone.main.id
+  name     = "mail.${var.domain_name}"
+  type     = "MX"
+  content  = "feedback-smtp.${var.aws_region}.amazonses.com"
+  priority = 10
+  ttl      = 1800
 }
 
-resource "aws_route53_record" "ses_mail_from_spf" {
-  zone_id = data.aws_route53_zone.main.zone_id
+resource "cloudflare_record" "ses_mail_from_spf" {
+  zone_id = data.cloudflare_zone.main.id
   name    = "mail.${var.domain_name}"
   type    = "TXT"
+  content = "v=spf1 include:amazonses.com -all"
   ttl     = 1800
-  records = ["v=spf1 include:amazonses.com -all"]
+}
+
+# Mail that fails DKIM is quarantined, so nobody can pass off fakes as the domain
+resource "cloudflare_record" "dmarc" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = "_dmarc.${var.domain_name}"
+  type    = "TXT"
+  content = "v=DMARC1; p=quarantine; adkim=r; aspf=r"
+  ttl     = 1800
+}
+
+# Incoming mail: Cloudflare Email Routing forwards anything sent to @<domain> to an inbox
+# you already read. Turning it on adds the domain's MX and SPF records. The inbox gets a
+# confirmation email from Cloudflare, and forwarding starts once it is confirmed.
+resource "cloudflare_email_routing_settings" "main" {
+  count   = var.mail_forward_to == "" ? 0 : 1
+  zone_id = data.cloudflare_zone.main.id
+  enabled = true
+}
+
+resource "cloudflare_email_routing_address" "inbox" {
+  count      = var.mail_forward_to == "" ? 0 : 1
+  account_id = data.cloudflare_zone.main.account_id
+  email      = var.mail_forward_to
+}
+
+resource "cloudflare_email_routing_catch_all" "forward" {
+  count   = var.mail_forward_to == "" ? 0 : 1
+  zone_id = data.cloudflare_zone.main.id
+  name    = "Forward all mail to ${var.mail_forward_to}"
+  enabled = true
+
+  matcher {
+    type = "all"
+  }
+
+  action {
+    type  = "forward"
+    value = [cloudflare_email_routing_address.inbox[0].email]
+  }
+
+  depends_on = [cloudflare_email_routing_settings.main]
 }
 
 # SMTP login: an IAM user that may only send email from the domain

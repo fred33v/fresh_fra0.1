@@ -57,6 +57,18 @@ variable "domain_name" {
   default     = "fraud-risk.co.uk"
 }
 
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for the domain's zone (Zone: Zone Read, DNS Edit, Zone Settings Edit, Email Routing Rules Edit; Account: Email Routing Addresses Edit)"
+  type        = string
+  sensitive   = true
+}
+
+variable "mail_forward_to" {
+  description = "Inbox that receives mail sent to any @domain_name address via Cloudflare Email Routing (empty: no incoming mail)"
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "API subdomain"
   type        = string

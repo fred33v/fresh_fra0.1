@@ -12,6 +12,8 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 | Two JWT secrets | Run `openssl rand -hex 32` twice. The two values must be different |
 | Stripe live secret key (`sk_live_…`) | Stripe dashboard, Developers > API keys |
 | Your alert email address | Where alarm emails should go |
+| Cloudflare API token | The domain's DNS is on Cloudflare. dash.cloudflare.com > My Profile > API Tokens > Create Token > Custom. Permissions: Zone: Zone Read, DNS Edit, Zone Settings Edit and Email Routing Rules Edit; Account: Email Routing Addresses Edit. Limit it to fraud-risk.co.uk |
+| Your forwarding inbox | Mail sent to any @fraud-risk.co.uk address is forwarded here, such as your Gmail |
 
 Email needs no values: Terraform sets up Amazon SES and stores the SMTP login itself.
 
@@ -21,17 +23,21 @@ Email needs no values: Terraform sets up Amazon SES and stores the SMTP login it
 cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars   # never commit this file
 # Fill in neon_database_url, upstash_redis_rest_url/token, jwt_secret,
-# jwt_refresh_secret and alert_emails
+# jwt_refresh_secret, alert_emails, cloudflare_api_token and mail_forward_to
 terraform init
 terraform plan        # read it: it should only create resources
 terraform apply
 ```
 
 This creates the server, load balancer, dashboard hosting, backups bucket, alarms and SES
-email. It also writes the database, JWT, Redis, S3 and SMTP settings to Parameter Store.
+email. It also writes the database, JWT, Redis, S3 and SMTP settings to Parameter Store,
+and adds the DNS records on Cloudflare: api and app, the certificate checks, the SES
+records, DMARC, and the MX records that forward incoming mail.
 
-Then, in your inbox, click the "AWS Notification - Subscription Confirmation" link so
-alarm emails reach you.
+Then, in your inbox, click two confirmation links:
+
+- "AWS Notification - Subscription Confirmation", so alarm emails reach you.
+- Cloudflare's "Verify your email address", so mail sent to @fraud-risk.co.uk is forwarded.
 
 ## 3. Turn on email sending (SES)
 

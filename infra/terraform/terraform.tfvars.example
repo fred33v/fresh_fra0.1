@@ -21,6 +21,13 @@ domain_name          = "fraud-risk.co.uk"
 api_subdomain        = "api"
 dashboard_subdomain  = "app"
 
+# The domain's DNS is on Cloudflare. Create a token at dash.cloudflare.com > My Profile >
+# API Tokens with Zone: Zone Read, DNS Edit, Zone Settings Edit and Email Routing Rules
+# Edit, plus Account: Email Routing Addresses Edit, limited to this zone and account.
+cloudflare_api_token = "your-cloudflare-api-token"
+# Mail sent to any @fraud-risk.co.uk address is forwarded here
+mail_forward_to = "you@example.com"
+
 # --- Upstash Redis ---
 # Create at https://console.upstash.com
 upstash_redis_rest_url   = "https://eu2-XXXX.upstash.io"
