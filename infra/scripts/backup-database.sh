@@ -61,4 +61,9 @@ aws s3 cp "$BACKUP_FILE" \
 
 echo "[$(date)] Uploaded to s3://${BACKUP_BUCKET}/database/${TIMESTAMP}.sql.gz"
 
+# Feeds the backup_missing alarm; a failure here must not mark the backup itself as failed
+aws cloudwatch put-metric-data --namespace StopFRA --metric-name DatabaseBackupSucceeded \
+  --value 1 --unit Count --region "$AWS_REGION" \
+  || echo "[$(date)] WARNING: could not report the backup to CloudWatch"
+
 echo "[$(date)] Backup complete."

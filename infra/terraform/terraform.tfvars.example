@@ -37,3 +37,7 @@ s3_download_prefix       = "downloads/"
 s3_url_expires_seconds   = 3600
 s3_max_upload_bytes      = 10485760
 s3_allowed_content_types = "application/pdf,image/png,image/jpeg"
+
+# --- Monitoring ---
+# Each address gets a confirmation email from AWS; alerts start once it is confirmed
+alert_emails = ["ops@fraud-risk.co.uk"]

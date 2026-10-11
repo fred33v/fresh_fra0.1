@@ -415,6 +415,24 @@ resource "aws_iam_role_policy" "backend_s3" {
   })
 }
 
+# Lets backup-database.sh report each successful backup to the backup_missing alarm
+resource "aws_iam_role_policy" "backend_metrics" {
+  name = "${var.project_name}-backup-metric"
+  role = aws_iam_role.backend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Action    = ["cloudwatch:PutMetricData"]
+        Resource  = "*"
+        Condition = { StringEquals = { "cloudwatch:namespace" = "StopFRA" } }
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "backend" {
   name = "${var.project_name}-backend-profile"
   role = aws_iam_role.backend.name
@@ -624,6 +642,66 @@ resource "aws_cloudfront_origin_access_control" "dashboard" {
   signing_protocol                  = "sigv4"
 }
 
+# Security headers on every dashboard response. The app is one script and one stylesheet
+# from this origin and talks only to the API, so the policy allows little else: inline
+# styles (charts and toasts inject <style> tags), images from data/blob URLs, and the API.
+resource "aws_cloudfront_response_headers_policy" "dashboard" {
+  name = "${var.project_name}-dashboard-security-headers"
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = join("; ", [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://${var.api_subdomain}.${var.domain_name}",
+        "frame-src 'none'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests",
+      ])
+      override = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 63072000 # two years
+      include_subdomains         = true
+      override                   = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "dashboard" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -641,6 +719,8 @@ resource "aws_cloudfront_distribution" "dashboard" {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-dashboard"
+
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.dashboard.id
 
     forwarded_values {
       query_string = false
@@ -754,4 +834,158 @@ resource "aws_ssm_parameter" "s3_content_types" {
   name  = "/fra/backend/S3_ALLOWED_CONTENT_TYPES"
   type  = "String"
   value = var.s3_allowed_content_types
+}
+
+# ============================================================
+# Monitoring: CloudWatch alarms, emailed through SNS
+# ============================================================
+
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts"
+}
+
+# AWS emails each address a confirmation link; alerts start once it is clicked
+resource "aws_sns_topic_subscription" "alerts_email" {
+  for_each  = toset(var.alert_emails)
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
+locals {
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  alb_dimensions = {
+    LoadBalancer = aws_lb.api.arn_suffix
+  }
+}
+
+# The health check fails when the API is down or cannot reach the database or Redis
+resource "aws_cloudwatch_metric_alarm" "api_unhealthy" {
+  alarm_name          = "${var.project_name}-api-unhealthy"
+  alarm_description   = "The API is failing its health check (/api/v1/health). Users cannot sign in or use the app."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HealthyHostCount"
+  dimensions          = merge(local.alb_dimensions, { TargetGroup = aws_lb_target_group.backend.arn_suffix })
+  statistic           = "Minimum"
+  period              = 60
+  evaluation_periods  = 3
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_5xx" {
+  alarm_name          = "${var.project_name}-api-5xx"
+  alarm_description   = "The API returned more than 10 server errors (5xx) in 5 minutes. Check the backend log."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  dimensions          = local.alb_dimensions
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# Errors from the load balancer itself: the API is unreachable or timing out
+resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  alarm_name          = "${var.project_name}-alb-5xx"
+  alarm_description   = "The load balancer returned more than 10 errors (502/503/504) in 5 minutes. The API is unreachable or too slow."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  dimensions          = local.alb_dimensions
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_slow" {
+  alarm_name          = "${var.project_name}-api-slow"
+  alarm_description   = "API responses have averaged over 2 seconds for 15 minutes."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  dimensions          = local.alb_dimensions
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# A failed AWS host check moves the instance to healthy hardware; the alarm also emails
+resource "aws_cloudwatch_metric_alarm" "ec2_system_check" {
+  alarm_name          = "${var.project_name}-ec2-system-check"
+  alarm_description   = "The backend server's AWS host failed its status check. AWS is recovering the instance onto new hardware."
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_System"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 2
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = concat(local.alarm_actions, ["arn:aws:automate:${var.aws_region}:ec2:recover"])
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "ec2_instance_check" {
+  alarm_name          = "${var.project_name}-ec2-instance-check"
+  alarm_description   = "The backend server failed its instance status check (out of memory, disk full, or not booting)."
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_Instance"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
+  alarm_name          = "${var.project_name}-ec2-cpu"
+  alarm_description   = "The backend server's CPU has been above 80% for 15 minutes."
+  namespace           = "AWS/EC2"
+  metric_name         = "CPUUtilization"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# backup-database.sh reports each successful backup; no report for 26 hours means the
+# nightly 02:00 backup did not happen
+resource "aws_cloudwatch_metric_alarm" "backup_missing" {
+  alarm_name          = "${var.project_name}-backup-missing"
+  alarm_description   = "No successful database backup in the last 26 hours. Check the backup cron on the backend server."
+  namespace           = "StopFRA"
+  metric_name         = "DatabaseBackupSucceeded"
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 26
+  datapoints_to_alarm = 26
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
 }

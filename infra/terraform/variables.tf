@@ -151,3 +151,9 @@ variable "backup_retention_days" {
   type        = number
   default     = 35
 }
+
+variable "alert_emails" {
+  description = "Email addresses that receive CloudWatch alarm alerts (each must confirm the subscription email from AWS)"
+  type        = list(string)
+  default     = []
+}
