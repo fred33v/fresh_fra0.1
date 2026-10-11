@@ -157,3 +157,9 @@ variable "alert_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "email_from" {
+  description = "Sender for app emails, on the SES-verified domain (default: FRAUD-RISK.CO.UK <no-reply@domain_name>)"
+  type        = string
+  default     = ""
+}

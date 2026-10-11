@@ -989,3 +989,102 @@ resource "aws_cloudwatch_metric_alarm" "backup_missing" {
   alarm_actions       = local.alarm_actions
   ok_actions          = local.alarm_actions
 }
+
+# ============================================================
+# Email: Amazon SES sends sign-up confirmations and password resets
+# The domain is verified with DKIM records in Route 53, bounces use mail.<domain> so the
+# domain's own SPF and MX records are untouched, and the SMTP login is written straight
+# to Parameter Store for start.sh to load.
+# New SES accounts can only send to verified addresses until production access is
+# granted (SES console > Account dashboard > Request production access).
+# ============================================================
+
+resource "aws_sesv2_email_identity" "domain" {
+  email_identity = var.domain_name
+}
+
+resource "aws_route53_record" "ses_dkim" {
+  count   = 3
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 1800
+  records = ["${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"]
+}
+
+resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
+  email_identity         = aws_sesv2_email_identity.domain.email_identity
+  mail_from_domain       = "mail.${var.domain_name}"
+  behavior_on_mx_failure = "USE_DEFAULT_VALUE"
+}
+
+resource "aws_route53_record" "ses_mail_from_mx" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "mail.${var.domain_name}"
+  type    = "MX"
+  ttl     = 1800
+  records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]
+}
+
+resource "aws_route53_record" "ses_mail_from_spf" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "mail.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 1800
+  records = ["v=spf1 include:amazonses.com -all"]
+}
+
+# SMTP login: an IAM user that may only send email from the domain
+resource "aws_iam_user" "smtp" {
+  name = "${var.project_name}-ses-smtp"
+}
+
+resource "aws_iam_user_policy" "smtp_send" {
+  name = "${var.project_name}-ses-send"
+  user = aws_iam_user.smtp.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ses:SendRawEmail", "ses:SendEmail"]
+        Resource = aws_sesv2_email_identity.domain.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_access_key" "smtp" {
+  user = aws_iam_user.smtp.name
+}
+
+resource "aws_ssm_parameter" "smtp_host" {
+  name  = "/fra/backend/SMTP_HOST"
+  type  = "String"
+  value = "email-smtp.${var.aws_region}.amazonaws.com"
+}
+
+resource "aws_ssm_parameter" "smtp_port" {
+  name  = "/fra/backend/SMTP_PORT"
+  type  = "String"
+  value = "587"
+}
+
+resource "aws_ssm_parameter" "smtp_user" {
+  name  = "/fra/backend/SMTP_USER"
+  type  = "SecureString"
+  value = aws_iam_access_key.smtp.id
+}
+
+resource "aws_ssm_parameter" "smtp_pass" {
+  name  = "/fra/backend/SMTP_PASS"
+  type  = "SecureString"
+  value = aws_iam_access_key.smtp.ses_smtp_password_v4
+}
+
+resource "aws_ssm_parameter" "email_from" {
+  name  = "/fra/backend/EMAIL_FROM"
+  type  = "String"
+  value = var.email_from != "" ? var.email_from : "FRAUD-RISK.CO.UK <no-reply@${var.domain_name}>"
+}

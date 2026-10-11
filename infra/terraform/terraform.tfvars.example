@@ -41,3 +41,7 @@ s3_allowed_content_types = "application/pdf,image/png,image/jpeg"
 # --- Monitoring ---
 # Each address gets a confirmation email from AWS; alerts start once it is confirmed
 alert_emails = ["ops@fraud-risk.co.uk"]
+
+# --- Email (Amazon SES) ---
+# Terraform verifies the domain and stores the SMTP login itself. Optional sender override:
+# email_from = "FRAUD-RISK.CO.UK <no-reply@fraud-risk.co.uk>"
