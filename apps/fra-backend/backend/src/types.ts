@@ -17,6 +17,8 @@ export type User = {
   organisationId: string;
   department?: string;
   createdAt: string;
+  /** null: signed up but has not confirmed their email yet. Missing: treated as confirmed. */
+  emailVerifiedAt?: string | null;
 };
 
 export type AssessmentStatus = 'draft' | 'in_progress' | 'submitted' | 'completed';
@@ -207,6 +209,7 @@ export type DbUserRow = {
   organisation_id: string;
   department: string | null;
   created_at: string;
+  email_verified_at?: string | null;
 };
 
 export type DbKeypassRow = {
@@ -297,6 +300,8 @@ export const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export const PASSWORD_RESET_PREFIX = 'pwreset:';
 export const PASSWORD_RESET_TTL_SECONDS = 3600; // 1 hour
+export const EMAIL_VERIFY_PREFIX = 'emailverify:';
+export const EMAIL_VERIFY_TTL_SECONDS = 24 * 3600; // 24 hours
 
 // ── Rate limit constants ────────────────────────────────────────
 
@@ -399,6 +404,10 @@ export const refreshSchema = z.object({
 
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1).max(200),
 });
 
 export const resetPasswordSchema = z.object({

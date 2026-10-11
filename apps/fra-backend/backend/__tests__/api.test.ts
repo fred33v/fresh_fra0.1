@@ -3,6 +3,17 @@
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
 
+/** Signs up and follows the confirmation link; returns the confirmation response, which carries the tokens. */
+async function confirmedSignup(url: string, init: RequestInit) {
+  const signupRes = await app.request(url, init);
+  const token = ((await signupRes.json()) as any).data.verificationToken;
+  return app.request('http://localhost/api/v1/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
 describe('Backend API', () => {
   it('GET /health returns ok', async () => {
     const res = await app.request('http://localhost/health');
@@ -23,7 +34,7 @@ describe('Backend API', () => {
   it('auth signup/login/assessments flow', async () => {
     const email = `test+${Date.now()}@example.com`;
 
-    const signupRes = await app.request('http://localhost/api/v1/auth/signup', {
+    const signupRes = await confirmedSignup('http://localhost/api/v1/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -72,7 +83,7 @@ describe('Backend API', () => {
   it('auth refresh and auth me work', async () => {
     const email = `test+refresh+${Date.now()}@example.com`;
 
-    const signupRes = await app.request('http://localhost/api/v1/auth/signup', {
+    const signupRes = await confirmedSignup('http://localhost/api/v1/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -114,7 +125,7 @@ describe('Backend API', () => {
   it('keypass allocate/validate/use flow works', async () => {
     const email = `test+kp+${Date.now()}@example.com`;
 
-    const signupRes = await app.request('http://localhost/api/v1/auth/signup', {
+    const signupRes = await confirmedSignup('http://localhost/api/v1/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -170,7 +181,7 @@ describe('Backend API', () => {
   it('payments and reports endpoints respond', async () => {
     const email = `test+pay+${Date.now()}@example.com`;
 
-    const signupRes = await app.request('http://localhost/api/v1/auth/signup', {
+    const signupRes = await confirmedSignup('http://localhost/api/v1/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

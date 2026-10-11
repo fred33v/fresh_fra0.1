@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { safeReturnPath } from '@/lib/return-path';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Shield, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
+import { Shield, ArrowLeft, Loader2, CheckCircle2, MailCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { checkoutPath, getPackage } from '@/data/packages';
 
@@ -63,19 +63,24 @@ type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset'>(() => {
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset' | 'check-email' | 'verify'>(() => {
     const m = searchParams.get('mode');
     if (m === 'signup') return 'signup';
     if (m === 'forgot') return 'forgot';
     if (m === 'reset') return 'reset';
+    if (m === 'verify') return 'verify';
     return 'signin';
   });
+  // The address a confirmation link was sent to, shown on the "check your email" screen
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [verifyFailed, setVerifyFailed] = useState(false);
+  const verifyStarted = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   // Arriving from the emailed link: the token is already filled in, so only the new password is asked for
   const tokenFromLink = !!searchParams.get('token');
   const [resetSuccess, setResetSuccess] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, verifyEmail, user } = useAuth();
   const navigate = useNavigate();
   // A package chosen before signing up/in (e.g. ?package=enterprise) takes the user straight to its checkout.
   const chosenPackage = getPackage(searchParams.get('package') ?? '');
@@ -88,6 +93,24 @@ export default function Auth() {
       navigate(afterAuthPath);
     }
   }, [user, navigate, afterAuthPath]);
+
+  // Opened from the confirmation email: confirm the address, which also signs the user in
+  useEffect(() => {
+    if (mode !== 'verify' || verifyStarted.current) return;
+    verifyStarted.current = true;
+    const token = searchParams.get('token');
+    if (!token) {
+      setVerifyFailed(true);
+      return;
+    }
+    verifyEmail(token).then(({ error }) => {
+      if (error) {
+        setVerifyFailed(true);
+      } else {
+        toast.success('Email confirmed. Welcome!');
+      }
+    });
+  }, [mode, searchParams, verifyEmail]);
 
   const signInForm = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -115,6 +138,11 @@ export default function Auth() {
     defaultValues: { email: '' },
   });
 
+  const resendForm = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: '' },
+  });
+
   const resetForm = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
@@ -133,6 +161,19 @@ export default function Auth() {
       // Always show success to prevent email enumeration
       setForgotSent(true);
     }
+    setIsLoading(false);
+  };
+
+  const resendConfirmation = async (email: string) => {
+    setIsLoading(true);
+    try {
+      await api.post('/api/v1/auth/resend-verification', { email });
+    } catch (_err) {
+      // The reply is the same either way, so there is nothing more to show
+    }
+    setPendingEmail(email);
+    setMode('check-email');
+    toast.success('If that email is waiting to be confirmed, we have sent a new link.');
     setIsLoading(false);
   };
 
@@ -164,6 +205,10 @@ export default function Auth() {
         toast.error('Invalid email or password');
       } else if (error instanceof ApiError && error.code === 'ACCOUNT_LOCKED') {
         toast.error('Account temporarily locked. Please try again later.');
+      } else if (error instanceof ApiError && error.code === 'EMAIL_NOT_VERIFIED') {
+        // The server has emailed a new link
+        setPendingEmail(data.email);
+        setMode('check-email');
       } else {
         toast.error('Sign in failed. Please try again.');
       }
@@ -184,14 +229,13 @@ export default function Auth() {
     });
     
     if (error) {
-      if (error instanceof ApiError && error.code === 'SIGNUP_FAILED') {
-        toast.error(error.message);
-      } else {
-        toast.error('Registration failed. Please try again.');
-      }
+      toast.error(error instanceof ApiError && error.code === 'VALIDATION_ERROR'
+        ? 'Please check your details and try again.'
+        : 'Registration failed. Please try again.');
     } else {
-      toast.success('Account created successfully!');
-      navigate(afterAuthPath);
+      // The same reply comes back for an address that already has an account, which is told by email
+      setPendingEmail(data.email);
+      setMode('check-email');
     }
     setIsLoading(false);
   };
@@ -404,6 +448,107 @@ export default function Auth() {
                         >
                           Sign in
                         </button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : mode === 'check-email' ? (
+              <motion.div
+                key="check-email"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Card className="border-0 shadow-xl">
+                  <CardHeader className="space-y-1">
+                    <CardTitle className="text-2xl">Check your email</CardTitle>
+                    <CardDescription>One more step to finish setting up your account</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center space-y-4 py-4" role="status" aria-label="Confirmation email sent">
+                      <MailCheck className="h-12 w-12 text-green-600 mx-auto" aria-hidden="true" />
+                      <p className="text-sm text-muted-foreground">
+                        We have sent an email to <span className="font-medium text-foreground">{pendingEmail}</span>.
+                        Follow the link in it to confirm your address and sign in. The link expires in 24 hours.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Nothing there? Check your spam folder, or send a new link.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        disabled={isLoading || !pendingEmail}
+                        aria-busy={isLoading}
+                        onClick={() => resendConfirmation(pendingEmail)}
+                      >
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                        Send a new link
+                      </Button>
+                      <Button variant="ghost" className="w-full" onClick={() => setMode('signin')}>
+                        Back to Sign In
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : mode === 'verify' ? (
+              <motion.div
+                key="verify"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Card className="border-0 shadow-xl">
+                  <CardHeader className="space-y-1">
+                    <CardTitle className="text-2xl">{verifyFailed ? 'This link has expired' : 'Confirming your email'}</CardTitle>
+                    <CardDescription>
+                      {verifyFailed
+                        ? 'Confirmation links work once and expire after 24 hours. Enter your email and we will send a new one.'
+                        : 'Just a moment while we confirm your address'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {verifyFailed ? (
+                      <>
+                        <XCircle className="h-10 w-10 text-destructive mx-auto mb-4" aria-hidden="true" />
+                        <Form {...resendForm}>
+                          <form onSubmit={resendForm.handleSubmit((d) => resendConfirmation(d.email))} className="space-y-4">
+                            <FormField
+                              control={resendForm.control}
+                              name="email"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Email</FormLabel>
+                                  <FormControl>
+                                    <Input autoComplete="email" type="email" placeholder="you@organisation.com" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <Button type="submit" className="w-full" disabled={isLoading} aria-busy={isLoading}>
+                              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                              Send a new link
+                            </Button>
+                          </form>
+                        </Form>
+                        <div className="mt-6 text-center text-sm">
+                          Already confirmed?{' '}
+                          <button
+                            type="button"
+                            onClick={() => setMode('signin')}
+                            className="text-primary font-medium hover:underline"
+                          >
+                            Sign in
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-center py-6" role="status" aria-label="Confirming your email">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
                       </div>
                     )}
                   </CardContent>

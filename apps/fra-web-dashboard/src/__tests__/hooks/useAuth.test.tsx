@@ -187,12 +187,11 @@ describe('AuthProvider', () => {
   // ── signUp ──────────────────────────────────────
 
   describe('signUp', () => {
-    it('calls /auth/signup, sets tokens, user, profile and roles', async () => {
+    it('calls /auth/signup and does not sign in until the email is confirmed', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-      const authResp = makeAuthResponse();
-      mockApi.post.mockResolvedValueOnce(authResp);
+      mockApi.post.mockResolvedValueOnce({ pendingVerification: true, email: 'alice@example.com' });
 
       let response: { error: Error | null } | undefined;
       await act(async () => {
@@ -214,27 +213,8 @@ describe('AuthProvider', () => {
         sector: 'public',
         workshopRole: 'participant',
       });
-      expect(mockSetTokens).toHaveBeenCalledWith('at-new', 'rt-new');
-      expect(result.current.user).toEqual(makeUser());
-      expect(result.current.profile).toEqual(makeProfile());
-      expect(result.current.roles).toEqual(['participant']);
-    });
-
-    it('defaults roles to participant when workshopRoles is missing', async () => {
-      const { result } = renderHook(() => useAuth(), { wrapper });
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-      mockApi.post.mockResolvedValueOnce(makeAuthResponse({ workshopRoles: undefined }));
-
-      await act(async () => {
-        await result.current.signUp('a@b.com', 'Pass1234567', {
-          full_name: 'Test',
-          organization_name: 'Org',
-          sector: 'private',
-        });
-      });
-
-      expect(result.current.roles).toEqual(['participant']);
+      expect(mockSetTokens).not.toHaveBeenCalled();
+      expect(result.current.user).toBeNull();
     });
 
     it('returns error on signup failure', async () => {
@@ -257,22 +237,43 @@ describe('AuthProvider', () => {
       expect(result.current.user).toBeNull();
     });
 
-    it('handles signup without profile in response', async () => {
+  });
+
+  // ── verifyEmail ──────────────────────────────────
+
+  describe('verifyEmail', () => {
+    it('confirms the token, sets tokens, then hydrates from /me', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-      mockApi.post.mockResolvedValueOnce(makeAuthResponse({ profile: null }));
+      mockApi.post.mockResolvedValueOnce(makeAuthResponse());
+      mockApi.get.mockResolvedValueOnce(makeMeResponse());
 
+      let response: { error: Error | null } | undefined;
       await act(async () => {
-        await result.current.signUp('a@b.com', 'Pass1234567', {
-          full_name: 'Test',
-          organization_name: 'Org',
-          sector: 'private',
-        });
+        response = await result.current.verifyEmail('tok-123');
       });
 
+      expect(response!.error).toBeNull();
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/auth/verify-email', { token: 'tok-123' });
+      expect(mockSetTokens).toHaveBeenCalledWith('at-new', 'rt-new');
       expect(result.current.user).toEqual(makeUser());
-      expect(result.current.profile).toBeNull();
+    });
+
+    it('returns the error for an expired link', async () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const err = new Error('expired');
+      mockApi.post.mockRejectedValueOnce(err);
+
+      let response: { error: Error | null } | undefined;
+      await act(async () => {
+        response = await result.current.verifyEmail('old');
+      });
+
+      expect(response!.error).toBe(err);
+      expect(result.current.user).toBeNull();
     });
   });
 

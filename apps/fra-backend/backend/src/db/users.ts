@@ -4,7 +4,7 @@ import type { User, DbUserRow, EmployeeDashboardRow, DbEmployeeDashboardRow } fr
 export async function dbGetUserByEmail(email: string): Promise<User | null> {
   const pool = getDbPool();
   const res = await pool.query<DbUserRow>(
-    'select id, email, name, password_hash, role, organisation_id, department, created_at from public.users where email = $1 limit 1',
+    'select id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at from public.users where email = $1 limit 1',
     [email.toLowerCase()]
   );
   const row = res.rows[0];
@@ -18,13 +18,14 @@ export async function dbGetUserByEmail(email: string): Promise<User | null> {
     organisationId: row.organisation_id,
     department: row.department ?? undefined,
     createdAt: new Date(row.created_at).toISOString(),
+    emailVerifiedAt: row.email_verified_at ? new Date(row.email_verified_at).toISOString() : null,
   };
 }
 
 export async function dbGetUserById(id: string): Promise<User | null> {
   const pool = getDbPool();
   const res = await pool.query<DbUserRow>(
-    'select id, email, name, password_hash, role, organisation_id, department, created_at from public.users where id = $1 limit 1',
+    'select id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at from public.users where id = $1 limit 1',
     [id]
   );
   const row = res.rows[0];
@@ -38,13 +39,14 @@ export async function dbGetUserById(id: string): Promise<User | null> {
     organisationId: row.organisation_id,
     department: row.department ?? undefined,
     createdAt: new Date(row.created_at).toISOString(),
+    emailVerifiedAt: row.email_verified_at ? new Date(row.email_verified_at).toISOString() : null,
   };
 }
 
 export async function dbInsertUser(user: User): Promise<void> {
   const pool = getDbPool();
   await pool.query(
-    'insert into public.users (id, email, name, password_hash, role, organisation_id, department, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8)',
+    'insert into public.users (id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
     [
       user.id,
       user.email.toLowerCase(),
@@ -54,6 +56,7 @@ export async function dbInsertUser(user: User): Promise<void> {
       user.organisationId,
       user.department ?? null,
       user.createdAt,
+      user.emailVerifiedAt === null ? null : (user.emailVerifiedAt ?? user.createdAt),
     ]
   );
 }
@@ -119,4 +122,11 @@ export async function dbGetEmployeeDashboardData(organisationId: string): Promis
     assessmentCompleted: row.assessment_completed ? new Date(row.assessment_completed).toISOString() : null,
     answerCount: Number(row.answer_count) || 0,
   }));
+}
+
+/** Marks the email confirmed. Returns false when the user does not exist. */
+export async function dbMarkUserEmailVerified(id: string, at: string): Promise<boolean> {
+  const pool = getDbPool();
+  const res = await pool.query('update public.users set email_verified_at = coalesce(email_verified_at, $2) where id = $1', [id, at]);
+  return (res.rowCount ?? 0) > 0;
 }

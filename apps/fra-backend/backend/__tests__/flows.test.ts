@@ -11,6 +11,14 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
   });
 }
 
+/** Signs up and follows the confirmation link; returns the confirmation response, which carries the tokens. */
+async function signupConfirmed(body: Record<string, unknown>) {
+  const signupRes = await post('/auth/signup', body);
+  expect(signupRes.status).toBe(200);
+  const token = ((await signupRes.json()) as any).data.verificationToken;
+  return post('/auth/verify-email', { token });
+}
+
 function get(path: string, headers: Record<string, string> = {}) {
   return app.request(`http://localhost/api/v1${path}`, { headers });
 }
@@ -36,7 +44,7 @@ describe('Integration flows', () => {
       const password = 'FlowTestPass1!';
 
       // 1. Signup
-      const signupRes = await post('/auth/signup', {
+      const signupRes = await signupConfirmed({
         email,
         password,
         name: 'Auth Flow User',
@@ -98,7 +106,7 @@ describe('Integration flows', () => {
       const email = `flow+assess+${Date.now()}@example.com`;
 
       // Signup
-      const signupRes = await post('/auth/signup', {
+      const signupRes = await signupConfirmed({
         email,
         password: 'FlowTestPass1!',
         name: 'Assess Flow',
@@ -175,7 +183,7 @@ describe('Integration flows', () => {
       const employerEmail = `flow+employer+${Date.now()}@example.com`;
 
       // 1. Employer signs up
-      const signupRes = await post('/auth/signup', {
+      const signupRes = await signupConfirmed({
         email: employerEmail,
         password: 'FlowTestPass1!',
         name: 'Employer Flow',

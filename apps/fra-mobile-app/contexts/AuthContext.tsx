@@ -72,7 +72,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       email: string,
       password: string,
       orgName: string
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; pendingVerification?: boolean; error?: string }> => {
       try {
         logger.info('Signing up:', email);
 
@@ -83,11 +83,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           organisationName: orgName,
         });
 
-        if (result.success && result.data) {
-          setUser(result.data.user);
-          setOrganisation(result.data.organisation as OrganisationData);
-          logger.info('Signup successful');
-          return { success: true };
+        if (result.success) {
+          // Signed in later, after the emailed link confirms the address
+          logger.info('Signup successful; waiting for email confirmation');
+          return { success: true, pendingVerification: true };
         }
 
         return {

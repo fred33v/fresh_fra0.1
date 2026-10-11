@@ -1,11 +1,11 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db.js';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { getRedis } from '../redis.js';
 import {
-  signupSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, profileUpdateSchema,
+  signupSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, profileUpdateSchema,
   refreshSecret,
   LOCKOUT_PREFIX, LOCKOUT_MAX_ATTEMPTS, LOCKOUT_ACCOUNT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS,
   RATE_LIMITS,
@@ -19,10 +19,12 @@ import {
   dbGetOrganisationById,
   auditLog,
   setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken,
+  setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken,
+  dbMarkUserEmailVerified,
 } from '../db/index.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { createLogger } from '../logger.js';
-import { passwordChangedEmail, passwordResetEmail, sendEmailInBackground } from '../email.js';
+import { accountExistsEmail, passwordChangedEmail, passwordResetEmail, sendEmailInBackground, verifyEmailEmail } from '../email.js';
 
 const logger = createLogger('auth');
 
@@ -113,6 +115,32 @@ async function clearFailedLogins(email: string, ip: string): Promise<void> {
   await clearFailures(lockoutKeys(email, ip).client);
 }
 
+// ── Email confirmation ─────────────────────────────────────────
+
+/** Issues a confirmation link and emails it. Returns the token (shown to developers outside production). */
+async function sendVerificationLink(user: User): Promise<string | undefined> {
+  const token = crypto.randomUUID();
+  try {
+    await setEmailVerificationToken(token, user.id);
+    sendEmailInBackground(verifyEmailEmail(user.email, user.name, token), { userId: user.id, kind: 'verify_email' });
+    return token;
+  } catch (err: unknown) {
+    logger.error('Could not issue an email confirmation link', { userId: user.id, error: String(err) });
+    return undefined;
+  }
+}
+
+function signupPendingResponse(c: Context, email: string, verificationToken?: string) {
+  const data: Record<string, unknown> = { pendingVerification: true, email };
+  // Lets local development and tests finish sign-up without an inbox
+  if (process.env.NODE_ENV !== 'production' && verificationToken) data.verificationToken = verificationToken;
+  return c.json({
+    success: true,
+    message: 'Check your email: we have sent a link to confirm your address and finish setting up your account.',
+    data,
+  });
+}
+
 // Dummy hash for timing-safe comparison when user is not found
 const DUMMY_HASH = '$2a$12$000000000000000000000uGEjMjP7rqOHBwE0oFRnlJWx/.EHPqK';
 
@@ -130,9 +158,20 @@ auth.post('/auth/signup', async (c) => {
   const { email, password, name } = parsed.data;
   const emailLc = email.toLowerCase();
   const existing = hasDatabase() ? await dbGetUserByEmail(emailLc) : usersByEmail.get(emailLc);
-  if (existing) return jsonError(c, 409, 'SIGNUP_FAILED', 'Unable to create account. Please try signing in or resetting your password.');
-
+  // Hashed either way, so a new and an already-registered email take the same time
   const passwordHash = await bcrypt.hash(password, 12);
+
+  if (existing) {
+    // Same reply as a new sign-up, so the form cannot be used to find out who has an
+    // account. The owner gets an email telling them, or a fresh link if never confirmed.
+    if (existing.emailVerifiedAt === null) {
+      void sendVerificationLink(existing);
+    } else {
+      sendEmailInBackground(accountExistsEmail(existing.email, existing.name), { userId: existing.id, kind: 'account_exists' });
+    }
+    return signupPendingResponse(c, emailLc);
+  }
+
   const now = new Date().toISOString();
   const user: User = {
     id: crypto.randomUUID(),
@@ -142,12 +181,10 @@ auth.post('/auth/signup', async (c) => {
     role: 'employer',
     organisationId: crypto.randomUUID(),
     createdAt: now,
+    emailVerifiedAt: null,
   };
 
   const orgName = parsed.data.organisationName ?? 'Organisation';
-
-  let workshopProfile = null;
-  const workshopRoles: string[] = [];
 
   if (hasDatabase()) {
     const pool = getDbPool();
@@ -168,21 +205,18 @@ auth.post('/auth/signup', async (c) => {
       const sector = parsed.data.sector ?? 'private';
       const jobTitle = parsed.data.jobTitle ?? null;
 
-      const profileRes = await client.query(
+      await client.query(
         `INSERT INTO workshop_profiles (user_id, full_name, organization_name, sector, job_title)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id) DO NOTHING
-         RETURNING *`,
+         ON CONFLICT (user_id) DO NOTHING`,
         [user.id, fullName, orgName, sector, jobTitle]
       );
-      workshopProfile = profileRes.rows[0] ?? null;
 
       const role = parsed.data.workshopRole ?? 'participant';
       await client.query(
         'INSERT INTO workshop_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [user.id, role]
       );
-      workshopRoles.push(role);
 
       await client.query('COMMIT');
     } catch (err) {
@@ -199,11 +233,6 @@ auth.post('/auth/signup', async (c) => {
     });
   }
 
-  const { accessToken, refreshToken } = issueTokens(user);
-  if (hasDatabase()) {
-    await dbUpsertRefreshToken(refreshToken, user.id);
-  }
-
   await auditLog({
     eventType: 'auth.signup', actorId: user.id, actorEmail: user.email,
     organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
@@ -211,17 +240,8 @@ auth.post('/auth/signup', async (c) => {
     userAgent: c.req.header('user-agent'),
   });
 
-  return c.json({
-    success: true,
-    data: {
-      user: publicUser(user),
-      organisation: { organisationId: user.organisationId, name: orgName },
-      accessToken,
-      refreshToken,
-      profile: workshopProfile,
-      workshopRoles,
-    },
-  });
+  const verificationToken = await sendVerificationLink(user);
+  return signupPendingResponse(c, emailLc, verificationToken);
 });
 
 auth.post('/auth/login', async (c) => {
@@ -268,6 +288,12 @@ auth.post('/auth/login', async (c) => {
 
   // Successful login - clear lockout counter
   await clearFailedLogins(emailLc, getClientIp(c));
+
+  // The right password proves who they are, so saying the email is unconfirmed reveals nothing
+  if (user.emailVerifiedAt === null) {
+    void sendVerificationLink(user);
+    return jsonError(c, 403, 'EMAIL_NOT_VERIFIED', 'Please confirm your email address first. We have sent you a new link.');
+  }
 
   const { accessToken, refreshToken } = issueTokens(user);
   if (hasDatabase()) {
@@ -472,6 +498,73 @@ auth.post('/auth/forgot-password', async (c) => {
   return c.json(response);
 });
 
+auth.post('/auth/verify-email', async (c) => {
+  const limited = await rateLimit('auth:verify', { windowMs: AUTH_WINDOW_MS, max: RESET_PASSWORD_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const parsed = verifyEmailSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid verify-email payload');
+
+  const userId = await getEmailVerificationUserId(parsed.data.token);
+  if (!userId) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
+  await deleteEmailVerificationToken(parsed.data.token);
+
+  const user = hasDatabase() ? await dbGetUserById(userId) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
+  if (!user) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
+
+  const verifiedAt = new Date().toISOString();
+  if (hasDatabase()) {
+    await dbMarkUserEmailVerified(user.id, verifiedAt);
+  } else {
+    user.emailVerifiedAt ??= verifiedAt;
+  }
+
+  await auditLog({
+    eventType: 'auth.email_verified', actorId: user.id, actorEmail: user.email,
+    organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+
+  // Following the link signs them in, so a new account goes straight to the app
+  const { accessToken, refreshToken } = issueTokens(user);
+  if (hasDatabase()) {
+    await dbUpsertRefreshToken(refreshToken, user.id);
+  }
+  let orgName = 'Organisation';
+  const org = hasDatabase() ? await dbGetOrganisationById(user.organisationId) : organisationsById.get(user.organisationId);
+  if (org) orgName = org.name;
+
+  return c.json({
+    success: true,
+    data: {
+      user: publicUser(user),
+      organisation: { organisationId: user.organisationId, name: orgName },
+      accessToken,
+      refreshToken,
+    },
+  });
+});
+
+auth.post('/auth/resend-verification', async (c) => {
+  const limited = await rateLimit('auth:resend-verification', { windowMs: AUTH_WINDOW_MS, max: FORGOT_PASSWORD_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const parsed = forgotPasswordSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid resend-verification payload');
+
+  const emailLc = parsed.data.email.toLowerCase();
+  // Looked up and sent in the background: the reply is the same whether or not the account exists
+  void (async () => {
+    const user = hasDatabase() ? await dbGetUserByEmail(emailLc) : usersByEmail.get(emailLc);
+    if (user && user.emailVerifiedAt === null) await sendVerificationLink(user);
+  })().catch((err: unknown) => logger.error('Resend verification failed', { error: String(err) }));
+
+  return c.json({
+    success: true,
+    message: 'If that email has an account waiting to be confirmed, we have sent a new link.',
+  });
+});
+
 auth.post('/auth/reset-password', async (c) => {
   const limited = await rateLimit('auth:reset', { windowMs: AUTH_WINDOW_MS, max: RESET_PASSWORD_MAX })(c);
   if (limited instanceof Response) return limited;
@@ -493,11 +586,15 @@ auth.post('/auth/reset-password', async (c) => {
   }
 
   const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  // The reset link reached their inbox, which confirms the address too
+  const verifiedAt = new Date().toISOString();
   if (hasDatabase()) {
     await dbUpdateUserPasswordHash(user.id, newHash);
+    await dbMarkUserEmailVerified(user.id, verifiedAt);
     await dbDeleteAllRefreshTokensForUser(user.id);
   } else {
     user.passwordHash = newHash;
+    user.emailVerifiedAt ??= verifiedAt;
     for (const token of Array.from(refreshTokenAllowlist.values())) {
       try {
         const payload = jwt.decode(token) as jwt.JwtPayload | null;

@@ -58,24 +58,16 @@ class AuthService {
   /**
    * Sign up a new user
    */
-  async signup(data: SignupData): Promise<{ success: boolean; data?: AuthResponse; error?: ApiError }> {
+  async signup(data: SignupData): Promise<{ success: boolean; pendingVerification?: boolean; error?: ApiError }> {
     try {
-      const response = await apiService.post<AuthResponse>(
+      // No tokens come back: the user signs in once they have confirmed their email
+      const response = await apiService.post<{ pendingVerification: boolean; email: string }>(
         API_CONFIG.ENDPOINTS.AUTH.SIGNUP,
         data as unknown as Record<string, unknown>
       );
 
-      if (response.success && response.data) {
-        // Save tokens
-        await apiService.setTokens(response.data.accessToken, response.data.refreshToken);
-
-        // Save user and organisation data
-        await Promise.all([
-          AsyncStorage.setItem('user', JSON.stringify(response.data.user)),
-          AsyncStorage.setItem('organisation', JSON.stringify(response.data.organisation)),
-        ]);
-
-        return { success: true, data: response.data };
+      if (response.success) {
+        return { success: true, pendingVerification: true };
       }
 
       return { success: false, error: response.error };

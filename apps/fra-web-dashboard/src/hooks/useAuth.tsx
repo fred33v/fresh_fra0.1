@@ -19,7 +19,10 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   isLoading: boolean;
+  /** Resolves once the account is created; the user signs in by following the emailed confirmation link */
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: Error | null }>;
+  /** Confirms the email from the link's token and signs the user in */
+  verifyEmail: (token: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -135,7 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, metadata: SignUpMetadata) => {
     try {
-      const data = await api.post<AuthResponse>('/api/v1/auth/signup', {
+      // No tokens come back: the account is used once its email is confirmed
+      await api.post('/api/v1/auth/signup', {
         email,
         password,
         name: metadata.full_name,
@@ -144,12 +148,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sector: metadata.sector,
         workshopRole: 'participant',
       });
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: err as Error };
+    }
+  }, []);
 
+  const verifyEmail = useCallback(async (token: string) => {
+    try {
+      const data = await api.post<AuthResponse>('/api/v1/auth/verify-email', { token });
       setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
-      if (data.profile) setProfile(mapProfile(data.profile));
-      setRoles((data.workshopRoles ?? ['participant']) as AppRole[]);
-
+      await hydrateFromMe();
       return { error: null };
     } catch (err: unknown) {
       return { error: err as Error };
@@ -196,11 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles,
     isLoading,
     signUp,
+    verifyEmail,
     signIn,
     signOut,
     hasRole,
     refreshProfile,
-  }), [user, profile, roles, isLoading, signUp, signIn, signOut, hasRole, refreshProfile]);
+  }), [user, profile, roles, isLoading, signUp, verifyEmail, signIn, signOut, hasRole, refreshProfile]);
 
   return (
     <AuthContext.Provider value={value}>

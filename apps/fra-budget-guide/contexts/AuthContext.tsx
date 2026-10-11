@@ -88,19 +88,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       password: string,
       name: string,
       organisationName: string
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; pendingVerification?: boolean; error?: string }> => {
       try {
-        const result = await apiService.post<AuthTokenResponse>(API_CONFIG.ENDPOINTS.AUTH.SIGNUP, {
+        // No tokens come back: the user signs in once they have confirmed their email
+        const result = await apiService.post<{ pendingVerification: boolean }>(API_CONFIG.ENDPOINTS.AUTH.SIGNUP, {
           email,
           password,
           name,
           organisationName,
         });
 
-        if (result.success && result.data?.accessToken && result.data?.refreshToken) {
-          await apiService.setTokens(result.data.accessToken, result.data.refreshToken);
-          setUser(result.data.user);
-          return { success: true };
+        if (result.success) {
+          return { success: true, pendingVerification: true };
         }
 
         return {
