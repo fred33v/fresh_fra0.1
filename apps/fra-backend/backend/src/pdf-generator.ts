@@ -66,7 +66,8 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
       if (req.url().startsWith('data:') || req.url() === 'about:blank') req.continue();
       else req.abort();
     });
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // Every network request is aborted above, so 'load' already means fully rendered
+    await page.setContent(html, { waitUntil: 'load' });
     const pdf = await page.pdf({
       format: 'A4',
       margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
