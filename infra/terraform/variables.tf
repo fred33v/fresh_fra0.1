@@ -139,3 +139,9 @@ variable "tags" {
     ManagedBy   = "Terraform"
   }
 }
+
+variable "ssh_allowed_cidrs" {
+  description = "CIDR blocks allowed to SSH to the backend instance, e.g. [\"203.0.113.4/32\"]. Empty closes port 22."
+  type        = list(string)
+  default     = []
+}

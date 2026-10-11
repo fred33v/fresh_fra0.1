@@ -41,8 +41,25 @@ echo "Enter values for each parameter (or press Enter to skip):"
 echo ""
 
 read -rp "DATABASE_URL (Neon: postgresql://user:pass@ep-xxx.neon.tech/dbname?sslmode=require): " DATABASE_URL
-read -rp "JWT_SECRET: " JWT_SECRET
-read -rp "JWT_REFRESH_SECRET: " JWT_REFRESH_SECRET
+read -rp "JWT_SECRET (at least 32 characters; Enter to generate): " JWT_SECRET
+JWT_SECRET=${JWT_SECRET:-$(openssl rand -hex 32)}
+read -rp "JWT_REFRESH_SECRET (at least 32 characters, different from JWT_SECRET; Enter to generate): " JWT_REFRESH_SECRET
+JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(openssl rand -hex 32)}
+read -rp "STRIPE_SECRET_KEY (sk_live_...): " STRIPE_SECRET_KEY
+read -rp "STRIPE_WEBHOOK_SECRET (whsec_...): " STRIPE_WEBHOOK_SECRET
+read -rp "SMTP_HOST: " SMTP_HOST
+read -rp "SMTP_PORT [587]: " SMTP_PORT
+SMTP_PORT=${SMTP_PORT:-587}
+read -rp "SMTP_USER: " SMTP_USER
+read -rp "SMTP_PASS: " SMTP_PASS
+read -rp "EMAIL_FROM [FRAUD-RISK.CO.UK <no-reply@fraud-risk.co.uk>]: " EMAIL_FROM
+EMAIL_FROM=${EMAIL_FROM:-FRAUD-RISK.CO.UK <no-reply@fraud-risk.co.uk>}
+read -rp "CORS_ORIGINS [https://app.fraud-risk.co.uk]: " CORS_ORIGINS
+CORS_ORIGINS=${CORS_ORIGINS:-https://app.fraud-risk.co.uk}
+read -rp "WEB_APP_URL [https://app.fraud-risk.co.uk]: " WEB_APP_URL
+WEB_APP_URL=${WEB_APP_URL:-https://app.fraud-risk.co.uk}
+read -rp "INBOUND_WEBHOOK_SECRET (for n8n calls to /webhooks/assessment-submitted; Enter to generate): " INBOUND_WEBHOOK_SECRET
+INBOUND_WEBHOOK_SECRET=${INBOUND_WEBHOOK_SECRET:-$(openssl rand -hex 32)}
 read -rp "UPSTASH_REDIS_REST_URL: " REDIS_URL
 read -rp "UPSTASH_REDIS_REST_TOKEN: " REDIS_TOKEN
 read -rp "S3_BUCKET: " S3_BUCKET
@@ -66,10 +83,20 @@ echo "Setting parameters..."
 [ -n "$DATABASE_URL" ] && put_param "/fra/backend/DATABASE_URL" "$DATABASE_URL"
 [ -n "$JWT_SECRET" ] && put_param "/fra/backend/JWT_SECRET" "$JWT_SECRET"
 [ -n "$JWT_REFRESH_SECRET" ] && put_param "/fra/backend/JWT_REFRESH_SECRET" "$JWT_REFRESH_SECRET"
+[ -n "$STRIPE_SECRET_KEY" ] && put_param "/fra/backend/STRIPE_SECRET_KEY" "$STRIPE_SECRET_KEY"
+[ -n "$STRIPE_WEBHOOK_SECRET" ] && put_param "/fra/backend/STRIPE_WEBHOOK_SECRET" "$STRIPE_WEBHOOK_SECRET"
+[ -n "$SMTP_USER" ] && put_param "/fra/backend/SMTP_USER" "$SMTP_USER"
+[ -n "$SMTP_PASS" ] && put_param "/fra/backend/SMTP_PASS" "$SMTP_PASS"
+put_param "/fra/backend/INBOUND_WEBHOOK_SECRET" "$INBOUND_WEBHOOK_SECRET"
 [ -n "$REDIS_URL" ] && put_param "/fra/backend/UPSTASH_REDIS_REST_URL" "$REDIS_URL"
 [ -n "$REDIS_TOKEN" ] && put_param "/fra/backend/UPSTASH_REDIS_REST_TOKEN" "$REDIS_TOKEN"
 
 # Non-secret configuration (String)
+[ -n "$SMTP_HOST" ] && put_param "/fra/backend/SMTP_HOST" "$SMTP_HOST" "String"
+put_param "/fra/backend/SMTP_PORT" "$SMTP_PORT" "String"
+put_param "/fra/backend/EMAIL_FROM" "$EMAIL_FROM" "String"
+put_param "/fra/backend/CORS_ORIGINS" "$CORS_ORIGINS" "String"
+put_param "/fra/backend/WEB_APP_URL" "$WEB_APP_URL" "String"
 [ -n "$S3_BUCKET" ] && put_param "/fra/backend/S3_BUCKET" "$S3_BUCKET" "String"
 put_param "/fra/backend/S3_REGION" "$S3_REGION" "String"
 put_param "/fra/backend/S3_UPLOAD_PREFIX" "$S3_UPLOAD_PREFIX" "String"

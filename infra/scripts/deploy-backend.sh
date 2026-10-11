@@ -20,22 +20,24 @@ echo ""
 
 # --- Step 1: Build ---
 echo "[1/5] Building backend..."
-cd "$BACKEND_DIR"
-npm run build
+cd "$PROJECT_ROOT"
+pnpm --filter @stopfra/backend build
 echo "  Build complete."
 
 # --- Step 2: Package ---
 echo "[2/5] Packaging deployment..."
-DEPLOY_PKG=$(mktemp -d)/stopfra-backend.tar.gz
-tar -czf "$DEPLOY_PKG" \
-  -C "$BACKEND_DIR" \
+STAGE_DIR=$(mktemp -d)
+DEPLOY_PKG="$STAGE_DIR/stopfra-backend.tar.gz"
+# pnpm deploy writes a self-contained copy of the backend with real (not workspace-linked)
+# production node_modules. Chrome for PDF rendering is installed on the server instead.
+PUPPETEER_SKIP_DOWNLOAD=1 pnpm --filter @stopfra/backend deploy --prod "$STAGE_DIR/app"
+rm -rf "$STAGE_DIR/app/dist" && cp -r "$BACKEND_DIR/dist" "$STAGE_DIR/app/dist"
+tar -czf "$DEPLOY_PKG" -C "$STAGE_DIR/app" \
   dist/ \
   migrations/ \
   package.json \
-  package-lock.json \
   start.sh \
-  node_modules/ \
-  --exclude='node_modules/.cache'
+  node_modules/
 
 echo "  Package: $(du -h "$DEPLOY_PKG" | cut -f1)"
 
@@ -64,6 +66,15 @@ echo "  Extracting new deployment..."
 sudo tar -xzf /tmp/stopfra-backend.tar.gz -C "$REMOTE_DIR"
 sudo chown -R stopfra:stopfra "$REMOTE_DIR"
 sudo chmod +x "$REMOTE_DIR/start.sh"
+
+# Chrome for PDF rendering (no-op when this version is already installed)
+echo "  Installing Chrome for PDF rendering..."
+(cd "$REMOTE_DIR" && sudo -u stopfra PUPPETEER_CACHE_DIR="$REMOTE_DIR/.cache/puppeteer" \
+  node node_modules/puppeteer/lib/cjs/puppeteer/node/cli.js browsers install chrome > /dev/null)
+
+# Apply database migrations before the new code starts serving
+echo "  Running database migrations..."
+(cd "$REMOTE_DIR" && sudo -u stopfra ./start.sh migrate)
 
 # Restart service
 echo "  Restarting backend service..."
@@ -113,4 +124,4 @@ echo ""
 echo "=== Deployment Complete ==="
 
 # Cleanup temp file
-rm -f "$DEPLOY_PKG"
+rm -rf "$STAGE_DIR"

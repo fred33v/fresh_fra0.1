@@ -17,6 +17,10 @@ dnf install -y nodejs20 nodejs20-npm
 node --version
 npm --version
 
+# --- Libraries headless Chrome needs (PDF reports) ---
+dnf install -y nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite \
+  libXdamage libXrandr mesa-libgbm pango alsa-lib
+
 # --- Install nginx ---
 dnf install -y nginx
 systemctl enable nginx

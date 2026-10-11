@@ -169,12 +169,16 @@ resource "aws_security_group" "backend" {
     description     = "Backend from ALB only"
   }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict to your IP in production
-    description = "SSH access"
+  # SSH is closed unless ssh_allowed_cidrs lists the addresses allowed in
+  dynamic "ingress" {
+    for_each = length(var.ssh_allowed_cidrs) > 0 ? [1] : []
+    content {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = var.ssh_allowed_cidrs
+      description = "SSH access"
+    }
   }
 
   egress {
@@ -314,7 +318,11 @@ resource "aws_iam_role_policy" "backend_ssm" {
           "ssm:GetParameter",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend/*"
+        # GetParametersByPath (used by start.sh) is authorised against the path itself
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend",
+          "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend/*",
+        ]
       },
       {
         Effect   = "Allow"
