@@ -7,7 +7,7 @@ import { getRedis } from '../redis.js';
 import {
   signupSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, profileUpdateSchema,
   refreshSecret,
-  LOCKOUT_PREFIX, LOCKOUT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS,
+  LOCKOUT_PREFIX, LOCKOUT_MAX_ATTEMPTS, LOCKOUT_ACCOUNT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS,
   RATE_LIMITS,
 } from '../types.js';
 import type { User } from '../types.js';
@@ -30,43 +30,37 @@ const { AUTH_WINDOW_MS, SIGNUP_MAX, LOGIN_MAX, FORGOT_PASSWORD_MAX, RESET_PASSWO
 
 // ── Auth helpers ────────────────────────────────────────────────
 
-// Lockout state lives in Redis when it is configured. If Redis errors, logins fall back
+// Failed logins are counted twice: per account and client address, which locks out
+// someone guessing a password, and per account across all addresses, a much higher
+// ceiling that stops a guesser spread over many addresses. Counting per address means
+// a stranger who knows an email cannot lock its owner out of their own account.
+//
+// The counters live in Redis when it is configured. If Redis errors, logins fall back
 // to the per-process counters rather than failing outright.
+function lockoutKeys(email: string, ip: string): { client: string; account: string } {
+  const account = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
+  return { client: `${account}:${ip}`, account };
+}
+
 function lockoutRedisError(err: unknown): void {
   logger.warn('Account lockout Redis error, using in-memory fallback', { error: (err as Error).message });
 }
 
-async function checkAccountLockout(email: string): Promise<{ locked: boolean; remaining: number }> {
+async function readFailures(key: string): Promise<number> {
   const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
-
   if (redis) {
     try {
-      const count = await redis.get<number>(key) ?? 0;
-      if (count >= LOCKOUT_MAX_ATTEMPTS) {
-        return { locked: true, remaining: 0 };
-      }
-      return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - count };
+      return (await redis.get<number>(key)) ?? 0;
     } catch (err) {
       lockoutRedisError(err);
     }
   }
-
-  // In-memory fallback
   const entry = accountLockouts.get(key);
-  if (!entry || entry.expiresAt < Date.now()) {
-    return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS };
-  }
-  if (entry.count >= LOCKOUT_MAX_ATTEMPTS) {
-    return { locked: true, remaining: 0 };
-  }
-  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - entry.count };
+  return entry && entry.expiresAt >= Date.now() ? entry.count : 0;
 }
 
-async function recordFailedLogin(email: string): Promise<void> {
+async function addFailure(key: string): Promise<void> {
   const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
-
   if (redis) {
     try {
       const count = await redis.incr(key);
@@ -78,8 +72,6 @@ async function recordFailedLogin(email: string): Promise<void> {
       lockoutRedisError(err);
     }
   }
-
-  // In-memory fallback
   const entry = accountLockouts.get(key);
   const now = Date.now();
   if (!entry || entry.expiresAt < now) {
@@ -89,11 +81,9 @@ async function recordFailedLogin(email: string): Promise<void> {
   }
 }
 
-async function clearFailedLogins(email: string): Promise<void> {
-  const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
-
+async function clearFailures(key: string): Promise<void> {
   accountLockouts.delete(key);
+  const redis = getRedis();
   if (redis) {
     try {
       await redis.del(key);
@@ -101,6 +91,26 @@ async function clearFailedLogins(email: string): Promise<void> {
       lockoutRedisError(err);
     }
   }
+}
+
+async function checkAccountLockout(email: string, ip: string): Promise<{ locked: boolean; remaining: number }> {
+  const keys = lockoutKeys(email, ip);
+  const [clientFailures, accountFailures] = await Promise.all([readFailures(keys.client), readFailures(keys.account)]);
+  if (clientFailures >= LOCKOUT_MAX_ATTEMPTS || accountFailures >= LOCKOUT_ACCOUNT_MAX_ATTEMPTS) {
+    return { locked: true, remaining: 0 };
+  }
+  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - clientFailures };
+}
+
+async function recordFailedLogin(email: string, ip: string): Promise<void> {
+  const keys = lockoutKeys(email, ip);
+  await Promise.all([addFailure(keys.client), addFailure(keys.account)]);
+}
+
+async function clearFailedLogins(email: string, ip: string): Promise<void> {
+  // A correct password from one address clears that address only; the account-wide
+  // count keeps running so a guesser elsewhere is still held back
+  await clearFailures(lockoutKeys(email, ip).client);
 }
 
 // Dummy hash for timing-safe comparison when user is not found
@@ -225,7 +235,7 @@ auth.post('/auth/login', async (c) => {
   const emailLc = email.toLowerCase();
 
   // Account lockout check
-  const lockout = await checkAccountLockout(emailLc);
+  const lockout = await checkAccountLockout(emailLc, getClientIp(c));
   if (lockout.locked) {
     await auditLog({
       eventType: 'auth.lockout', actorEmail: emailLc,
@@ -243,11 +253,11 @@ auth.post('/auth/login', async (c) => {
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
 
   if (!user) {
-    await recordFailedLogin(emailLc);
+    await recordFailedLogin(emailLc, getClientIp(c));
     return jsonError(c, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
   if (!ok) {
-    await recordFailedLogin(emailLc);
+    await recordFailedLogin(emailLc, getClientIp(c));
     await auditLog({
       eventType: 'auth.failed_login', actorEmail: emailLc,
       details: { remaining: lockout.remaining - 1 }, ipAddress: getClientIp(c),
@@ -257,7 +267,7 @@ auth.post('/auth/login', async (c) => {
   }
 
   // Successful login - clear lockout counter
-  await clearFailedLogins(emailLc);
+  await clearFailedLogins(emailLc, getClientIp(c));
 
   const { accessToken, refreshToken } = issueTokens(user);
   if (hasDatabase()) {
@@ -430,15 +440,21 @@ auth.post('/auth/forgot-password', async (c) => {
   let resetToken: string | undefined;
 
   if (user) {
-    resetToken = crypto.randomUUID();
-    await setPasswordResetToken(resetToken, user.id);
-    // In the background, so the response time does not reveal whether the account exists
-    sendEmailInBackground(passwordResetEmail(user.email, user.name, resetToken), { userId: user.id, kind: 'password_reset' });
-
-    await auditLog({
-      eventType: 'auth.forgot_password', actorEmail: emailLc,
-      resourceType: 'user', resourceId: user.id, ipAddress: getClientIp(c),
-      userAgent: c.req.header('user-agent'),
+    const token = crypto.randomUUID();
+    resetToken = token;
+    const ipAddress = getClientIp(c);
+    const userAgent = c.req.header('user-agent');
+    // Everything that only happens for a real account runs in the background, so the
+    // response time does not reveal whether the account exists
+    void (async () => {
+      await setPasswordResetToken(token, user.id);
+      sendEmailInBackground(passwordResetEmail(user.email, user.name, token), { userId: user.id, kind: 'password_reset' });
+      await auditLog({
+        eventType: 'auth.forgot_password', actorEmail: emailLc,
+        resourceType: 'user', resourceId: user.id, ipAddress, userAgent,
+      });
+    })().catch((err: unknown) => {
+      logger.error('Password reset request failed', { userId: user.id, error: String(err) });
     });
   }
 

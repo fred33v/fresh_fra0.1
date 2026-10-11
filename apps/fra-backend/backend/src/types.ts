@@ -284,7 +284,8 @@ export function requireUUIDParam(c: Context, paramName: string): string | Respon
 // ── Account lockout constants ───────────────────────────────────
 
 export const LOCKOUT_PREFIX = 'lockout:';
-export const LOCKOUT_MAX_ATTEMPTS = 5;
+export const LOCKOUT_MAX_ATTEMPTS = 5; // per account and client address
+export const LOCKOUT_ACCOUNT_MAX_ATTEMPTS = 50; // per account, across all addresses
 export const LOCKOUT_WINDOW_SECONDS = 15 * 60; // 15 minutes
 
 // ── Security constants ──────────────────────────────────────────

@@ -51,6 +51,24 @@ describe('Security hardening', () => {
       expect(res.status).toBe(401);
     }, 30000);
 
+    it('does not lock the owner out from a different address', async () => {
+      const attackerHeaders = { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.7' };
+      for (let i = 0; i < 6; i++) {
+        await app.request('http://localhost/api/v1/auth/login', {
+          method: 'POST',
+          headers: attackerHeaders,
+          body: JSON.stringify({ email, password: 'WrongPassword123!' }),
+        });
+      }
+
+      const owner = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '198.51.100.20' },
+        body: JSON.stringify({ email, password }),
+      });
+      expect(owner.status).toBe(200);
+    }, 30000);
+
     it('allows login after lockout is cleared', async () => {
       // Manually clear lockout
       for (const key of accountLockouts.keys()) {
