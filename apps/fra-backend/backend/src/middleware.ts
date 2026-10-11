@@ -45,9 +45,19 @@ export function sanitizeObject(obj: unknown): unknown {
 
 // ── Client IP ───────────────────────────────────────────────────
 
+// Each proxy in front of the API appends the address it received the request from, so
+// only the last TRUST_PROXY_HOPS entries of X-Forwarded-For were written by our own
+// infrastructure. Anything to their left came from the client and can be forged, which
+// would let one caller dodge rate limits by sending a new address on every request.
+// Production runs behind a single AWS load balancer, hence the default of 1.
+const trustProxyHops = Math.max(1, Number(process.env.TRUST_PROXY_HOPS ?? 1) || 1);
+
 export function getClientIp(c: Context): string {
   const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const hops = forwarded.split(',').map((ip) => ip.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[Math.max(0, hops.length - trustProxyHops)];
+  }
   const realIp = c.req.header('x-real-ip');
   if (realIp) return realIp.trim();
   return 'unknown';
@@ -65,18 +75,23 @@ export function rateLimit(keyPrefix: string, cfg: RateLimitConfig) {
 
     const redis = getRedis();
     if (redis) {
-      const count = await redis.incr(key);
-      if (count === 1) {
-        await redis.pexpire(key, cfg.windowMs);
-      }
+      try {
+        const count = await redis.incr(key);
+        if (count === 1) {
+          await redis.pexpire(key, cfg.windowMs);
+        }
 
-      if (count > cfg.max) {
-        const ttl = await redis.pttl(key);
-        c.header('Retry-After', String(Math.ceil(Math.max(ttl, 1000) / 1000)));
-        return jsonError(c, 429, 'RATE_LIMITED', 'Too many requests');
-      }
+        if (count > cfg.max) {
+          const ttl = await redis.pttl(key);
+          c.header('Retry-After', String(Math.ceil(Math.max(ttl, 1000) / 1000)));
+          return jsonError(c, 429, 'RATE_LIMITED', 'Too many requests');
+        }
 
-      return;
+        return;
+      } catch (err) {
+        // A Redis outage must not take the whole API down; limit per process until it recovers
+        logger.warn('Rate limiter Redis error, using in-memory fallback', { error: (err as Error).message });
+      }
     }
 
     const now = Date.now();
@@ -224,7 +239,14 @@ export function applyApiMiddleware(api: Hono, allowedOrigins: string[]) {
 
     // In production, validate Origin/Referer against allowed origins
     if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
-      const requestOrigin = origin ?? (referer ? new URL(referer).origin : null);
+      let requestOrigin = origin ?? null;
+      if (!requestOrigin && referer) {
+        try {
+          requestOrigin = new URL(referer).origin;
+        } catch {
+          return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
+        }
+      }
       if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
         return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
       }

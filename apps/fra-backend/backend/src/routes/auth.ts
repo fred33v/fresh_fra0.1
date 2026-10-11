@@ -30,48 +30,62 @@ const { AUTH_WINDOW_MS, SIGNUP_MAX, LOGIN_MAX, FORGOT_PASSWORD_MAX, RESET_PASSWO
 
 // ── Auth helpers ────────────────────────────────────────────────
 
+// Lockout state lives in Redis when it is configured. If Redis errors, logins fall back
+// to the per-process counters rather than failing outright.
+function lockoutRedisError(err: unknown): void {
+  logger.warn('Account lockout Redis error, using in-memory fallback', { error: (err as Error).message });
+}
+
 async function checkAccountLockout(email: string): Promise<{ locked: boolean; remaining: number }> {
   const redis = getRedis();
   const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
 
-  if (!redis) {
-    // In-memory fallback
-    const entry = accountLockouts.get(key);
-    if (!entry || entry.expiresAt < Date.now()) {
-      return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS };
+  if (redis) {
+    try {
+      const count = await redis.get<number>(key) ?? 0;
+      if (count >= LOCKOUT_MAX_ATTEMPTS) {
+        return { locked: true, remaining: 0 };
+      }
+      return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - count };
+    } catch (err) {
+      lockoutRedisError(err);
     }
-    if (entry.count >= LOCKOUT_MAX_ATTEMPTS) {
-      return { locked: true, remaining: 0 };
-    }
-    return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - entry.count };
   }
 
-  const count = await redis.get<number>(key) ?? 0;
-  if (count >= LOCKOUT_MAX_ATTEMPTS) {
+  // In-memory fallback
+  const entry = accountLockouts.get(key);
+  if (!entry || entry.expiresAt < Date.now()) {
+    return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS };
+  }
+  if (entry.count >= LOCKOUT_MAX_ATTEMPTS) {
     return { locked: true, remaining: 0 };
   }
-  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - count };
+  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - entry.count };
 }
 
 async function recordFailedLogin(email: string): Promise<void> {
   const redis = getRedis();
   const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
 
-  if (!redis) {
-    // In-memory fallback
-    const entry = accountLockouts.get(key);
-    const now = Date.now();
-    if (!entry || entry.expiresAt < now) {
-      accountLockouts.set(key, { count: 1, expiresAt: now + LOCKOUT_WINDOW_SECONDS * 1000 });
-    } else {
-      entry.count += 1;
+  if (redis) {
+    try {
+      const count = await redis.incr(key);
+      if (count === 1) {
+        await redis.expire(key, LOCKOUT_WINDOW_SECONDS);
+      }
+      return;
+    } catch (err) {
+      lockoutRedisError(err);
     }
-    return;
   }
 
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, LOCKOUT_WINDOW_SECONDS);
+  // In-memory fallback
+  const entry = accountLockouts.get(key);
+  const now = Date.now();
+  if (!entry || entry.expiresAt < now) {
+    accountLockouts.set(key, { count: 1, expiresAt: now + LOCKOUT_WINDOW_SECONDS * 1000 });
+  } else {
+    entry.count += 1;
   }
 }
 
@@ -79,12 +93,14 @@ async function clearFailedLogins(email: string): Promise<void> {
   const redis = getRedis();
   const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
 
-  if (!redis) {
-    accountLockouts.delete(key);
-    return;
+  accountLockouts.delete(key);
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (err) {
+      lockoutRedisError(err);
+    }
   }
-
-  await redis.del(key);
 }
 
 // Dummy hash for timing-safe comparison when user is not found

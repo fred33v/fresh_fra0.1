@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Hono } from 'hono';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { requireUUIDParam, RATE_LIMITS } from '../types.js';
@@ -95,6 +96,19 @@ reportsExports.get('/assessments/:id/export-pdf', async (c) => {
 reportsExports.post('/webhooks/assessment-submitted', async (c) => {
   const limited = await rateLimit('webhooks:assessment-submitted', { windowMs: RATE_LIMITS.WEBHOOK_WINDOW_MS ?? 60_000, max: RATE_LIMITS.WEBHOOK_MAX ?? 100 })(c);
   if (limited instanceof Response) return limited;
+
+  // Callers (e.g. n8n) must send the shared secret, or anyone who learns an assessment
+  // id could write entries into that organisation's audit trail
+  const secret = process.env.INBOUND_WEBHOOK_SECRET;
+  if (secret) {
+    const given = Buffer.from(c.req.header('x-webhook-secret') ?? '');
+    const expected = Buffer.from(secret);
+    if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+      return jsonError(c, 401, 'UNAUTHORIZED', 'Invalid webhook secret');
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    return jsonError(c, 503, 'NOT_CONFIGURED', 'This webhook is disabled until INBOUND_WEBHOOK_SECRET is set');
+  }
 
   try {
     const body = await c.req.json();

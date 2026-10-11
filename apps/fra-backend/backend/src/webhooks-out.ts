@@ -4,6 +4,7 @@
 // ============================================================
 
 import crypto from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { hasDatabase, hasPackageEntitlement } from './helpers.js';
 import { listOrgPurchases } from './entitlements.js';
@@ -36,9 +37,21 @@ function isPrivateIPv4(host: string): boolean {
     || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 }
 
+function isPrivateAddress(address: string): boolean {
+  const host = address.toLowerCase();
+  const version = isIP(host);
+  if (version === 4) return isPrivateIPv4(host);
+  if (version === 6) {
+    const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateIPv4(mapped[1]);
+    return host === '::1' || host === '::' || /^(fc|fd|fe[89ab])/.test(host);
+  }
+  return false;
+}
+
 /**
  * Reject URLs that would let a customer make the server call internal services.
- * Hostnames that resolve to private addresses are not caught here (DNS is not resolved).
+ * Hostnames that resolve to private addresses are caught at delivery time (see deliverOnce).
  */
 export function validateWebhookUrl(raw: string): string | null {
   let url: URL;
@@ -81,6 +94,15 @@ async function recordDelivery(endpoint: WebhookEndpoint, status: number) {
 export async function deliverOnce(endpoint: WebhookEndpoint, payload: WebhookPayload): Promise<number> {
   const body = JSON.stringify(payload);
   try {
+    // A public-looking hostname can still resolve to localhost or the cloud metadata address
+    if (process.env.NODE_ENV === 'production') {
+      const host = new URL(endpoint.url).hostname.replace(/^\[|\]$/g, '');
+      const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+      if (addresses.length === 0 || addresses.some((a) => isPrivateAddress(a.address))) {
+        logger.warn('Webhook delivery blocked: host resolves to a private address', { endpointId: endpoint.id });
+        return 0;
+      }
+    }
     const res = await fetch(endpoint.url, {
       method: 'POST',
       headers: {

@@ -275,7 +275,7 @@ export function isValidUUID(value: string): boolean {
 
 export function requireUUIDParam(c: Context, paramName: string): string | Response {
   const value = c.req.param(paramName);
-  if (!isValidUUID(value)) {
+  if (!value || !isValidUUID(value)) {
     return jsonError(c, 400, 'INVALID_PARAM', `Invalid ${paramName} format`);
   }
   return value;
@@ -368,7 +368,11 @@ export function paginate<T>(items: T[], page: number, pageSize: number): { items
 
 // ── Zod schemas ─────────────────────────────────────────────────
 
-export const passwordSchema = z.string().min(12).refine(
+// The upper bound stops a huge password tying up the event loop in bcrypt (which only
+// reads the first 72 bytes anyway).
+export const MAX_PASSWORD_LENGTH = 128;
+
+export const passwordSchema = z.string().min(12).max(MAX_PASSWORD_LENGTH).refine(
   (pw) => /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw),
   { message: 'Password must contain uppercase, lowercase, and a number' }
 );
@@ -385,7 +389,7 @@ export const signupSchema = z.object({
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });
 
 export const refreshSchema = z.object({

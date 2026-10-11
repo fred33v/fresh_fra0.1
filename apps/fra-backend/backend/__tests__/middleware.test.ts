@@ -175,9 +175,10 @@ describe('getClientIp', () => {
     } as any;
   }
 
-  it('extracts first IP from x-forwarded-for', () => {
+  it('takes the address the load balancer appended, not one the client sent', () => {
+    // The client sent "1.2.3.4"; the load balancer appended the real peer, 5.6.7.8
     const c = mockContext({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' });
-    expect(getClientIp(c)).toBe('1.2.3.4');
+    expect(getClientIp(c)).toBe('5.6.7.8');
   });
 
   it('trims whitespace from x-forwarded-for', () => {
