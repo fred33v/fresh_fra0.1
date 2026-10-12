@@ -32,7 +32,7 @@ terraform apply
 This creates the server, load balancer, dashboard hosting, backups bucket, alarms and SES
 email. It also writes the database, JWT, Redis, S3 and SMTP settings to Parameter Store,
 and adds the DNS records on Cloudflare: api and app, the certificate checks, the SES
-records and DMARC. It leaves the Spacemail MX and SPF records as they are.
+records. It leaves the Spacemail MX, SPF, DKIM and DMARC records as they are.
 
 Then, in your inbox, click the "AWS Notification - Subscription Confirmation" link so
 alarm emails reach you.

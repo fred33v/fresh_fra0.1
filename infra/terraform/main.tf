@@ -1041,15 +1041,6 @@ resource "cloudflare_record" "ses_mail_from_spf" {
   ttl     = 1800
 }
 
-# Mail that fails DKIM is quarantined, so nobody can pass off fakes as the domain
-resource "cloudflare_record" "dmarc" {
-  zone_id = data.cloudflare_zone.main.id
-  name    = "_dmarc.${var.domain_name}"
-  type    = "TXT"
-  content = "v=DMARC1; p=quarantine; adkim=r; aspf=r"
-  ttl     = 1800
-}
-
 # Incoming mail: Cloudflare Email Routing forwards anything sent to @<domain> to an inbox
 # you already read. Turning it on adds the domain's MX and SPF records. The inbox gets a
 # confirmation email from Cloudflare, and forwarding starts once it is confirmed.
