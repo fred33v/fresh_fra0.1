@@ -58,7 +58,7 @@ variable "domain_name" {
 }
 
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token for the domain's zone (Zone: Zone Read, DNS Edit, Zone Settings Edit, Email Routing Rules Edit; Account: Email Routing Addresses Edit)"
+  description = "Cloudflare API token for the domain's zone (Zone: Zone Read and DNS Edit; with mail_forward_to also Zone Settings Edit, Email Routing Rules Edit and Account: Email Routing Addresses Edit)"
   type        = string
   sensitive   = true
 }

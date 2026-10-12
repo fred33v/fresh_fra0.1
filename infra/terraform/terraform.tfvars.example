@@ -22,11 +22,14 @@ api_subdomain        = "api"
 dashboard_subdomain  = "app"
 
 # The domain's DNS is on Cloudflare. Create a token at dash.cloudflare.com > My Profile >
-# API Tokens with Zone: Zone Read, DNS Edit, Zone Settings Edit and Email Routing Rules
-# Edit, plus Account: Email Routing Addresses Edit, limited to this zone and account.
+# API Tokens with Zone: Zone Read and Zone: DNS Edit, limited to this zone. If you set
+# mail_forward_to, it also needs Zone Settings Edit, Email Routing Rules Edit and
+# Account: Email Routing Addresses Edit.
 cloudflare_api_token = "your-cloudflare-api-token"
-# Mail sent to any @fraud-risk.co.uk address is forwarded here
-mail_forward_to = "you@example.com"
+# Incoming mail for @fraud-risk.co.uk is handled by Spacemail (its MX records are on
+# Cloudflare already). Leave this empty. Setting an inbox here instead turns on Cloudflare
+# Email Routing, which replaces the Spacemail MX records and forwards everything there.
+mail_forward_to = ""
 
 # --- Upstash Redis ---
 # Create at https://console.upstash.com
