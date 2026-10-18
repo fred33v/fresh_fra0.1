@@ -2,6 +2,7 @@
 
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders } from './helpers';
+import { signupSchema } from '../src/types';
 
 // Helper to create a user and return tokens (keeps res/json shape for auth-specific tests)
 async function signup(overrides: Record<string, unknown> = {}) {
@@ -34,6 +35,24 @@ describe('Auth endpoints', () => {
       expect(json.data.user.userId).toBeTruthy();
       expect(json.data.user.role).toBe('employer');
       expect(json.data.organisation.organisationId).toBeTruthy();
+    });
+
+    it('ignores a self-chosen facilitator role', async () => {
+      // Facilitators skip the training package gate, so signup must not let people pick it
+      const parsed = signupSchema.parse({
+        email: 'role@example.com', password: 'SecurePass123!', name: 'Role Test', workshopRole: 'facilitator',
+      });
+      expect('workshopRole' in parsed).toBe(false);
+
+      const { res, json } = await signup({ workshopRole: 'facilitator' });
+      expect(res.status).toBe(200);
+      expect(json.data.workshopRoles).not.toContain('facilitator');
+
+      // Without a training package the gated workshop routes stay closed
+      const sessions = await app.request('http://localhost/api/v1/workshop/sessions', {
+        headers: authHeaders(json.data.accessToken),
+      });
+      expect(sessions.status).toBe(403);
     });
 
     it('rejects duplicate email', async () => {

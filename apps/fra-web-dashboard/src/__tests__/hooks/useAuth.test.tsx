@@ -212,7 +212,6 @@ describe('AuthProvider', () => {
         organisationName: 'Test Org',
         jobTitle: 'Director',
         sector: 'public',
-        workshopRole: 'participant',
       });
       expect(mockSetTokens).toHaveBeenCalledWith('at-new', 'rt-new');
       expect(result.current.user).toEqual(makeUser());

@@ -380,7 +380,8 @@ export const signupSchema = z.object({
   organisationName: z.string().min(1).max(200).optional(),
   jobTitle: z.string().max(200).optional(),
   sector: z.enum(['public', 'charity', 'private']).optional(),
-  workshopRole: z.enum(['facilitator', 'participant']).optional(),
+  // No workshopRole: everyone signs up as a participant. Facilitators skip the training
+  // package gate, so that role must never be self-selected.
 });
 
 export const loginSchema = z.object({
