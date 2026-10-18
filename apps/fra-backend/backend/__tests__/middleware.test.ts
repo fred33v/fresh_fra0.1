@@ -175,9 +175,33 @@ describe('getClientIp', () => {
     } as any;
   }
 
-  it('extracts first IP from x-forwarded-for', () => {
+  afterEach(() => {
+    delete process.env.TRUSTED_PROXY_COUNT;
+  });
+
+  it('uses the address added by the proxy, not one the client sent', () => {
+    // Client sent "1.2.3.4"; the load balancer appended the real address 5.6.7.8
     const c = mockContext({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' });
-    expect(getClientIp(c)).toBe('1.2.3.4');
+    expect(getClientIp(c)).toBe('5.6.7.8');
+  });
+
+  it('cannot be spoofed by prepending fake addresses', () => {
+    const real = mockContext({ 'x-forwarded-for': '5.6.7.8' });
+    const spoofed = mockContext({ 'x-forwarded-for': '9.9.9.9, 8.8.8.8, 5.6.7.8' });
+    expect(getClientIp(spoofed)).toBe(getClientIp(real));
+  });
+
+  it('counts back past each trusted proxy when TRUSTED_PROXY_COUNT is set', () => {
+    process.env.TRUSTED_PROXY_COUNT = '2';
+    // fake, real client (added by the load balancer), load balancer (added by nginx)
+    const c = mockContext({ 'x-forwarded-for': '9.9.9.9, 5.6.7.8, 10.0.1.20' });
+    expect(getClientIp(c)).toBe('5.6.7.8');
+  });
+
+  it('uses the left-most entry when there are fewer hops than trusted proxies', () => {
+    process.env.TRUSTED_PROXY_COUNT = '3';
+    const c = mockContext({ 'x-forwarded-for': '5.6.7.8, 10.0.1.20' });
+    expect(getClientIp(c)).toBe('5.6.7.8');
   });
 
   it('trims whitespace from x-forwarded-for', () => {
