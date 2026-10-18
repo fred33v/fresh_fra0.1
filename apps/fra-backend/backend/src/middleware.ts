@@ -1,5 +1,6 @@
 import type { Hono, Context } from 'hono';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
 import { jsonError } from './helpers.js';
 import { createLogger } from './logger.js';
 import { getRedis } from './redis.js';
@@ -206,14 +207,12 @@ export function applyGlobalMiddleware(app: Hono) {
 // ── API-level middleware (body-size, sanitization, CSRF, rate-limit) ──
 
 export function applyApiMiddleware(api: Hono, allowedOrigins: string[]) {
-  // Request body size limit
-  api.use('*', async (c, next) => {
-    const contentLength = c.req.header('content-length');
-    if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
-      return jsonError(c, 413, 'PAYLOAD_TOO_LARGE', `Request body exceeds ${MAX_BODY_BYTES} bytes`);
-    }
-    return next();
-  });
+  // Request body size limit. bodyLimit counts the bytes actually received, so a chunked
+  // request with no Content-Length header cannot slip past it.
+  api.use('*', bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => jsonError(c, 413, 'PAYLOAD_TOO_LARGE', `Request body exceeds ${MAX_BODY_BYTES} bytes`),
+  }));
 
   // JSON sanitisation (proto pollution + XSS)
   api.use('*', async (c, next) => {
