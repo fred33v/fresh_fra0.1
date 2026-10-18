@@ -99,14 +99,17 @@ describe('ApiService', () => {
       expect(apiService.isAuthenticated()).toBe(true);
     });
 
-    it('should save tokens via setTokens()', async () => {
+    it('should save tokens to the secure store, not AsyncStorage, via setTokens()', async () => {
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
       await loadService();
+      const SecureStore = require('expo-secure-store');
 
       await apiService.setTokens('new-access', 'new-refresh');
 
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith('accessToken', 'new-access');
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith('refreshToken', 'new-refresh');
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith('accessToken', 'new-access');
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith('refreshToken', 'new-refresh');
+      expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+      expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
       expect(apiService.isAuthenticated()).toBe(true);
     });
 

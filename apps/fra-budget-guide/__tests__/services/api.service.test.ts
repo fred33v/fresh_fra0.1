@@ -123,10 +123,14 @@ describe('ApiService', () => {
   it('sets and clears tokens', async () => {
     await apiService.setTokens('access123', 'refresh456');
     expect(apiService.isAuthenticated()).toBe(true);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('accessToken', 'access123');
+    // Tokens go to the Keychain / Keystore, never to plain AsyncStorage
+    const SecureStore = (await import('expo-secure-store')) as unknown as Record<string, jest.Mock>;
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('accessToken', 'access123');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
 
     await apiService.clearTokens();
     expect(apiService.isAuthenticated()).toBe(false);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('accessToken');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('accessToken');
   });
 });
