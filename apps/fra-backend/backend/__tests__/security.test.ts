@@ -102,6 +102,45 @@ describe('Security hardening', () => {
     });
   });
 
+  // ── Keypass account takeover prevention ─────────────────────
+
+  describe('Keypass cannot sign in as an existing account', () => {
+    it('refuses a keypass used with another account\'s email and issues no tokens', async () => {
+      // The victim: an employer in a different organisation
+      const victim = await createAuthenticatedUser();
+
+      // The attacker: an employer who can generate keypasses for their own organisation
+      const { accessToken, organisationId, userId } = await signup();
+      seedPurchase(organisationId, userId);
+      const genRes = await app.request('http://localhost/api/v1/keypasses/generate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 1, expiresInDays: 30 }),
+      });
+      const code = ((await genRes.json()) as any).data.codes[0];
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: victim.email.toUpperCase() }),
+      });
+      expect(useRes.status).toBe(409);
+      const json = (await useRes.json()) as any;
+      expect(json.error.code).toBe('ACCOUNT_EXISTS');
+      expect(json.data).toBeUndefined();
+
+      // The keypass is not used up, so it can still go to a new employee
+      const retry = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `new-emp-${crypto.randomUUID()}@example.com` }),
+      });
+      expect(retry.status).toBe(200);
+      const retryJson = (await retry.json()) as any;
+      expect(retryJson.data.user.organisationId).toBe(organisationId);
+    });
+  });
+
   // ── Purchase double-spend prevention ────────────────────────
 
   describe('Purchase double-spend prevention', () => {
