@@ -169,12 +169,17 @@ resource "aws_security_group" "backend" {
     description     = "Backend from ALB only"
   }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict to your IP in production
-    description = "SSH access"
+  # SSH is closed unless ssh_allowed_cidrs lists specific addresses (e.g. your office IP).
+  # Prefer AWS Systems Manager Session Manager, which needs no open port.
+  dynamic "ingress" {
+    for_each = length(var.ssh_allowed_cidrs) > 0 ? [1] : []
+    content {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = var.ssh_allowed_cidrs
+      description = "SSH from allowed addresses only"
+    }
   }
 
   egress {
@@ -349,6 +354,12 @@ resource "aws_iam_role_policy" "backend_s3" {
   })
 }
 
+# Lets you open a shell on the instance through Session Manager instead of SSH
+resource "aws_iam_role_policy_attachment" "backend_ssm_session" {
+  role       = aws_iam_role.backend.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "backend" {
   name = "${var.project_name}-backend-profile"
   role = aws_iam_role.backend.name
@@ -365,6 +376,13 @@ resource "aws_instance" "backend" {
   subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.backend.id]
   iam_instance_profile   = aws_iam_instance_profile.backend.name
+
+  # IMDSv2 only: stops SSRF bugs from reading the instance's AWS credentials
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
 
   root_block_device {
     volume_size = 20

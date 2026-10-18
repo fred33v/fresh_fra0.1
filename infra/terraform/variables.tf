@@ -49,6 +49,17 @@ variable "ec2_key_name" {
   type        = string
 }
 
+variable "ssh_allowed_cidrs" {
+  description = "Addresses allowed to SSH to the backend, e.g. [\"203.0.113.10/32\"]. Empty = SSH closed (use Session Manager)."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = !contains(var.ssh_allowed_cidrs, "0.0.0.0/0") && !contains(var.ssh_allowed_cidrs, "::/0")
+    error_message = "Do not open SSH to the whole internet; list specific addresses instead."
+  }
+}
+
 # --- Domain ---
 
 variable "domain_name" {
