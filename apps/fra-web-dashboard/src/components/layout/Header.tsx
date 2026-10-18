@@ -43,6 +43,10 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-4">
+          {/* The budget-holder guide is open to everyone */}
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/guide">Guide</Link>
+          </Button>
           {user ? (
             <>
               {(user.role === 'employer' || user.role === 'admin') && (
@@ -87,6 +91,9 @@ export function Header() {
                   )}
                   <DropdownMenuItem asChild>
                     <Link to="/resources">Resources</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/guide">Budget-holder guide</Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
