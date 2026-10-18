@@ -2,15 +2,31 @@
 
 import { describe, expect, it } from '@jest/globals';
 import { app, authHeaders, createPaidUser } from './helpers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { QUIZ_ANSWER_KEY, WORKSHOP_SECTION_IDS, mergeQuizScores, missingForCompletion } from '../src/workshop-quiz';
-import { quizQuestions } from '../../../../packages/shared/src/data/quizQuestions';
-import { workshopSections } from '../../../../packages/shared/src/data/workshopContent';
+
+// The workshop content lives in packages/shared, which the backend does not depend on,
+// so it is read as text here rather than imported
+const SHARED_DATA = join(__dirname, '../../../../packages/shared/src/data');
+
+function sharedSectionIds(): number[] {
+  const source = readFileSync(join(SHARED_DATA, 'workshopContent.ts'), 'utf8');
+  const list = source.slice(source.indexOf('export const workshopSections'));
+  return [...list.slice(0, list.indexOf('];')).matchAll(/\bid:\s*(\d+)/g)].map((m) => Number(m[1]));
+}
+
+function sharedAnswerKey(): Record<number, number> {
+  const source = readFileSync(join(SHARED_DATA, 'quizQuestions.ts'), 'utf8');
+  return Object.fromEntries(
+    [...source.matchAll(/^\s{2}(\d+):\s*\{[\s\S]*?correctAnswer:\s*(\d+)/gm)].map((m) => [Number(m[1]), Number(m[2])]),
+  );
+}
 
 describe('workshop completion rules', () => {
   it('match the workshop content the apps show', () => {
-    expect([...WORKSHOP_SECTION_IDS]).toEqual(workshopSections.map((s) => s.id));
-    const sharedKey = Object.fromEntries(Object.entries(quizQuestions).map(([id, q]) => [Number(id), q.correctAnswer]));
-    expect(QUIZ_ANSWER_KEY).toEqual(sharedKey);
+    expect(sharedSectionIds()).toEqual([...WORKSHOP_SECTION_IDS]);
+    expect(sharedAnswerKey()).toEqual(QUIZ_ANSWER_KEY);
   });
 
   it('scores answers on the server and rejects sections without a quiz', () => {

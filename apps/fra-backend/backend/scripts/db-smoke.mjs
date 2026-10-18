@@ -163,8 +163,9 @@ if (check('case log CSV', s, 200, p)) expect('case CSV leaves out report text', 
 // ── Workshop, certificate, training evidence ────────────────────
 [s, p] = await call('POST', '/workshop/progress', {}, ent); check('workshop progress start', s, [200, 201], p);
 const progressId = data(p)?.id;
-[s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { currentSection: 6, completedSections: [0, 1, 2, 3, 4, 5, 6], quizScores: { 1: 1 } }, ent);
-check('workshop progress update', s, 200, p);
+// Quiz answers (the chosen option per section) are marked by the server
+[s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { currentSection: 6, completedSections: [0, 1, 2, 3, 4, 5, 6], quizAnswers: { 1: 1, 2: 2, 3: 1, 4: 0 } }, ent);
+if (check('workshop progress update', s, 200, p)) expect('quiz scored by the server', JSON.stringify(data(p).quiz_scores) === '{"1":100,"2":100,"3":100,"4":0}', data(p).quiz_scores);
 [s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { completedAt: new Date().toISOString() }, ent); check('workshop complete', s, 200, p);
 [s, p] = await call('POST', '/workshop/certificates', {}, ent); check('certificate issued', s, [200, 201], p);
 [s, p] = await call('POST', '/workshop/action-plans', { actionItems: [{ text: 'Review supplier changes', done: false }], commitments: ['Brief board'] }, ent);
