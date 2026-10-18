@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { useSession } from '@/hooks/useSession';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +25,7 @@ import {
   Lightbulb,
   HelpCircle,
   ArrowRight,
+  ClipboardCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,7 +33,12 @@ export default function Workshop() {
   const [searchParams] = useSearchParams();
   const sessionCode = searchParams.get('session');
   
-  const { user, profile } = useAuth();
+  const { user, profile, hasRole } = useAuth();
+  const { entitlements, isLoading: entitlementsLoading } = useEntitlements();
+  // Account managers do the organisation's risk assessment (package 1) before the training
+  const isManager = user?.role === 'employer' || user?.role === 'admin';
+  const assessmentFirst = isManager && !sessionCode && !hasRole('facilitator') && !!entitlements?.features.assessment;
+  const { isLoading: assessmentsLoading, hasFinishedAssessment } = useOrgAssessments(assessmentFirst);
   const { session, participantCount, joinSession, isLoading: sessionLoading } = useSession(sessionCode || undefined);
   // A ?session= link carries the join code; progress is stored against the session's id once it is known
   const { progress, updateSection, completeSection, markComplete, saveQuizScore, saveScenarioChoice, isLoading: progressLoading } =
@@ -57,7 +65,7 @@ export default function Workshop() {
     }
   }, [sessionCode, user, joinSession]);
 
-  if (progressLoading) {
+  if (progressLoading || entitlementsLoading || assessmentsLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Loading workshop">
@@ -68,6 +76,29 @@ export default function Workshop() {
   }
 
   if (!user || !profile) return null;
+
+  if (assessmentFirst && !hasFinishedAssessment) {
+    return (
+      <Layout>
+        <div className="container max-w-xl py-16">
+          <Card>
+            <CardHeader className="text-center">
+              <ClipboardCheck className="h-10 w-10 text-primary mx-auto mb-2" aria-hidden="true" />
+              <CardTitle>Start with your risk assessment</CardTitle>
+              <CardDescription>
+                Your package begins with step 1, your organisation&apos;s fraud risk assessment. The training
+                workshop (step 2) opens once it is submitted, so it builds on your own risks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button asChild><Link to="/assessment">Go to step 1: risk assessment</Link></Button>
+              <Button variant="outline" asChild><Link to="/dashboard">Back to dashboard</Link></Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   const totalSlides = workshopSections.length;
   const progressPercent = ((currentSlide + 1) / totalSlides) * 100;

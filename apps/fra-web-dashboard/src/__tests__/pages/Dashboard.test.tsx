@@ -5,6 +5,7 @@ import Dashboard from '@/pages/Dashboard';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { useEntitlements, type Entitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { workshopSections } from '@/data/workshopContent';
 
 // ── Mocks ──────────────────────────────────────────────────
@@ -19,6 +20,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
 vi.mock('@/hooks/useEntitlements');
+vi.mock('@/hooks/useOrgAssessments');
 
 // The health check card loads its own data; its behaviour is tested in HealthCheckCard.test.tsx
 vi.mock('@/components/HealthCheckCard', () => ({
@@ -41,6 +43,11 @@ vi.mock('framer-motion', () => ({
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseWorkshopProgress = vi.mocked(useWorkshopProgress);
 const mockedUseEntitlements = vi.mocked(useEntitlements);
+const mockedUseOrgAssessments = vi.mocked(useOrgAssessments);
+
+function setupAssessments(hasFinishedAssessment: boolean) {
+  mockedUseOrgAssessments.mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment });
+}
 
 const PACKAGE_FEATURES = {
   pkg_basic: { packageName: 'Starter', tier: 1, training: false, dashboard: false },
@@ -148,6 +155,8 @@ beforeEach(() => {
   setupAuth();
   setupProgress();
   setupPackage('pkg_training');
+  // Most tests look at an organisation that has already done its risk assessment
+  setupAssessments(true);
 });
 
 describe('Dashboard', () => {
@@ -521,6 +530,42 @@ describe('Dashboard', () => {
       mockedUseEntitlements.mockReturnValue({ isLoading: true, entitlements: null });
       renderDashboard();
       expect(screen.queryByTestId('health-check-card')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Package 2 starts with the package 1 risk assessment ─────
+
+  describe('risk assessment first', () => {
+    it('Professional manager: step 1 is the risk assessment, and the workshop waits for it', () => {
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
+      setupPackage('pkg_training');
+      setupAssessments(false);
+      renderDashboard();
+
+      expect(screen.getByText('Step 2: Fraud Risk Awareness Workshop')).toBeInTheDocument();
+      expect(screen.getByText('Go to step 1').closest('a')).toHaveAttribute('href', '/assessment');
+      expect(screen.queryByText('Start Workshop')).not.toBeInTheDocument();
+      expect(screen.queryByText('Action Plan')).not.toBeInTheDocument();
+    });
+
+    it('Professional manager: the workshop opens once the risk assessment is submitted', () => {
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
+      setupPackage('pkg_training');
+      setupAssessments(true);
+      renderDashboard();
+
+      expect(screen.queryByText('Step 2: Fraud Risk Awareness Workshop')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Start Workshop').length).toBeGreaterThan(0);
+    });
+
+    it('staff who joined with a key-pass go straight to their training', () => {
+      setupAuth({ user: { ...makeUser(), role: 'employee' } });
+      setupPackage('pkg_training');
+      setupAssessments(false);
+      renderDashboard();
+
+      expect(screen.queryByText('Step 2: Fraud Risk Awareness Workshop')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Start Workshop').length).toBeGreaterThan(0);
     });
   });
 });

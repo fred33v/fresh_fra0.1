@@ -5,6 +5,8 @@ import Workshop from '@/pages/Workshop';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { useSession } from '@/hooks/useSession';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { workshopSections, sectionContent, quizQuestions, scenarioExercise } from '@/data/workshopContent';
 
 // ── Mocks ──────────────────────────────────────────────────
@@ -19,6 +21,8 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
 vi.mock('@/hooks/useSession');
+vi.mock('@/hooks/useEntitlements');
+vi.mock('@/hooks/useOrgAssessments');
 
 vi.mock('@/components/layout/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
@@ -145,11 +149,24 @@ function renderWorkshop(initialRoute = '/workshop') {
 
 // ── Tests ──────────────────────────────────────────────────
 
+function setupPackage(hasFinishedAssessment = true) {
+  vi.mocked(useEntitlements).mockReturnValue({
+    isLoading: false,
+    entitlements: {
+      packageId: 'pkg_training', packageName: 'Professional', tier: 2, expiresAt: null, keypassAllowance: 50,
+      features: { assessment: true, training: true, certificates: true, dashboard: false, compliance: false },
+      assessments: { allowed: true, limit: 4, used: 0 },
+    },
+  });
+  vi.mocked(useOrgAssessments).mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   setupAuth();
   setupProgress();
   setupSession();
+  setupPackage();
 });
 
 describe('Workshop', () => {
@@ -558,6 +575,35 @@ describe('Workshop', () => {
       await user.click(dot3);
 
       expect(mockUpdateSection).toHaveBeenCalledWith(2);
+    });
+  });
+
+  // ── Package 2 starts with the package 1 risk assessment ─────
+
+  describe('risk assessment first', () => {
+    it('sends an account manager to the risk assessment before the training', () => {
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
+      setupPackage(false);
+      renderWorkshop();
+
+      expect(screen.getByText('Start with your risk assessment')).toBeInTheDocument();
+      expect(screen.getByText('Go to step 1: risk assessment').closest('a')).toHaveAttribute('href', '/assessment');
+      expect(screen.queryByText(workshopSections[0].title)).not.toBeInTheDocument();
+    });
+
+    it('opens the training for a manager once the risk assessment is submitted', () => {
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
+      setupPackage(true);
+      renderWorkshop();
+
+      expect(screen.queryByText('Start with your risk assessment')).not.toBeInTheDocument();
+    });
+
+    it('lets staff do their training without the organisation risk assessment', () => {
+      setupPackage(false);
+      renderWorkshop();
+
+      expect(screen.queryByText('Start with your risk assessment')).not.toBeInTheDocument();
     });
   });
 });
