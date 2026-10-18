@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fraud Risk Assessment app icon: the site's shield on its navy brand colour -->
+  <rect width="512" height="512" rx="112" fill="#1b2a4a"/>
+  <path d="M256 104 L380 150 V246 C380 330 326 386 256 412 C186 386 132 330 132 246 V150 Z"
+        fill="none" stroke="#fdf6e3" stroke-width="28" stroke-linejoin="round"/>
+  <path d="M206 262 L244 300 L312 222" fill="none" stroke="#e8b23a" stroke-width="30"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

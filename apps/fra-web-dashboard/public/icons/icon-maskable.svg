@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed version for Android adaptive icons: artwork kept inside the central safe zone -->
+  <rect width="512" height="512" fill="#1b2a4a"/>
+  <g transform="translate(256 258) scale(0.72) translate(-256 -258)">
+    <path d="M256 104 L380 150 V246 C380 330 326 386 256 412 C186 386 132 330 132 246 V150 Z"
+          fill="none" stroke="#fdf6e3" stroke-width="28" stroke-linejoin="round"/>
+    <path d="M206 262 L244 300 L312 222" fill="none" stroke="#e8b23a" stroke-width="30"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
