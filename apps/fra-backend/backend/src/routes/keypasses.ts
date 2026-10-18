@@ -172,6 +172,22 @@ keypasses.post('/keypasses/use', async (c) => {
 
   if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
 
+  const email = (parsed.data.email ?? `employee+${kp.code.toLowerCase()}@example.com`).toLowerCase();
+  const name = parsed.data.name ?? email.split('@')[0];
+
+  // A keypass only ever creates a new employee account. Issuing tokens for an existing
+  // account here would let anyone holding a keypass sign in as any user by email.
+  const existing = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
+  if (existing) {
+    await auditLog({
+      eventType: 'keypass.use_rejected', actorEmail: email,
+      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+      details: { reason: 'account_exists' }, ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    });
+    return jsonError(c, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Please sign in instead.');
+  }
+
   // In-memory path: claim immediately to prevent TOCTOU race across async gaps
   // (bcrypt.hash below yields the event loop, allowing concurrent requests to pass the check)
   if (!hasDatabase()) {
@@ -184,31 +200,19 @@ keypasses.post('/keypasses/use', async (c) => {
     logger.warn('Keypass used during grace period', { code, expiresAt: kp.expiresAt });
   }
 
-  const email = (parsed.data.email ?? `employee+${kp.code.toLowerCase()}@example.com`).toLowerCase();
-  const name = parsed.data.name ?? email.split('@')[0];
-
-  let user: User | null | undefined;
+  const user: User = {
+    id: crypto.randomUUID(),
+    email,
+    name,
+    passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
+    role: 'employee',
+    organisationId: kp.organisationId,
+    createdAt: now,
+  };
   if (hasDatabase()) {
-    user = await dbGetUserByEmail(email);
+    await dbInsertUser(user);
   } else {
-    user = usersByEmail.get(email);
-  }
-
-  if (!user) {
-    user = {
-      id: crypto.randomUUID(),
-      email,
-      name,
-      passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
-      role: 'employee',
-      organisationId: kp.organisationId,
-      createdAt: now,
-    };
-    if (hasDatabase()) {
-      await dbInsertUser(user);
-    } else {
-      usersByEmail.set(email, user);
-    }
+    usersByEmail.set(email, user);
   }
 
   if (!hasDatabase()) kp.usedByUserId = user.id;
