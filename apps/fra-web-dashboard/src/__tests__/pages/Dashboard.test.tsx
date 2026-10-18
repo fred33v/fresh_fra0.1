@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '@/pages/Dashboard';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
+import { useEntitlements, type Entitlements } from '@/hooks/useEntitlements';
 import { workshopSections } from '@/data/workshopContent';
 
 // ── Mocks ──────────────────────────────────────────────────
@@ -17,6 +18,14 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
+vi.mock('@/hooks/useEntitlements');
+
+// The health check card loads its own data; its behaviour is tested in HealthCheckCard.test.tsx
+vi.mock('@/components/HealthCheckCard', () => ({
+  HealthCheckCard: ({ entitlements }: { entitlements: Entitlements | null }) => (
+    <div data-testid="health-check-card">Health check for {entitlements?.packageName ?? 'no package'}</div>
+  ),
+}));
 
 vi.mock('@/components/layout/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
@@ -31,6 +40,25 @@ vi.mock('framer-motion', () => ({
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseWorkshopProgress = vi.mocked(useWorkshopProgress);
+const mockedUseEntitlements = vi.mocked(useEntitlements);
+
+const PACKAGE_FEATURES = {
+  pkg_basic: { packageName: 'Starter', tier: 1, training: false, dashboard: false },
+  pkg_training: { packageName: 'Professional', tier: 2, training: true, dashboard: false },
+  pkg_full: { packageName: 'Enterprise', tier: 3, training: true, dashboard: true },
+} as const;
+
+function setupPackage(packageId: keyof typeof PACKAGE_FEATURES) {
+  const p = PACKAGE_FEATURES[packageId];
+  mockedUseEntitlements.mockReturnValue({
+    isLoading: false,
+    entitlements: {
+      packageId, packageName: p.packageName, tier: p.tier, expiresAt: null, keypassAllowance: 1,
+      features: { assessment: true, training: p.training, certificates: p.training, dashboard: p.dashboard, compliance: p.dashboard },
+      assessments: { allowed: true, limit: 1, used: 0 },
+    },
+  });
+}
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -119,6 +147,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setupAuth();
   setupProgress();
+  setupPackage('pkg_training');
 });
 
 describe('Dashboard', () => {
@@ -453,6 +482,45 @@ describe('Dashboard', () => {
 
       // Section 2 is both current and complete, so no "In Progress" badge
       expect(screen.queryByText('In Progress')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Each package includes everything below it ─────────────
+
+  describe('packages', () => {
+    it.each(['pkg_basic', 'pkg_training', 'pkg_full'] as const)('shows the health check for %s', (packageId) => {
+      setupPackage(packageId);
+      renderDashboard();
+      expect(screen.getByTestId('health-check-card')).toHaveTextContent(PACKAGE_FEATURES[packageId].packageName);
+    });
+
+    it('Starter: health check, with the workshop shown as part of Professional', () => {
+      setupPackage('pkg_basic');
+      renderDashboard();
+
+      expect(screen.getByTestId('health-check-card')).toBeInTheDocument();
+      expect(screen.getByText('See Professional')).toBeInTheDocument();
+      expect(screen.queryByText('Start Workshop')).not.toBeInTheDocument();
+      expect(screen.queryByText('Action Plan')).not.toBeInTheDocument();
+      expect(screen.queryByText('Workshop Modules')).not.toBeInTheDocument();
+      // Resources are for every package
+      expect(screen.getByText('Resources')).toBeInTheDocument();
+    });
+
+    it('Professional: the Starter health check and the workshop together', () => {
+      setupPackage('pkg_training');
+      renderDashboard();
+
+      expect(screen.getByTestId('health-check-card')).toBeInTheDocument();
+      expect(screen.getAllByText('Start Workshop').length).toBeGreaterThan(0);
+      expect(screen.getByText('Action Plan')).toBeInTheDocument();
+      expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
+    });
+
+    it('waits for the package before showing the dashboard', () => {
+      mockedUseEntitlements.mockReturnValue({ isLoading: true, entitlements: null });
+      renderDashboard();
+      expect(screen.queryByTestId('health-check-card')).not.toBeInTheDocument();
     });
   });
 });

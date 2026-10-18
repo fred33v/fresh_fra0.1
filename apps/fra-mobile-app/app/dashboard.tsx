@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, Users, Key, FileText, HelpCircle, Bell } from 'lucide-react-native';
 import colors from '@/constants/colors';
+import { PACKAGES } from '@/constants/packages';
 
 import type { TabType, VisibleMetrics } from '@/components/dashboard/types';
 import { useDashboardFilters } from '@/components/dashboard/useDashboardFilters';
@@ -291,7 +292,7 @@ export default function DashboardScreen() {
             organisationName={organisation.name}
             totalEmployees={filteredEmployees.length}
             completedEmployees={employeesCompleted}
-            packageName={organisation.packageType === 'with-dashboard' ? 'Full (with Dashboard)' : 'Standard'}
+            packageName={organisation.packageType ? PACKAGES[organisation.packageType].name : 'No package yet'}
           />
         )}
       </ScrollView>
