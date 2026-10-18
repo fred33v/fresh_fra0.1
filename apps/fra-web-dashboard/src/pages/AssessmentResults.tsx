@@ -16,6 +16,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { Layout } from '@/components/layout/Layout';
+import { FinishAssessment } from '@/components/assessment/FinishAssessment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -393,6 +394,12 @@ export default function AssessmentResults() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {assessmentId && (
+          <div className="mt-8">
+            <FinishAssessment assessmentId={assessmentId} />
+          </div>
+        )}
       </div>
     </Layout>
   );

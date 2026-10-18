@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
+import type { Context } from 'hono';
+import { z } from 'zod';
+import { type AuthContext, hasDatabase, isManagerRole, jsonError, requireAuth } from '../helpers.js';
 import { requireUUIDParam, assessmentCreateSchema, assessmentPatchSchema, parsePagination, paginate } from '../types.js';
 import type { Assessment, AssessmentStatus } from '../types.js';
 import { assessmentsById } from '../stores.js';
@@ -13,6 +15,7 @@ import { ASSESSMENT_MODULES, buildAssessmentResults } from '../assessment-module
 import { emitOrgEvent } from '../webhooks-out.js';
 import { scoreAssessment } from '../assessment-risk.js';
 import { organisationReassessmentStatus } from '../reassessment.js';
+import { SIGN_OFF_STATEMENT, createSignOff, getSignOff, saveFeedback } from '../assessment-signoff.js';
 
 // Answers stay out of webhook payloads; integrations fetch detail via the API if needed
 function notifySubmitted(a: Assessment) {
@@ -352,6 +355,99 @@ assessments.get('/assessments/:id/results', async (c) => {
   }
 
   return c.json({ success: true, data: buildAssessmentResults(assessment.id, assessment.answers) });
+});
+
+// ── Sign-off and feedback (from the mobile app's final steps) ───────
+
+/** The submitted assessment behind :id in the caller's organisation, or an error response. */
+async function submittedAssessment(c: Context, auth: AuthContext): Promise<Assessment | Response> {
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+  const assessment = hasDatabase() ? await dbGetAssessmentById(id) : assessmentsById.get(id);
+  if (!assessment || assessment.organisationId !== auth.organisationId) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
+  }
+  if (assessment.status !== 'submitted' && assessment.status !== 'completed') {
+    return jsonError(c, 409, 'NOT_SUBMITTED', 'Submit the assessment first');
+  }
+  return assessment;
+}
+
+const signOffSchema = z.object({
+  signerName: z.string().trim().min(2).max(120),
+  signerRole: z.string().trim().max(120).optional(),
+  // The person signing must tick the statement; it is stored with the sign-off
+  confirm: z.literal(true),
+});
+
+const feedbackSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comments: z.string().trim().max(2000).optional(),
+});
+
+assessments.get('/assessments/:id/sign-off', async (c) => {
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const assessment = await submittedAssessment(c, auth);
+  if (assessment instanceof Response) return assessment;
+  return c.json({ success: true, data: { signOff: await getSignOff(assessment.id), statement: SIGN_OFF_STATEMENT } });
+});
+
+assessments.post('/assessments/:id/sign-off', async (c) => {
+  const limited = await rateLimit('assessments:sign-off', { windowMs: 60_000, max: 10 })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  // Signing off authorises the assessment for the organisation, so it is for the people who run the account
+  if (!isManagerRole(auth.role)) return jsonError(c, 403, 'FORBIDDEN', 'Only an employer or admin can sign off an assessment');
+
+  const assessment = await submittedAssessment(c, auth);
+  if (assessment instanceof Response) return assessment;
+
+  const parsed = signOffSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Enter your name and confirm the statement');
+
+  const signOff = await createSignOff({
+    assessmentId: assessment.id,
+    organisationId: auth.organisationId,
+    signedByUserId: auth.userId,
+    signerName: parsed.data.signerName,
+    signerRole: parsed.data.signerRole || null,
+  });
+  if (!signOff) return jsonError(c, 409, 'ALREADY_SIGNED_OFF', 'This assessment has already been signed off');
+
+  await auditLog({
+    eventType: 'assessment.signed_off', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'assessment', resourceId: assessment.id,
+    details: { signerName: signOff.signerName, signerRole: signOff.signerRole },
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+  return c.json({ success: true, data: signOff }, 201);
+});
+
+assessments.post('/assessments/:id/feedback', async (c) => {
+  const limited = await rateLimit('assessments:feedback', { windowMs: 60_000, max: 10 })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const assessment = await submittedAssessment(c, auth);
+  if (assessment instanceof Response) return assessment;
+
+  const parsed = feedbackSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Choose a rating from 1 to 5');
+
+  const saved = await saveFeedback({
+    assessmentId: assessment.id, userId: auth.userId, organisationId: auth.organisationId,
+    rating: parsed.data.rating, comments: parsed.data.comments || null,
+  });
+  await auditLog({
+    eventType: 'assessment.feedback', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'assessment', resourceId: assessment.id,
+    details: { rating: saved.rating }, ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+  return c.json({ success: true, data: saved }, 201);
 });
 
 export default assessments;

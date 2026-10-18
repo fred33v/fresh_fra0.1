@@ -92,6 +92,12 @@ const assessmentId = data(p)?.id;
 [s, p] = await call('PATCH', `/assessments/${assessmentId}`, { answers: { ...answers, 'payroll.segregation': 2 } }, ent); check('assessment patch', s, 200, p);
 [s, p] = await call('POST', `/assessments/${assessmentId}/submit`, {}, ent); check('assessment submit', s, 200, p);
 [s, p] = await call('GET', `/assessments/${assessmentId}/results`, undefined, ent); check('assessment results', s, 200, p);
+[s, p] = await call('POST', `/assessments/${assessmentId}/sign-off`, { signerName: 'Smoke Director', signerRole: 'Director', confirm: true }, ent); check('assessment sign-off', s, 201, p);
+[s, p] = await call('POST', `/assessments/${assessmentId}/sign-off`, { signerName: 'Smoke Director', confirm: true }, ent); check('assessment sign-off only once', s, 409, p);
+[s, p] = await call('GET', `/assessments/${assessmentId}/sign-off`, undefined, ent);
+if (check('assessment sign-off read', s, 200, p)) expect('sign-off recorded', data(p)?.signOff?.signerName === 'Smoke Director', data(p));
+[s, p] = await call('POST', `/assessments/${assessmentId}/feedback`, { rating: 5, comments: 'Smoke test' }, ent); check('assessment feedback', s, 201, p);
+[s, p] = await call('POST', `/assessments/${assessmentId}/feedback`, { rating: 3 }, ent); check('assessment feedback updated', s, 201, p);
 [s, p] = await call('GET', '/assessments', undefined, ent); check('assessments list', s, 200, p);
 [s, p] = await call('GET', '/assessments/reassessment', undefined, ent); check('reassessment status', s, 200, p);
 if (!SKIP_PDF) {
