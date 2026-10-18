@@ -45,9 +45,24 @@ export function sanitizeObject(obj: unknown): unknown {
 
 // ── Client IP ───────────────────────────────────────────────────
 
+/**
+ * Number of proxies in front of the app that append to X-Forwarded-For
+ * (1 = the AWS load balancer; 2 = load balancer + nginx).
+ */
+function trustedProxyCount(): number {
+  const n = Number(process.env.TRUSTED_PROXY_COUNT ?? 1);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
 export function getClientIp(c: Context): string {
+  // Proxies append the address they saw to X-Forwarded-For, so everything to the left of
+  // the entries added by our own proxies was sent by the client and can be faked.
+  // Read the entry our outermost proxy added, counting from the right.
   const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const hops = forwarded.split(',').map((h) => h.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[Math.max(hops.length - trustedProxyCount(), 0)];
+  }
   const realIp = c.req.header('x-real-ip');
   if (realIp) return realIp.trim();
   return 'unknown';
