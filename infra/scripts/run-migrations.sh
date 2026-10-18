@@ -3,6 +3,7 @@
 # Stop FRA - Run Database Migrations on Production (7.7)
 #
 # Usage: ./infra/scripts/run-migrations.sh [DATABASE_URL]
+# Prefer the SSM default: a URL passed as an argument is saved in shell history.
 # If no DATABASE_URL, fetches from AWS SSM Parameter Store.
 # ============================================================
 set -euo pipefail
@@ -26,7 +27,9 @@ else
 fi
 
 echo "=== Stop FRA Database Migrations ==="
-echo "Database: ${DATABASE_URL%%@*}@***"
+# Show only the host and database name; everything before "@" holds the username and password
+DB_HOST_AND_NAME="${DATABASE_URL##*@}"
+echo "Database: ${DB_HOST_AND_NAME%%\?*}"
 echo "Migrations: $MIGRATIONS_DIR"
 echo ""
 
