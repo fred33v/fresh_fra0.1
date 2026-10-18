@@ -232,3 +232,35 @@ describe('getClientIp', () => {
     expect(getClientIp(c)).toBe('1.1.1.1');
   });
 });
+
+// ── Request body size limit ────────────────────────────────────
+
+describe('request body size limit', () => {
+  // Imported here so the app picks up the middleware under test
+  const big = 'x'.repeat(1_048_576 + 10);
+
+  it('rejects an oversized body that declares its length', async () => {
+    const { app } = await import('./helpers');
+    const res = await app.request('http://localhost/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'a@example.com', password: big }),
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('rejects an oversized chunked body with no Content-Length', async () => {
+    const { app } = await import('./helpers');
+    const chunk = new TextEncoder().encode(big);
+    const stream = new ReadableStream({
+      start(controller) { controller.enqueue(chunk); controller.close(); },
+    });
+    const res = await app.request('http://localhost/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: stream,
+      duplex: 'half', // required by Node for streamed request bodies
+    });
+    expect(res.status).toBe(413);
+  });
+});

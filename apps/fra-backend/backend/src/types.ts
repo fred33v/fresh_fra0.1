@@ -269,8 +269,8 @@ export const refreshTokenExpiry = (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') a
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function isValidUUID(value: string): boolean {
-  return UUID_REGEX.test(value);
+export function isValidUUID(value: string | undefined): value is string {
+  return typeof value === 'string' && UUID_REGEX.test(value);
 }
 
 export function requireUUIDParam(c: Context, paramName: string): string | Response {
