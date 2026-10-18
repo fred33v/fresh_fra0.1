@@ -576,6 +576,55 @@ resource "aws_cloudfront_origin_access_control" "dashboard" {
   signing_protocol                  = "sigv4"
 }
 
+# Security headers for the web dashboard. The Content-Security-Policy only lets the page run
+# its own scripts and talk to its own API, which limits the damage of any XSS bug (the app
+# keeps login tokens in localStorage). Inline styles are needed by the chart and UI libraries.
+resource "aws_cloudfront_response_headers_policy" "dashboard_security" {
+  name = "${var.project_name}-dashboard-security-headers"
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = join("; ", [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://${var.api_subdomain}.${var.domain_name}",
+        "frame-ancestors 'none'",
+        "form-action 'self' https://checkout.stripe.com",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "upgrade-insecure-requests",
+      ])
+      override = true
+    }
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options { override = true }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=()"
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "dashboard" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -593,6 +642,8 @@ resource "aws_cloudfront_distribution" "dashboard" {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-dashboard"
+
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.dashboard_security.id
 
     forwarded_values {
       query_string = false
