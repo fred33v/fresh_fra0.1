@@ -11,6 +11,7 @@
     "dev:budget": "pnpm --filter @stopfra/budget-guide start",
     "ai-gateway": "sh tools/omniroute/start.sh",
     "ai-gateway:stop": "sh tools/omniroute/start.sh stop",
+    "ai-gateway:test": "sh tools/omniroute/test-key.sh",
     "build": "turbo run build",
     "build:web": "pnpm --filter @stopfra/web-dashboard build",
     "build:backend": "pnpm --filter @stopfra/backend build",

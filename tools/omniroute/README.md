@@ -20,6 +20,7 @@ so OmniRoute runs on a separate Node 22 in `~/.local/node22` (or set
 ```bash
 pnpm ai-gateway        # start: dashboard at http://127.0.0.1:20128
 pnpm ai-gateway:stop   # stop
+pnpm ai-gateway:test   # check an OmniRoute API key (asks for it; never shown or saved)
 ```
 
 On first run `tools/omniroute/.env` is created with random secrets (git ignores
