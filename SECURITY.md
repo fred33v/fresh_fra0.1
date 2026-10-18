@@ -313,6 +313,7 @@ Counts: 🔴 x · 🟠 x · 🟡 x · 🟢 x
 ## 6. Reporting a vulnerability
 
 If you discover a security issue in Stop FRA, please **do not open a public GitHub
-issue**. Email the maintainers privately (add your security contact address here)
+issue**. Email the development team privately at
+[development-team@fraud-risk.co.uk](mailto:development-team@fraud-risk.co.uk)
 with a description and steps to reproduce. We aim to acknowledge reports within
 3 working days.
