@@ -66,7 +66,9 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
       if (req.url().startsWith('data:') || req.url() === 'about:blank') req.continue();
       else req.abort();
     });
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // 'load', not 'networkidle0': every outside request is aborted above, and waiting for the
+    // network to go idle after an aborted request can hang until the 30s timeout
+    await page.setContent(html, { waitUntil: 'load', timeout: 15_000 });
     const pdf = await page.pdf({
       format: 'A4',
       margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
