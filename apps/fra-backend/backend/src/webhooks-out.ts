@@ -30,6 +30,22 @@ export function signPayload(secret: string, body: string, timestamp = Math.floor
   return `t=${timestamp},v1=${sig}`;
 }
 
+/**
+ * Check a `t=<unix seconds>,v1=<hex>` signature made by signPayload.
+ * Rejects signatures older or newer than toleranceSeconds, so a captured request cannot be replayed later.
+ */
+export function verifySignedPayload(secret: string, body: string, header: string | undefined, toleranceSeconds = 300): boolean {
+  if (!header) return false;
+  const parts = Object.fromEntries(header.split(',').map((p) => p.trim().split('=', 2)));
+  const timestamp = Number(parts.t);
+  if (!Number.isInteger(timestamp) || typeof parts.v1 !== 'string') return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > toleranceSeconds) return false;
+
+  const expected = Buffer.from(signPayload(secret, body, timestamp).split('v1=')[1]);
+  const received = Buffer.from(parts.v1);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
 function isPrivateIPv4(host: string): boolean {
   const [a, b] = host.split('.').map(Number);
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254)
