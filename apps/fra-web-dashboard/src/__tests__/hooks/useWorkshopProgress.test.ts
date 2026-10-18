@@ -16,6 +16,10 @@ vi.mock('@/lib/api', () => ({
     post: (...args: unknown[]) => mockPost(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
   },
+  ApiError: class ApiError extends Error {
+    code: string;
+    constructor(code: string, message: string) { super(message); this.code = code; }
+  },
 }));
 
 const mockUser = {
@@ -354,40 +358,25 @@ describe('useWorkshopProgress', () => {
     });
   });
 
-  // ── saveQuizScore ─────────────────────────────────────────
+  // ── saveQuizAnswer ────────────────────────────────────────
 
-  describe('saveQuizScore', () => {
-    it('saves quiz score and updates local state', async () => {
-      mockGet.mockResolvedValueOnce(makeProgressRow({ quiz_scores: { '0': 80 } }));
-      mockPatch.mockResolvedValueOnce({});
+  describe('saveQuizAnswer', () => {
+    it('sends the chosen option and keeps the scores the server returns', async () => {
+      mockGet.mockResolvedValueOnce(makeProgressRow({ quiz_scores: { '1': 100 } }));
+      mockPatch.mockResolvedValueOnce(makeProgressRow({ quiz_scores: { '1': 100, '2': 0 } }));
 
       const { result } = renderHook(() => useWorkshopProgress());
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       await act(async () => {
-        await result.current.saveQuizScore(2, 95);
+        await result.current.saveQuizAnswer(2, 3);
       });
 
       expect(mockPatch).toHaveBeenCalledWith('/api/v1/workshop/progress/prog-1', {
-        quizScores: { '0': 80, '2': 95 },
+        quizAnswers: { '2': 3 },
       });
-      expect(result.current.progress?.quiz_scores).toEqual({ '0': 80, '2': 95 });
-    });
-
-    it('overwrites existing score for same section', async () => {
-      mockGet.mockResolvedValueOnce(makeProgressRow({ quiz_scores: { '1': 60 } }));
-      mockPatch.mockResolvedValueOnce({});
-
-      const { result } = renderHook(() => useWorkshopProgress());
-
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-      await act(async () => {
-        await result.current.saveQuizScore(1, 100);
-      });
-
-      expect(result.current.progress?.quiz_scores).toEqual({ '1': 100 });
+      expect(result.current.progress?.quiz_scores).toEqual({ '1': 100, '2': 0 });
     });
 
     it('shows toast on error', async () => {
@@ -399,7 +388,7 @@ describe('useWorkshopProgress', () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       await act(async () => {
-        await result.current.saveQuizScore(0, 50);
+        await result.current.saveQuizAnswer(1, 0);
       });
 
       expect(toast.error).toHaveBeenCalledWith('Failed to save quiz score');
@@ -518,6 +507,22 @@ describe('useWorkshopProgress', () => {
       });
 
       expect(toast.error).toHaveBeenCalledWith('Failed to complete workshop');
+    });
+
+    it('explains what is missing when the server says the workshop is not finished', async () => {
+      const { ApiError } = await import('@/lib/api');
+      mockGet.mockResolvedValueOnce(makeProgressRow());
+      mockPatch.mockRejectedValueOnce(new ApiError('NOT_COMPLETED', 'Workshop not finished'));
+
+      const { result } = renderHook(() => useWorkshopProgress());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      let ok: boolean | undefined;
+      await act(async () => { ok = await result.current.markComplete(); });
+
+      expect(ok).toBe(false);
+      expect(result.current.progress?.completed_at).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('Please complete every section and answer every quiz question first');
     });
   });
 

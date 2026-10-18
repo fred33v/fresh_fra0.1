@@ -19,13 +19,22 @@ describe('Workshop without a database', () => {
     expect((await json(await send('POST', '/workshop/progress', accessToken))).id).toBe(started.id);
 
     const moved = await json(await send('PATCH', `/workshop/progress/${started.id}`, accessToken, {
-      currentSection: 3, completedSections: [0, 1, 2], quizScores: { q1: 1 },
+      currentSection: 3, completedSections: [0, 1, 2], quizAnswers: { 1: 1, 2: 0 },
     }));
-    expect(moved).toMatchObject({ current_section: 3, completed_sections: [0, 1, 2], quiz_scores: { q1: 1 } });
+    // Scores are worked out by the server: section 1 correct, section 2 wrong
+    expect(moved).toMatchObject({ current_section: 3, completed_sections: [0, 1, 2], quiz_scores: { 1: 100, 2: 0 } });
     expect((await json(await get('/workshop/progress', accessToken))).current_section).toBe(3);
 
     expect((await send('POST', '/workshop/certificates', accessToken)).status).toBe(400);
-    await send('PATCH', `/workshop/progress/${started.id}`, accessToken, { completedAt: new Date().toISOString() });
+    // Cannot be marked complete before every section and quiz is done
+    const early = await send('PATCH', `/workshop/progress/${started.id}`, accessToken, { completedAt: new Date().toISOString() });
+    expect(early.status).toBe(400);
+    expect(((await early.json()) as any).error.code).toBe('NOT_COMPLETED');
+    expect((await send('POST', '/workshop/certificates', accessToken)).status).toBe(400);
+
+    await send('PATCH', `/workshop/progress/${started.id}`, accessToken, {
+      completedSections: [0, 1, 2, 3, 4, 5, 6], quizAnswers: { 3: 1, 4: 2 }, completedAt: new Date().toISOString(),
+    });
 
     const cert = await send('POST', '/workshop/certificates', accessToken);
     expect(cert.status).toBe(201);

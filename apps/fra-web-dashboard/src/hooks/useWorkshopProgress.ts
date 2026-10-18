@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('WorkshopProgress');
@@ -119,16 +119,16 @@ export function useWorkshopProgress(sessionId?: string | null, { enabled = true 
     }
   };
 
-  const saveQuizScore = async (sectionId: number, score: number) => {
+  /** Sends the chosen option; the server marks it and returns the saved scores. */
+  const saveQuizAnswer = async (sectionId: number, answer: number) => {
     if (!user || !progress) return;
 
-    const newScores = { ...progress.quiz_scores, [sectionId.toString()]: score };
-
     try {
-      await api.patch(`/api/v1/workshop/progress/${progress.id}`, {
-        quizScores: newScores,
+      const row = await api.patch<Partial<ProgressRow> | null>(`/api/v1/workshop/progress/${progress.id}`, {
+        quizAnswers: { [sectionId.toString()]: answer },
       });
-      setProgress(prev => prev ? { ...prev, quiz_scores: newScores } : null);
+      const scores = row?.quiz_scores as Record<string, number> | undefined;
+      if (scores) setProgress(prev => prev ? { ...prev, quiz_scores: scores } : null);
     } catch (err: unknown) {
       logger.error('Error saving quiz score', err);
       toast.error('Failed to save quiz score');
@@ -151,19 +151,25 @@ export function useWorkshopProgress(sessionId?: string | null, { enabled = true 
     }
   };
 
-  const markComplete = async () => {
-    if (!user || !progress) return;
-
-    const completedAt = new Date().toISOString();
+  /** Asks the server to mark the workshop complete; it checks every section and quiz is done. */
+  const markComplete = async (): Promise<boolean> => {
+    if (!user || !progress) return false;
 
     try {
-      await api.patch(`/api/v1/workshop/progress/${progress.id}`, {
-        completedAt,
+      const row = await api.patch<Partial<ProgressRow> | null>(`/api/v1/workshop/progress/${progress.id}`, {
+        completedAt: new Date().toISOString(),
       });
+      const completedAt = row?.completed_at ?? new Date().toISOString();
       setProgress(prev => prev ? { ...prev, completed_at: completedAt } : null);
+      return true;
     } catch (err: unknown) {
       logger.error('Error marking complete', err);
-      toast.error('Failed to complete workshop');
+      if (err instanceof ApiError && err.code === 'NOT_COMPLETED') {
+        toast.error('Please complete every section and answer every quiz question first');
+      } else {
+        toast.error('Failed to complete workshop');
+      }
+      return false;
     }
   };
 
@@ -173,7 +179,7 @@ export function useWorkshopProgress(sessionId?: string | null, { enabled = true 
     error,
     updateSection,
     completeSection,
-    saveQuizScore,
+    saveQuizAnswer,
     saveScenarioChoice,
     markComplete,
     refreshProgress: fetchProgress,
