@@ -33,7 +33,7 @@ export default function Workshop() {
   const { user, profile } = useAuth();
   const { session, participantCount, joinSession, isLoading: sessionLoading } = useSession(sessionCode || undefined);
   // A ?session= link carries the join code; progress is stored against the session's id once it is known
-  const { progress, updateSection, completeSection, markComplete, saveQuizScore, saveScenarioChoice, isLoading: progressLoading } =
+  const { progress, updateSection, completeSection, markComplete, saveQuizAnswer, saveScenarioChoice, isLoading: progressLoading } =
     useWorkshopProgress(session?.id ?? null, { enabled: !sessionCode || !sessionLoading });
   const navigate = useNavigate();
 
@@ -73,6 +73,8 @@ export default function Workshop() {
   const progressPercent = ((currentSlide + 1) / totalSlides) * 100;
   const currentSection = sectionContent[currentSlide];
   const currentQuiz = quizQuestions[currentSlide];
+  // A quiz must be answered (now or on an earlier visit) before moving on; it counts towards completion
+  const quizPending = !!currentQuiz && !quizSubmitted && progress?.quiz_scores?.[String(currentSlide)] === undefined;
   const sectorCaseStudy = caseStudies[profile.sector];
 
   const handleNext = async () => {
@@ -88,9 +90,10 @@ export default function Workshop() {
     } else {
       // Workshop complete: record the completion date, which unlocks the certificate and counts as training evidence
       await completeSection(currentSlide);
-      await markComplete();
-      toast.success('Congratulations! Workshop completed!');
-      navigate('/certificate');
+      if (await markComplete()) {
+        toast.success('Congratulations! Workshop completed!');
+        navigate('/certificate');
+      }
     }
   };
 
@@ -109,8 +112,7 @@ export default function Workshop() {
     
     setQuizSubmitted(true);
     const isCorrect = quizAnswer === currentQuiz.correctAnswer;
-    const score = isCorrect ? 100 : 0;
-    await saveQuizScore(currentSlide, score);
+    await saveQuizAnswer(currentSlide, quizAnswer);
     
     if (isCorrect) {
       toast.success('Correct! Well done.');
@@ -499,7 +501,11 @@ export default function Workshop() {
                 ))}
               </div>
 
-              <Button onClick={handleNext}>
+              <Button
+                onClick={handleNext}
+                disabled={quizPending}
+                title={quizPending ? 'Answer the quiz question to continue' : undefined}
+              >
                 {currentSlide === totalSlides - 1 ? 'Complete Workshop' : 'Next'}
                 <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>

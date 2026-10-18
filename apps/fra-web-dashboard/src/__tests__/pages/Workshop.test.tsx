@@ -100,7 +100,7 @@ function setupAuth(overrides?: Record<string, unknown>) {
 
 const mockUpdateSection = vi.fn().mockResolvedValue(undefined);
 const mockCompleteSection = vi.fn().mockResolvedValue(undefined);
-const mockSaveQuizScore = vi.fn().mockResolvedValue(undefined);
+const mockSaveQuizAnswer = vi.fn().mockResolvedValue(undefined);
 const mockSaveScenarioChoice = vi.fn().mockResolvedValue(undefined);
 
 function setupProgress(overrides?: Record<string, unknown>) {
@@ -110,7 +110,7 @@ function setupProgress(overrides?: Record<string, unknown>) {
     error: null,
     updateSection: mockUpdateSection,
     completeSection: mockCompleteSection,
-    saveQuizScore: mockSaveQuizScore,
+    saveQuizAnswer: mockSaveQuizAnswer,
     saveScenarioChoice: mockSaveScenarioChoice,
     markComplete: vi.fn(),
     refreshProgress: vi.fn(),
@@ -289,7 +289,7 @@ describe('Workshop', () => {
 
     it('completing last section records completion and navigates to /certificate', async () => {
       const { toast } = await import('sonner');
-      const markComplete = vi.fn().mockResolvedValue(undefined);
+      const markComplete = vi.fn().mockResolvedValue(true);
       setupProgress({
         progress: makeProgress({ current_section: workshopSections.length - 1 }),
         markComplete,
@@ -306,6 +306,21 @@ describe('Workshop', () => {
       expect(mockCompleteSection.mock.invocationCallOrder[0]).toBeLessThan(markComplete.mock.invocationCallOrder[0]);
       expect(toast.success).toHaveBeenCalledWith('Congratulations! Workshop completed!');
       expect(mockNavigate).toHaveBeenCalledWith('/certificate');
+    });
+
+    it('stays on the workshop when the server says it is not finished', async () => {
+      const markComplete = vi.fn().mockResolvedValue(false);
+      setupProgress({
+        progress: makeProgress({ current_section: workshopSections.length - 1 }),
+        markComplete,
+      });
+
+      const user = userEvent.setup();
+      renderWorkshop();
+      await user.click(screen.getByText('Complete Workshop'));
+
+      expect(markComplete).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).not.toHaveBeenCalledWith('/certificate');
     });
 
     it('Previous button navigates back after advancing', async () => {
@@ -415,11 +430,22 @@ describe('Workshop', () => {
       await user.click(screen.getByText(quiz.options[quiz.correctAnswer]));
       await user.click(screen.getByText('Submit Answer'));
 
-      expect(mockSaveQuizScore).toHaveBeenCalledWith(quizSectionIndex, 100);
+      // The chosen option is sent; the server works out the score
+      expect(mockSaveQuizAnswer).toHaveBeenCalledWith(quizSectionIndex, quiz.correctAnswer);
       expect(toast.success).toHaveBeenCalledWith('Correct! Well done.');
     });
 
-    it('saves score 0 on incorrect answer', async () => {
+    it('keeps Next locked until the quiz is answered', async () => {
+      const user = userEvent.setup();
+      renderWorkshop();
+
+      expect(screen.getByText('Next').closest('button')).toBeDisabled();
+      await user.click(screen.getByText(quiz.options[0]));
+      await user.click(screen.getByText('Submit Answer'));
+      expect(screen.getByText('Next').closest('button')).not.toBeDisabled();
+    });
+
+    it('sends a wrong answer too', async () => {
       const { toast } = await import('sonner');
       const user = userEvent.setup();
       renderWorkshop();
@@ -429,7 +455,7 @@ describe('Workshop', () => {
       await user.click(screen.getByText(quiz.options[wrongIndex]));
       await user.click(screen.getByText('Submit Answer'));
 
-      expect(mockSaveQuizScore).toHaveBeenCalledWith(quizSectionIndex, 0);
+      expect(mockSaveQuizAnswer).toHaveBeenCalledWith(quizSectionIndex, wrongIndex);
       expect(toast.error).toHaveBeenCalledWith('Not quite right. Review the explanation.');
     });
 

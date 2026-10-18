@@ -16,6 +16,7 @@ import { rateLimit, getClientIp } from './middleware.js';
 import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
 import { requirePackage } from './entitlements.js';
+import { mergeQuizScores, missingForCompletion } from './workshop-quiz.js';
 import {
   workshopProfiles, workshopSessions, sessionParticipants, workshopProgress, polls, pollResponses, questions,
   questionUpvotes, actionPlans, certificates, newId, nowIso, memSessionRole, memParticipantCount, memFindProgress,
@@ -636,15 +637,17 @@ workshop.patch('/progress/:id', async (c) => {
   const schema = z.object({
     currentSection: z.number().int().min(0).optional(),
     completedSections: z.array(z.number().int()).max(100).optional(),
-    quizScores: z.record(z.number()).refine(
-      (v) => JSON.stringify(v).length <= 100_000,
-      'quizScores payload too large (max 100KB)'
-    ).optional(),
+    // The chosen option per quiz section ({ "1": 2 }); the server works out the score.
+    // Scores sent by the client are ignored, so they cannot be faked.
+    quizAnswers: z.record(z.string().regex(/^\d{1,3}$/), z.number().int().min(0).max(20))
+      .refine((v) => Object.keys(v).length <= 50, 'Too many quiz answers').optional(),
     scenarioChoices: z.record(z.string().max(2000)).refine(
       (v) => JSON.stringify(v).length <= 100_000,
       'scenarioChoices payload too large (max 100KB)'
     ).optional(),
-    completedAt: z.string().datetime({ message: 'completedAt must be a valid ISO 8601 datetime' }).nullable().optional(),
+    // Asks to mark the workshop complete. The server checks every section and quiz is done
+    // and records its own time; the value sent is not stored.
+    completedAt: z.string().datetime({ message: 'completedAt must be a valid ISO 8601 datetime' }).optional(),
   });
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid progress data');
@@ -652,26 +655,43 @@ workshop.patch('/progress/:id', async (c) => {
   const progressId = requireUUID(c, 'id');
   if (progressId instanceof Response) return progressId;
 
-  if (!hasDatabase()) {
-    const row = workshopProgress.get(progressId);
-    if (!row) return jsonError(c, 404, 'NOT_FOUND', 'Progress not found');
-    if (row.user_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your progress');
-    const d = parsed.data;
+  const d = parsed.data;
+  const pool = hasDatabase() ? getDbPool() : null;
+
+  // Load the saved progress (and verify ownership)
+  const current = pool
+    ? (await pool.query('SELECT * FROM workshop_progress WHERE id = $1', [progressId])).rows[0]
+    : workshopProgress.get(progressId);
+  if (!current) return jsonError(c, 404, 'NOT_FOUND', 'Progress not found');
+  if (current.user_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your progress');
+
+  let quizScores: Record<string, number> | undefined;
+  if (d.quizAnswers !== undefined) {
+    const merged = mergeQuizScores(current.quiz_scores, d.quizAnswers);
+    if (merged.invalid.length) return jsonError(c, 400, 'VALIDATION_ERROR', `No quiz for section(s) ${merged.invalid.join(', ')}`);
+    quizScores = merged.scores;
+  }
+
+  let completedAt: string | undefined;
+  if (d.completedAt !== undefined) {
+    const missing = missingForCompletion(d.completedSections ?? current.completed_sections, quizScores ?? current.quiz_scores);
+    if (missing.sections.length || missing.quizzes.length) {
+      return jsonError(c, 400, 'NOT_COMPLETED',
+        `Workshop not finished: sections [${missing.sections.join(', ')}] and quizzes [${missing.quizzes.join(', ')}] remain`);
+    }
+    completedAt = current.completed_at ?? nowIso(); // keep the first completion date
+  }
+
+  if (!pool) {
+    const row = current;
     if (d.currentSection !== undefined) row.current_section = d.currentSection;
     if (d.completedSections !== undefined) row.completed_sections = d.completedSections;
-    if (d.quizScores !== undefined) row.quiz_scores = d.quizScores;
+    if (quizScores !== undefined) row.quiz_scores = quizScores;
     if (d.scenarioChoices !== undefined) row.scenario_choices = d.scenarioChoices;
-    if (d.completedAt !== undefined) row.completed_at = d.completedAt;
+    if (completedAt !== undefined) row.completed_at = completedAt;
     row.updated_at = nowIso();
     return c.json({ success: true, data: row });
   }
-
-  const pool = getDbPool();
-
-  // Verify ownership
-  const check = await pool.query('SELECT user_id FROM workshop_progress WHERE id = $1', [progressId]);
-  if (!check.rows[0]) return jsonError(c, 404, 'NOT_FOUND', 'Progress not found');
-  if (check.rows[0].user_id !== auth.userId) return jsonError(c, 403, 'FORBIDDEN', 'Not your progress');
 
   const sets: string[] = ['updated_at = now()'];
   const vals: unknown[] = [];
@@ -679,9 +699,9 @@ workshop.patch('/progress/:id', async (c) => {
 
   if (parsed.data.currentSection !== undefined) { sets.push(`current_section = $${idx++}`); vals.push(parsed.data.currentSection); }
   if (parsed.data.completedSections !== undefined) { sets.push(`completed_sections = $${idx++}`); vals.push(parsed.data.completedSections); }
-  if (parsed.data.quizScores !== undefined) { sets.push(`quiz_scores = $${idx++}`); vals.push(JSON.stringify(parsed.data.quizScores)); }
+  if (quizScores !== undefined) { sets.push(`quiz_scores = $${idx++}`); vals.push(JSON.stringify(quizScores)); }
   if (parsed.data.scenarioChoices !== undefined) { sets.push(`scenario_choices = $${idx++}`); vals.push(JSON.stringify(parsed.data.scenarioChoices)); }
-  if (parsed.data.completedAt !== undefined) { sets.push(`completed_at = $${idx++}`); vals.push(parsed.data.completedAt); }
+  if (completedAt !== undefined) { sets.push(`completed_at = $${idx++}`); vals.push(completedAt); }
 
   vals.push(progressId);
   const res = await pool.query(
