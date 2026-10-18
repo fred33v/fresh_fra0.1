@@ -142,7 +142,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         organisationName: metadata.organization_name,
         jobTitle: metadata.job_title,
         sector: metadata.sector,
-        workshopRole: 'participant',
       });
 
       setTokens(data.accessToken, data.refreshToken);

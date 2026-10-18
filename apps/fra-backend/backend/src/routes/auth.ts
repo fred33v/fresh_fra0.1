@@ -151,7 +151,7 @@ auth.post('/auth/signup', async (c) => {
       );
       workshopProfile = profileRes.rows[0] ?? null;
 
-      const role = parsed.data.workshopRole ?? 'participant';
+      const role = 'participant';
       await client.query(
         'INSERT INTO workshop_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [user.id, role]
