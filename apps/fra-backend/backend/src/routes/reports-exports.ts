@@ -7,6 +7,7 @@ import { dbGetAssessmentById, dbGetOrganisationById, dbListAssessmentsByOrganisa
 import { rateLimit, getClientIp } from '../middleware.js';
 import { generateAssessmentPdf } from '../pdf-generator.js';
 import { createLogger } from '../logger.js';
+import { verifySignedPayload } from '../webhooks-out.js';
 import { requireAnyPaidPurchase } from '../entitlements.js';
 
 const logger = createLogger('reports-exports');
@@ -90,14 +91,26 @@ reportsExports.get('/assessments/:id/export-pdf', async (c) => {
 /**
  * POST /webhooks/assessment-submitted
  * Webhook endpoint for assessment submission events
- * Can be triggered by n8n or other automation systems
+ * Can be triggered by n8n or other automation systems.
+ *
+ * Callers must sign the raw body with INBOUND_WEBHOOK_SECRET and send it as
+ * `X-StopFRA-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`
+ * (the same format as our outgoing webhooks). Without the secret the endpoint is off.
  */
 reportsExports.post('/webhooks/assessment-submitted', async (c) => {
   const limited = await rateLimit('webhooks:assessment-submitted', { windowMs: RATE_LIMITS.WEBHOOK_WINDOW_MS ?? 60_000, max: RATE_LIMITS.WEBHOOK_MAX ?? 100 })(c);
   if (limited instanceof Response) return limited;
 
+  const secret = process.env.INBOUND_WEBHOOK_SECRET;
+  if (!secret) return jsonError(c, 404, 'NOT_FOUND', 'Not found');
+
+  const rawBody = await c.req.text();
+  if (!verifySignedPayload(secret, rawBody, c.req.header('x-stopfra-signature'))) {
+    return jsonError(c, 401, 'SIGNATURE_INVALID', 'Missing or invalid webhook signature');
+  }
+
   try {
-    const body = await c.req.json();
+    const body = JSON.parse(rawBody);
 
     // Validate webhook payload
     if (!body.assessmentId || !body.organisationId) {
