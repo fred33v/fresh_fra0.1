@@ -150,7 +150,7 @@ describe('Backend API', () => {
     const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, email: `employee+${Date.now()}@example.com`, name: 'Employee' }),
+      body: JSON.stringify({ code, email: `employee+${Date.now()}@example.com`, name: 'Employee', password: 'Employee-Pass-2026' }),
     });
 
     expect(useRes.status).toBe(200);

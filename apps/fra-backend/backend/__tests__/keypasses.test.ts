@@ -126,7 +126,7 @@ describe('Keypasses endpoints', () => {
       const res = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: empEmail, name: 'Employee One' }),
+        body: JSON.stringify({ code, email: empEmail, name: 'Employee One', password: 'Employee-Pass-2026' }),
       });
       expect(res.status).toBe(200);
       const json = (await res.json()) as any;
@@ -152,14 +152,14 @@ describe('Keypasses endpoints', () => {
       await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: `emp1+${Date.now()}@example.com`, name: 'Emp 1' }),
+        body: JSON.stringify({ code, email: `emp1+${Date.now()}@example.com`, name: 'Emp 1', password: 'Employee-Pass-2026' }),
       });
 
       // Try to use again
       const res = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: `emp2+${Date.now()}@example.com`, name: 'Emp 2' }),
+        body: JSON.stringify({ code, email: `emp2+${Date.now()}@example.com`, name: 'Emp 2', password: 'Employee-Pass-2026' }),
       });
       expect(res.status).toBe(400);
     });
@@ -168,7 +168,7 @@ describe('Keypasses endpoints', () => {
       const res = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'NONEXISTENT1234', email: 'emp@example.com', name: 'Emp' }),
+        body: JSON.stringify({ code: 'NONEXISTENT1234', email: 'emp@example.com', name: 'Emp', password: 'Employee-Pass-2026' }),
       });
       // Returns 400 or 404 depending on code lookup
       expect([400, 404]).toContain(res.status);
@@ -258,6 +258,55 @@ describe('Keypasses endpoints', () => {
       expect(json.success).toBe(true);
       expect(typeof json.data.totals).toBe('number');
       expect(json.data.totals).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  // ── Employees sign back in after joining ───────────────────────
+
+  describe('employee sign-in after redeeming', () => {
+    it('lets the employee sign in with the password they chose', async () => {
+      const { accessToken } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 1 }),
+      });
+      const [code] = ((await allocRes.json()) as any).data.codes;
+      const email = `returning-${Date.now()}@example.com`;
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email, password: 'Employee-Pass-2026' }),
+      });
+      expect(useRes.status).toBe(200);
+
+      const loginRes = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'Employee-Pass-2026' }),
+      });
+      expect(loginRes.status).toBe(200);
+      expect(((await loginRes.json()) as any).data.user.role).toBe('employee');
+    });
+
+    it('requires an email and a strong password', async () => {
+      const { accessToken } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 1 }),
+      });
+      const [code] = ((await allocRes.json()) as any).data.codes;
+
+      for (const body of [{ code }, { code, email: 'a@example.com' }, { code, email: 'a@example.com', password: 'short' }]) {
+        const res = await app.request('http://localhost/api/v1/keypasses/use', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        expect(res.status).toBe(400);
+      }
     });
   });
 });

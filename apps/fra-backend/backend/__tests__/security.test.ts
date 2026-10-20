@@ -86,7 +86,7 @@ describe('Security hardening', () => {
       const use1 = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(use1.status).toBe(200);
 
@@ -94,7 +94,7 @@ describe('Security hardening', () => {
       const use2 = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(use2.status).toBe(400);
       const json2 = (await use2.json()) as any;
@@ -122,7 +122,7 @@ describe('Security hardening', () => {
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: victim.email.toUpperCase() }),
+        body: JSON.stringify({ code, email: victim.email.toUpperCase(), password: 'Employee-Pass-2026' }),
       });
       expect(useRes.status).toBe(409);
       const json = (await useRes.json()) as any;
@@ -133,7 +133,7 @@ describe('Security hardening', () => {
       const retry = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: `new-emp-${crypto.randomUUID()}@example.com` }),
+        body: JSON.stringify({ code, email: `new-emp-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(retry.status).toBe(200);
       const retryJson = (await retry.json()) as any;
@@ -327,7 +327,7 @@ describe('Security hardening', () => {
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com` }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       const useJson = (await useRes.json()) as any;
       const userBToken = useJson.data.accessToken;
@@ -376,7 +376,7 @@ describe('Security hardening', () => {
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(useRes.status).toBe(400);
       const useJson = (await useRes.json()) as any;
@@ -399,14 +399,14 @@ describe('Security hardening', () => {
       await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
 
       // Second attempt — should get NOT_AVAILABLE
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, email: `employee-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(useRes.status).toBe(400);
       const useJson = (await useRes.json()) as any;
@@ -561,7 +561,7 @@ describe('Security hardening', () => {
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email: `emp-${crypto.randomUUID()}@example.com` }),
+        body: JSON.stringify({ code, email: `emp-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       const useJson = (await useRes.json()) as any;
       const employeeToken = useJson.data.accessToken;

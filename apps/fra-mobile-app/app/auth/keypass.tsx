@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Key, Mail } from 'lucide-react-native';
+import { Key, Lock, Mail } from 'lucide-react-native';
 import colors from '@/constants/colors';
 
 export default function KeyPassScreen() {
@@ -13,6 +13,7 @@ export default function KeyPassScreen() {
   const { signInWithKeyPass } = useAuth();
   const [email, setEmail] = useState('');
   const [keyPassCode, setKeyPassCode] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleKeyPassSignIn = async () => {
@@ -26,9 +27,15 @@ export default function KeyPassScreen() {
       return;
     }
 
+    // An access code works once, so the password is how the employee signs back in (rules match the backend)
+    if (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      Alert.alert('Choose a stronger password', 'Use at least 12 characters, with an uppercase letter, a lowercase letter and a number.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const result = await signInWithKeyPass(email.trim().toLowerCase(), keyPassCode.trim().toUpperCase());
+      const result = await signInWithKeyPass(email.trim().toLowerCase(), keyPassCode.trim().toUpperCase(), password);
       if (result.success) {
         router.replace('/');
       } else {
@@ -91,6 +98,28 @@ export default function KeyPassScreen() {
             </View>
             <Text style={styles.hint}>
               This code should have been provided by your organisation administrator
+            </Text>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Create a password</Text>
+            <View style={styles.inputContainer}>
+              <Lock size={20} color={colors.govGrey3} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="At least 12 characters"
+                placeholderTextColor={colors.govGrey3}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                accessibilityLabel="Create a password"
+              />
+            </View>
+            <Text style={styles.hint}>
+              Your access code works once. Next time, sign in with your email and this password.
             </Text>
           </View>
 

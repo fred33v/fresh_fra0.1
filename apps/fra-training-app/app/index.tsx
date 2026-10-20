@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from 'react-native';
 import ScreenContainer from '@/components/ScreenContainer';
 import ActionButton from '@/components/ActionButton';
@@ -19,9 +20,13 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function KeyPassEntryScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, loginWithKeyPass } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, loginWithKeyPass, loginWithPassword } = useAuth();
 
+  // 'join' redeems a key-pass (first visit); 'signin' uses the password chosen when joining
+  const [mode, setMode] = useState<'join' | 'signin'>('join');
   const [code, setCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,17 +43,37 @@ export default function KeyPassEntryScreen() {
     return <Redirect href="/home" />;
   }
 
+  const isJoining = mode === 'join';
+  const canSubmit = !!email.trim() && !!password && (!isJoining || !!code.trim());
+
+  const switchMode = () => {
+    setMode(isJoining ? 'signin' : 'join');
+    setError(null);
+  };
+
   const handleStartTraining = async () => {
     const trimmed = code.trim();
-    if (!trimmed) {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (isJoining && !trimmed) {
       setError('Please enter your key-pass code');
+      return;
+    }
+    if (!trimmedEmail || !password) {
+      setError('Please enter your email and password');
+      return;
+    }
+    // Same rules as the backend
+    if (isJoining && (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password))) {
+      setError('Use at least 12 characters, with an uppercase letter, a lowercase letter and a number');
       return;
     }
 
     setError(null);
     setIsSubmitting(true);
 
-    const result = await loginWithKeyPass(trimmed);
+    const result = isJoining
+      ? await loginWithKeyPass(trimmed.toUpperCase(), trimmedEmail, password)
+      : await loginWithPassword(trimmedEmail, password);
 
     if (result.success) {
       router.replace('/home');
@@ -81,27 +106,66 @@ export default function KeyPassEntryScreen() {
 
           {/* Entry form */}
           <View style={styles.formCard}>
-            <Text style={styles.formLabel}>Enter your key-pass code</Text>
+            <Text style={styles.formLabel}>{isJoining ? 'Join with your key-pass' : 'Sign in'}</Text>
             <Text style={styles.formHint}>
-              Your code was provided by your organisation administrator
+              {isJoining
+                ? 'Your code was provided by your organisation administrator. It works once, so choose a password for next time.'
+                : 'Use the email and password you chose when you joined.'}
             </Text>
 
+            {isJoining && (
+              <TextInput
+                style={[styles.input, error ? styles.inputError : null]}
+                value={code}
+                onChangeText={(text) => {
+                  setCode(text);
+                  if (error) setError(null);
+                }}
+                placeholder="e.g. FRA-2024-ABCD"
+                placeholderTextColor={colors.textFaint}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="next"
+                editable={!isSubmitting}
+                accessibilityLabel="Key-pass code"
+                accessibilityHint="Enter the key-pass code provided by your organisation"
+              />
+            )}
+
             <TextInput
-              style={[styles.input, error ? styles.inputError : null]}
-              value={code}
+              style={styles.input}
+              value={email}
               onChangeText={(text) => {
-                setCode(text);
+                setEmail(text);
                 if (error) setError(null);
               }}
-              placeholder="e.g. FRA-2024-ABCD"
+              placeholder="Work email"
               placeholderTextColor={colors.textFaint}
-              autoCapitalize="characters"
+              keyboardType="email-address"
+              autoCapitalize="none"
               autoCorrect={false}
+              textContentType="emailAddress"
+              editable={!isSubmitting}
+              accessibilityLabel="Work email"
+            />
+
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (error) setError(null);
+              }}
+              placeholder={isJoining ? 'Create a password (12+ characters)' : 'Password'}
+              placeholderTextColor={colors.textFaint}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType={isJoining ? 'newPassword' : 'password'}
               returnKeyType="go"
               onSubmitEditing={handleStartTraining}
               editable={!isSubmitting}
-              accessibilityLabel="Key-pass code"
-              accessibilityHint="Enter the key-pass code provided by your organisation"
+              accessibilityLabel={isJoining ? 'Create a password' : 'Password'}
             />
 
             {error && (
@@ -110,12 +174,22 @@ export default function KeyPassEntryScreen() {
 
             <View style={styles.buttonContainer}>
               <ActionButton
-                label="Start Training"
+                label={isJoining ? 'Start Training' : 'Sign in'}
                 onPress={handleStartTraining}
                 loading={isSubmitting}
-                disabled={!code.trim()}
+                disabled={!canSubmit}
               />
             </View>
+
+            <Pressable
+              onPress={switchMode}
+              style={styles.switchMode}
+              accessibilityRole="button"
+            >
+              <Text style={styles.switchModeText}>
+                {isJoining ? 'Already joined? Sign in with your password' : 'First time? Join with a key-pass'}
+              </Text>
+            </Pressable>
           </View>
 
           {/* Compliance badge */}
@@ -176,6 +250,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.md,
+  },
+  switchMode: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  switchModeText: {
+    fontSize: 15,
+    color: colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   formLabel: {
     fontSize: 16,

@@ -439,9 +439,11 @@ export const keypassBulkSchema = z.object({
   codes: z.array(keypassCodeSchema).min(1).max(100),
 });
 
+// Employees choose a password when they join so they can sign back in later; a key-pass works once
 export const keypassUseSchema = z.object({
   code: keypassCodeSchema,
-  email: z.string().email().optional(),
+  email: z.string().email(),
+  password: passwordSchema,
   name: z.string().min(1).optional(),
 });
 
