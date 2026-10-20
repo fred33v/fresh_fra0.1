@@ -287,7 +287,7 @@ describe('EmployerDashboard', () => {
       expect(screen.getByText('Try Again')).toBeInTheDocument();
     });
 
-    it('shows package upgrade message for PACKAGE_REQUIRED error', async () => {
+    it('keeps key-passes available when analytics need Enterprise', async () => {
       mockedApi.get.mockRejectedValueOnce(new ApiError('Upgrade needed', 'PACKAGE_REQUIRED'));
 
       renderDashboard();
@@ -295,6 +295,10 @@ describe('EmployerDashboard', () => {
       await waitFor(() => {
         expect(screen.getByText(/part of the Enterprise package/)).toBeInTheDocument();
       });
+      // Professional employers pay for key-passes, so the manager must still render
+      expect(screen.getByTestId('keypass-manager')).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Employees' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
     });
 
     it('retries fetch when Try Again is clicked', async () => {

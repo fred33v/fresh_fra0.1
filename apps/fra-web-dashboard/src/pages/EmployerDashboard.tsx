@@ -110,6 +110,9 @@ export default function EmployerDashboard() {
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Analytics are Enterprise-only, but every paid package can issue key-passes
+  const [analyticsLocked, setAnalyticsLocked] = useState(false);
+  const analyticsLockedRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [riskFilter, setRiskFilter] = useState('all');
@@ -145,6 +148,8 @@ export default function EmployerDashboard() {
         if (batch.length < EMPLOYEE_PAGE_SIZE) break;
       }
       setEmployees(all);
+      analyticsLockedRef.current = false;
+      setAnalyticsLocked(false);
       setRefreshSignal((n) => n + 1);
     } catch (err: unknown) {
       if (silent) {
@@ -152,7 +157,8 @@ export default function EmployerDashboard() {
         return;
       }
       if (err instanceof ApiError && err.code === 'PACKAGE_REQUIRED') {
-        setError('The organisation dashboard is part of the Enterprise package. Upgrade to see employee analytics.');
+        analyticsLockedRef.current = true;
+        setAnalyticsLocked(true);
       } else {
         const message = err instanceof Error ? err.message : 'Failed to load dashboard data';
         setError(message);
@@ -167,7 +173,7 @@ export default function EmployerDashboard() {
     fetchData();
     // Live monitoring: refresh every 30s while the tab is visible
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData(true);
+      if (document.visibilityState === 'visible' && !analyticsLockedRef.current) fetchData(true);
     }, LIVE_REFRESH_MS);
     return () => clearInterval(timer);
   }, [isEmployerOrAdmin]);
@@ -353,7 +359,7 @@ export default function EmployerDashboard() {
             </Card>
           </div>
         ) : !error && (
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={analyticsLocked ? 'keypasses' : tab} onValueChange={setTab}>
             <div className="space-y-4 mb-6">
               <SubscriptionCard entitlements={entitlements} />
               {tab !== 'overview' && highRiskEmployees.length > 0 && (
@@ -377,11 +383,24 @@ export default function EmployerDashboard() {
                   </CardContent>
                 </Card>
               )}
-              <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="employees">Employees</TabsTrigger>
-                <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
-              </TabsList>
+              {analyticsLocked ? (
+                <Card>
+                  <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground">
+                      Employee analytics and the live overview are part of the Enterprise package. You can issue key-passes below.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/package/enterprise')}>
+                      See the Enterprise package
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <TabsList>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="employees">Employees</TabsTrigger>
+                  <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
+                </TabsList>
+              )}
             </div>
 
             <TabsContent value="overview">
