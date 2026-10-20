@@ -65,6 +65,21 @@ sudo tar -xzf /tmp/stopfra-backend.tar.gz -C "$REMOTE_DIR"
 sudo chown -R stopfra:stopfra "$REMOTE_DIR"
 sudo chmod +x "$REMOTE_DIR/start.sh"
 
+# Chrome for the PDF reports (servers set up before it was added to ec2-user-data.sh)
+if ! command -v google-chrome-stable > /dev/null 2>&1; then
+  echo "  Installing Google Chrome for PDF reports..."
+  sudo dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+fi
+sudo mkdir -p /etc/systemd/system/stopfra-backend.service.d
+sudo tee /etc/systemd/system/stopfra-backend.service.d/pdf-chrome.conf > /dev/null << 'DROPINEOF'
+[Service]
+Environment=PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+Environment=XDG_CONFIG_HOME=/tmp/.config
+Environment=XDG_CACHE_HOME=/tmp/.cache
+MemoryMax=1G
+DROPINEOF
+sudo systemctl daemon-reload
+
 # Restart service
 echo "  Restarting backend service..."
 sudo systemctl restart stopfra-backend
