@@ -237,6 +237,31 @@ describe('Keypasses endpoints', () => {
       });
       expect(res.status).toBe(403);
     });
+
+    it('hides the code list and stats from employees of the same org', async () => {
+      const { accessToken, organisationId } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 2 }),
+      });
+      const [code] = ((await allocRes.json()) as any).data.codes;
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `staff-${Date.now()}@example.com` }),
+      });
+      expect(useRes.status).toBe(200);
+      const employeeToken = ((await useRes.json()) as any).data.accessToken;
+
+      for (const path of ['', '/stats']) {
+        const res = await app.request(`http://localhost/api/v1/keypasses/organisation/${organisationId}${path}`, {
+          headers: { Authorization: `Bearer ${employeeToken}` },
+        });
+        expect(res.status).toBe(403);
+      }
+    });
   });
 
   // ── GET /keypasses/organisation/:orgId/stats ───────────────────
