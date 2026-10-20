@@ -220,8 +220,9 @@ export default function AssessmentResults() {
                   <div className="space-y-2">
                     <h3 className="font-semibold">What this means:</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {rating === 'low' &&
-                        'Your organisation demonstrates strong fraud prevention controls. Continue monitoring and regular staff training.'}
+                      {rating === 'low' && (topRisks.length > 0
+                        ? `Your overall fraud risk is low, but the assessment found ${topRisks.length} weakness${topRisks.length === 1 ? '' : 'es'} to address. Review the key risk factors below.`
+                        : 'No significant weaknesses were found. Keep monitoring your controls and training staff regularly.')}
                       {rating === 'medium' &&
                         'Your organisation has some fraud prevention measures in place, but there are opportunities for improvement.'}
                       {rating === 'high' &&
