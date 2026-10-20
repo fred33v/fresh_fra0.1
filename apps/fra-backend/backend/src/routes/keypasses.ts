@@ -437,6 +437,12 @@ keypasses.post('/keypasses/bulk-revoke', async (c) => {
       continue;
     }
 
+    // A redeemed code belongs to an employee; revoking it would free a slot past the package allowance
+    if (kp.status === 'used') {
+      results.push({ code, revoked: false, reason: 'already_used' });
+      continue;
+    }
+
     if (hasDatabase()) {
       await dbUpdateKeypassStatus(code, 'revoked');
     } else {
