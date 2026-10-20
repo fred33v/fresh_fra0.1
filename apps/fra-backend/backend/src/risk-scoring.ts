@@ -338,7 +338,9 @@ function scoreTrainingAwareness(data?: RiskScoringInput['trainingAwareness']): M
   let score = 15;
   const factors: string[] = [];
   if (!data) return { score, factors };
-  if (data.staffTrainedPercentage !== undefined && data.staffTrainedPercentage < 50) { score += 20; factors.push(`Only ${data.staffTrainedPercentage}% of staff trained in fraud awareness`); }
+  // Staff training is a core "reasonable procedure" under ECCTA 2023, so near-zero coverage weighs more
+  if (data.staffTrainedPercentage !== undefined && data.staffTrainedPercentage < 25) { score += 30; factors.push(`Only ${data.staffTrainedPercentage}% of staff trained in fraud awareness`); }
+  else if (data.staffTrainedPercentage !== undefined && data.staffTrainedPercentage < 50) { score += 20; factors.push(`Only ${data.staffTrainedPercentage}% of staff trained in fraud awareness`); }
   else if (data.staffTrainedPercentage !== undefined && data.staffTrainedPercentage < 80) { score += 10; factors.push(`${data.staffTrainedPercentage}% of staff trained, below 80%`); }
   if (data.specialistTraining === 'no') { score += 15; factors.push('No role-specific training for high-risk roles'); }
   if (data.boardTrained === 'no') { score += 10; factors.push('Board not trained in fraud risk in the last 12 months'); }
