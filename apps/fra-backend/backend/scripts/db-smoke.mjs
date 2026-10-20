@@ -198,7 +198,7 @@ if (check('evidence pack', s, 200, p)) {
 [s, p] = await call('POST', '/keypasses/generate', { quantity: 2, expiresInDays: 30 }, ent); check('key-passes generate', s, 200, p);
 const codes = (data(p)?.codes ?? []).map((c) => (typeof c === 'string' ? c : c.code));
 [s, p] = await call('POST', '/keypasses/validate', { code: codes[0] }); check('key-pass validate', s, 200, p);
-[s, p] = await call('POST', '/keypasses/use', { code: codes[0], email: `smoke-emp-${RUN}@example.test`, name: 'Smoke Employee' }); check('key-pass redeemed', s, [200, 201], p);
+[s, p] = await call('POST', '/keypasses/use', { code: codes[0], email: `smoke-emp-${RUN}@example.test`, password: 'Smoke-Employee-2026', name: 'Smoke Employee' }); check('key-pass redeemed', s, [200, 201], p);
 [s, p] = await call('POST', '/keypasses/revoke', { code: codes[1] }, ent); check('key-pass revoke', s, [200, 204], p);
 
 // ── API keys: create, read-only use, revoke ─────────────────────
