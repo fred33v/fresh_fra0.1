@@ -285,4 +285,42 @@ describe('Keypasses endpoints', () => {
       expect(json.data.totals).toBeGreaterThanOrEqual(3);
     });
   });
+
+  // ── POST /keypasses/bulk-revoke ────────────────────────────────
+
+  describe('POST /keypasses/bulk-revoke', () => {
+    it('refuses redeemed codes so their slots stay counted', async () => {
+      const { accessToken, organisationId } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 2 }),
+      });
+      const [usedCode, spareCode] = ((await allocRes.json()) as any).data.codes;
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: usedCode, email: `staff-${Date.now()}@example.com` }),
+      });
+      expect(useRes.status).toBe(200);
+
+      const res = await app.request('http://localhost/api/v1/keypasses/bulk-revoke', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ codes: [usedCode, spareCode] }),
+      });
+      expect(res.status).toBe(200);
+      const { results } = ((await res.json()) as any).data;
+      expect(results).toEqual([
+        { code: usedCode, revoked: false, reason: 'already_used' },
+        { code: spareCode, revoked: true },
+      ]);
+
+      const quotaRes = await app.request(`http://localhost/api/v1/keypasses/organisation/${organisationId}/quota`, {
+        headers: authHeaders(accessToken),
+      });
+      expect(((await quotaRes.json()) as any).data.used).toBe(1);
+    });
+  });
 });
