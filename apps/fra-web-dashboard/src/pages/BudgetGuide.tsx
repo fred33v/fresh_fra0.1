@@ -18,13 +18,14 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertCircle, TrendingUp, CheckCircle2, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useBudgetGuide } from '@/hooks/useBudgetGuide';
-import { useAssessment } from '@/hooks/useAssessment';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { createLogger } from '@/lib/logger';
+import type { AssessmentResults } from '@/types/assessment';
 
 const logger = createLogger('BudgetGuidePage');
 
@@ -52,12 +53,11 @@ const _RISK_LEVELS = [
 ];
 
 export function BudgetGuidePage() {
-  const { assessmentId: _assessmentId } = useParams<{ assessmentId: string }>();
+  const { assessmentId } = useParams<{ assessmentId: string }>();
   const _navigate = useNavigate();
 
-  const {
-    riskScore,
-  } = useAssessment();
+  // The score of the assessment in the link, as its results page shows it
+  const [riskScore, setRiskScore] = useState<number | null>(null);
 
   const {
     riskAppetite,
@@ -84,6 +84,13 @@ export function BudgetGuidePage() {
   useEffect(() => {
     fetchProgress();
   }, [fetchProgress]);
+
+  useEffect(() => {
+    if (!assessmentId) return;
+    api.get<AssessmentResults>(`/api/v1/assessments/${assessmentId}/results`)
+      .then((results) => setRiskScore(results.overallScore))
+      .catch((err) => logger.error('Error loading assessment results', err));
+  }, [assessmentId]);
 
   const handleAddMitigation = async () => {
     if (!formData.description || formData.budget === 0) return;
