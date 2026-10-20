@@ -20,7 +20,7 @@ export const roleOptions: RoleOption[] = [
     id: 'invoices',
     title: 'Invoices & Payments',
     icon: CreditCard,
-    description: 'Approving invoices and authorizing payments',
+    description: 'Approving invoices and authorising payments',
   },
   {
     id: 'payroll',

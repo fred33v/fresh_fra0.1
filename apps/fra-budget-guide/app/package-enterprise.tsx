@@ -218,7 +218,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#92400e',
-    opacity: 0.8,
   },
   priceNote: {
     fontSize: 13,

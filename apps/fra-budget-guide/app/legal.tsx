@@ -52,7 +52,7 @@ const contentBlocks: ContentBlock[] = [
     summary: 'Your role as a steward of organisational resources',
     details: [
       'Stewardship: You manage stakeholder resources (taxpayer money, donor funds, shareholder capital). This is a position of trust.',
-      'Role Modeling: Your team watches your behavior. Shortcuts you take signal "acceptable" conduct.',
+      'Role Modelling: Your team watches your behaviour. Shortcuts you take signal "acceptable" conduct.',
       'Fiduciary Duty: Act in the organisation\'s best interests, not personal convenience.',
     ],
   },
