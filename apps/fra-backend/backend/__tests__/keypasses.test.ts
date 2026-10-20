@@ -276,7 +276,7 @@ describe('Keypasses endpoints', () => {
       const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: usedCode, email: `staff-${Date.now()}@example.com` }),
+        body: JSON.stringify({ code: usedCode, email: `staff-${Date.now()}@example.com`, password: 'Employee-Pass-2026' }),
       });
       expect(useRes.status).toBe(200);
 
