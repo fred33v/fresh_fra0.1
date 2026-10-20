@@ -17,6 +17,12 @@ dnf install -y nodejs20 nodejs20-npm
 node --version
 npm --version
 
+# --- Install Google Chrome (headless, for the PDF reports) ---
+# Puppeteer's bundled Chrome is downloaded on the machine that runs the install,
+# so it never reaches this server; the backend uses this one instead
+dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+google-chrome-stable --version
+
 # --- Install nginx ---
 dnf install -y nginx
 systemctl enable nginx
@@ -58,6 +64,9 @@ ReadWritePaths=/opt/stopfra/backend/logs
 PrivateTmp=true
 Environment=NODE_ENV=production
 Environment=PORT=3001
+Environment=PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+Environment=XDG_CONFIG_HOME=/tmp/.config
+Environment=XDG_CACHE_HOME=/tmp/.cache
 LimitNOFILE=65535
 
 [Install]
