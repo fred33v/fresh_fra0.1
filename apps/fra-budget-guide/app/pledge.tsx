@@ -24,7 +24,7 @@ const pledgeItems = [
   'Never approve my own transactions',
   'Declare all conflicts of interest',
   'Report fraud concerns immediately through proper channels',
-  'Set the tone for my team (ethical behavior, speak-up culture)',
+  'Set the tone for my team (ethical behaviour, speak-up culture)',
   'Complete mandatory fraud awareness training annually',
   'Support fraud investigations with full cooperation',
   'Protect whistleblowers from retaliation',
@@ -106,6 +106,7 @@ export default function PledgeScreen() {
                   accessibilityRole="checkbox"
                   accessibilityLabel={item}
                   accessibilityState={{ checked: !!checkedItems[index] }}
+                  aria-checked={!!checkedItems[index]}
                 >
                   <View style={[styles.checkbox, checkedItems[index] && styles.checkboxChecked]}>
                     {checkedItems[index] && <View style={styles.checkboxInner} />}

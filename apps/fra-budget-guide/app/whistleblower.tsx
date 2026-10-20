@@ -18,7 +18,7 @@ const protections = [
     items: [
       'Protected from dismissal if you report in good faith',
       'Protected from disciplinary action or demotion',
-      'Protected from harassment or victimization',
+      'Protected from harassment or victimisation',
       'Protected under Public Interest Disclosure Act 1998 (UK)',
     ],
   },

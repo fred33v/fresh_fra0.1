@@ -60,7 +60,7 @@ export const scenarioData: Record<string, Scenario[]> = {
               'Correct! Always verify new suppliers using independent sources before processing any payment.',
           },
           {
-            text: 'Ask colleague if they recognize the supplier',
+            text: 'Ask colleague if they recognise the supplier',
             correct: false,
             feedback:
               'Insufficient. Rely on documented verification, not verbal confirmation.',
@@ -85,7 +85,7 @@ export const scenarioData: Record<string, Scenario[]> = {
       whatToDo: [
         'NEVER update bank details via email alone',
         'Call supplier using phone number from contract/invoice (not email)',
-        'Verbal confirmation with two authorized signatories',
+        'Verbal confirmation with two authorised signatories',
         'Test payment (£1) before full amount',
       ],
       controls: [
@@ -160,7 +160,7 @@ export const scenarioData: Record<string, Scenario[]> = {
         'Receipts in employee name (hotels should show organisation)',
       ],
       whatToDo: [
-        'Require original itemized receipts (not credit card slips)',
+        'Require original itemised receipts (not credit card slips)',
         'Cross-check mileage vs. calendar appointments',
         'Sample verification (call hotel/restaurant to confirm)',
       ],

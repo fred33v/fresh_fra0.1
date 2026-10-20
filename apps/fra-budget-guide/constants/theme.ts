@@ -1,5 +1,5 @@
 // Design tokens for FRA Budget Guide
-// All colors follow the Slate/Blue palette from Tailwind CSS
+// All colours follow the Slate/Blue palette from Tailwind CSS
 
 export type ThemeColors = { [K in keyof typeof colors]: string };
 
@@ -12,8 +12,8 @@ export const colors = {
   // Text
   text: '#0f172a',           // slate-900 — headings, primary text
   textSecondary: '#334155',  // slate-700 — body text
-  textMuted: '#64748b',      // slate-500 — captions, hints
-  textFaint: '#94a3b8',      // slate-400 — disabled, placeholders
+  textMuted: '#475569',      // slate-600 — captions, hints (AA on tinted bgs)
+  textFaint: '#64748b',      // slate-500 — disabled, placeholders (AA on white/slate-50)
 
   // Backgrounds
   background: '#f8fafc',     // slate-50 — screen background
@@ -25,14 +25,14 @@ export const colors = {
   borderLight: '#cbd5e1',    // slate-300 — heavier borders
 
   // Success (Green)
-  success: '#059669',        // emerald-600 — positive actions
-  successDark: '#047857',    // emerald-700 — hover/pressed
+  success: '#047857',        // emerald-700 — positive actions (AA with white text)
+  successDark: '#065f46',    // emerald-800 — hover/pressed
   successDarker: '#065f46',  // emerald-800 — text on green bg
   successLight: '#d1fae5',   // emerald-100 — success backgrounds
 
   // Warning (Amber)
-  warning: '#f59e0b',        // amber-500 — warning icons
-  warningDark: '#d97706',    // amber-600 — warning text
+  warning: '#b45309',        // amber-700 — warning icons/text (AA on amber-50)
+  warningDark: '#92400e',    // amber-800 — warning text
   warningDarker: '#92400e',  // amber-800 — text on amber bg
   warningDarkest: '#78350f', // amber-900 — dark warning text
   warningLight: '#fef3c7',   // amber-100 — warning backgrounds

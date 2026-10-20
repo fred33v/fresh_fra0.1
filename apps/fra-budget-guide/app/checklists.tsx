@@ -36,7 +36,7 @@ const checklists: Checklist[] = [
       { id: 'p1', text: 'Verify goods/services actually received (three-way match)' },
       { id: 'p2', text: 'Confirm supplier is legitimate (if new/unusual)' },
       { id: 'p3', text: 'Check invoice amount matches agreement/quote' },
-      { id: 'p4', text: 'Ensure proper authorization obtained' },
+      { id: 'p4', text: 'Ensure proper authorisation obtained' },
       { id: 'p5', text: 'Verify bank details if payment to new account' },
       { id: 'p6', text: 'Question anything unusual or urgent' },
     ],
@@ -48,7 +48,7 @@ const checklists: Checklist[] = [
     items: [
       { id: 't1', text: 'Verify hours are reasonable and consistent with work' },
       { id: 't2', text: 'Check employee was scheduled to work claimed days' },
-      { id: 't3', text: 'Confirm overtime was pre-authorized' },
+      { id: 't3', text: 'Confirm overtime was pre-authorised' },
       { id: 't4', text: 'Cross-check against project deliverables' },
       { id: 't5', text: 'Question unusual patterns or maximum hours every week' },
     ],
@@ -58,9 +58,9 @@ const checklists: Checklist[] = [
     title: 'Before Approving Expenses',
     icon: FileSignature,
     items: [
-      { id: 'e1', text: 'Check receipts are original, itemized, and dated' },
+      { id: 'e1', text: 'Check receipts are original, itemised, and dated' },
       { id: 'e2', text: 'Verify business purpose is legitimate and clear' },
-      { id: 'e3', text: 'Cross-check dates (employee was traveling/working)' },
+      { id: 'e3', text: 'Cross-check dates (employee was travelling/working)' },
       { id: 'e4', text: 'Confirm expenses comply with policy limits' },
       { id: 'e5', text: 'Question weekend/holiday expenses' },
       { id: 'e6', text: 'Verify mileage claims against calendar' },
@@ -86,7 +86,7 @@ const checklists: Checklist[] = [
     items: [
       { id: 'b1', text: 'NEVER update bank details via email alone' },
       { id: 'b2', text: 'Call supplier using contact details from original contract' },
-      { id: 'b3', text: 'Obtain verbal confirmation from two authorized signatories' },
+      { id: 'b3', text: 'Obtain verbal confirmation from two authorised signatories' },
       { id: 'b4', text: 'Make test payment (£1) before full amount' },
       { id: 'b5', text: 'Flag change for senior management approval' },
       { id: 'b6', text: 'Document all verification steps taken' },

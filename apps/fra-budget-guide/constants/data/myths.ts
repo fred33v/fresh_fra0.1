@@ -15,7 +15,7 @@ export const myths: Myth[] = [
     id: '2',
     myth: 'Trusted, long-serving employees won\'t commit fraud',
     reality:
-      'Average fraudster tenure is 8+ years (ACFE). Trust creates opportunity. Pressure and rationalization can affect anyone, regardless of tenure.',
+      'Average fraudster tenure is 8+ years (ACFE). Trust creates opportunity. Pressure and rationalisation can affect anyone, regardless of tenure.',
   },
   {
     id: '3',

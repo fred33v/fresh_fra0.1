@@ -94,7 +94,12 @@ export default function AuthorityScreen() {
           This is an example. Check your organisation&apos;s specific limits.
         </Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          focusable
+          accessibilityLabel="Authority matrix, scroll sideways to see all columns"
+        >
           <View style={styles.table}>
             <View style={styles.tableHeader}>
               <View style={[styles.tableCell, styles.tableHeaderCell, styles.cellType]}>
