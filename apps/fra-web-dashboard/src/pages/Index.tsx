@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   Shield,
   Users,
@@ -496,6 +497,84 @@ export default function Index() {
         </div>
       </section>
 
+      {/* ===== FAQ Section ===== */}
+      <section id="faq" className="scroll-mt-4 py-16 lg:py-24 bg-white" aria-labelledby="faq-heading">
+        <div className="container max-w-3xl">
+          <div className="text-center mb-10">
+            <h2 id="faq-heading" className="text-3xl font-bold text-[#0b0c0c] sm:text-4xl mb-4">
+              FAQ
+            </h2>
+            <p className="text-lg text-[#505a5f]">Common questions</p>
+          </div>
+
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="offence">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">What is the failure to prevent fraud offence?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                The Economic Crime and Corporate Transparency Act 2023 makes a large organisation liable when an employee, agent or other associated person commits fraud intending to benefit it. The offence came into force on 1 September 2025. The organisation's defence is to show it had reasonable procedures in place to prevent fraud, and a documented fraud risk assessment is the starting point for those procedures.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="small">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">Is this useful if my organisation is small?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                Yes. The offence itself applies to large organisations, but fraud affects organisations of every size, and clients, funders and larger partners increasingly ask suppliers how they manage fraud risk. The Starter package is designed for sole traders and micro-businesses.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="assessment">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">What does the assessment cover?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                It covers 13 areas of fraud risk, including procurement, cash and banking, payroll, IT and cybersecurity, people and culture, and how you respond to fraud. Your answers save automatically, so you can stop and come back at any time.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="results">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">What do I get at the end?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                You get a risk score with a breakdown by area, the risk factors that need attention, a downloadable PDF report and an action plan. The report gives you a written record of your assessment for your board, auditors or regulators.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="package">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">Which package is right for us?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                <ul className="list-disc pl-5 space-y-1">
+                  {PACKAGES.map((pkg) => (
+                    <li key={pkg.id}>
+                      <strong>{pkg.name}</strong> ({formatPrice(pkg)} {pkg.billing === 'one-time' ? 'one-time' : 'a year'}): {pkg.audience}.
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2">Prices exclude VAT. Each package includes everything in the packages below it.</p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="keypasses">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">How do my staff get access?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                You issue key-passes from your employer page. A key-pass is a one-use code that lets an employee create their own account in your organisation. Professional includes 50 key-passes and Enterprise has no limit.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="upgrade">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">Can we upgrade later?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                Yes. You can move to a higher package at any time, and your completed assessments and results stay in your account.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="advice">
+              <AccordionTrigger className="text-left text-[#0b0c0c]">Is this legal advice?</AccordionTrigger>
+              <AccordionContent className="text-base text-[#0b0c0c]">
+                No. The platform helps you identify, record and act on your fraud risks. For advice on your organisation's legal position, speak to a qualified solicitor.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          <p className="mt-8 text-center text-[#0b0c0c]">
+            Still have a question? Email{' '}
+            <a href="mailto:help@fraud-risk.co.uk" className="font-bold text-[#1d70b8] underline hover:text-[#003078]">
+              help@fraud-risk.co.uk
+            </a>
+            .
+          </p>
+        </div>
+      </section>
+
       {/* ===== CTA Section ===== */}
       <section className="py-16 lg:py-24 bg-[#f3f2f1]" aria-label="Call to action">
         <div className="container">
@@ -534,6 +613,11 @@ export default function Index() {
             <div>
               <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">About</h3>
               <ul className="space-y-2">
+                <li>
+                  <a href="#faq" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                    FAQ
+                  </a>
+                </li>
                 <li>
                   <Link to="/resources" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
                     Resources
