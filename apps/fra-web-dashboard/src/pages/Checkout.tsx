@@ -120,13 +120,12 @@ export default function Checkout() {
                   </div>
 
                   <div className="flex flex-col gap-3">
+                    {/* Every package starts with the risk assessment (package 1), whichever was bought */}
                     <Button className="w-full" asChild>
-                      <Link to={packageName === 'Starter' ? '/assessment' : '/dashboard'}>
-                        {packageName === 'Starter' ? 'Start Your Assessment' : 'Go to Dashboard'}
-                      </Link>
+                      <Link to="/assessment">Start Your Risk Assessment</Link>
                     </Button>
                     <Button variant="outline" className="w-full" asChild>
-                      <Link to="/">Back to Home</Link>
+                      <Link to="/dashboard">Go to Dashboard</Link>
                     </Button>
                   </div>
                 </CardContent>

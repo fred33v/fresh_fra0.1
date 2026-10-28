@@ -2,6 +2,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
+import { HealthCheckCard } from '@/components/HealthCheckCard';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -20,14 +23,17 @@ import {
   FileText,
   Users,
   Loader2,
+  Lock,
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, hasRole } = useAuth();
   const { progress, isLoading: progressLoading } = useWorkshopProgress();
+  const { entitlements, isLoading: entitlementsLoading } = useEntitlements();
+  const { assessments, isLoading: assessmentsLoading, hasFinishedAssessment } = useOrgAssessments(!!entitlements?.features.assessment);
   const navigate = useNavigate();
 
-  if (progressLoading) {
+  if (progressLoading || entitlementsLoading || assessmentsLoading) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -48,6 +54,15 @@ export default function Dashboard() {
   // No progress yet (or no workshop package) is not completion
   const isCompleted = !!progress?.completed_at;
   const currentSection = progress?.current_section || 0;
+  // Each package includes everything below it: the health check is in all of them, the
+  // workshop from Professional up. Admins and facilitators run workshops, as on the server.
+  const hasTraining = !!entitlements?.features.training || user.role === 'admin' || hasRole('facilitator');
+  // For the people who run the account, the package starts with the organisation's risk
+  // assessment (package 1); the training (package 2) opens once one has been submitted.
+  // Staff who join with a key-pass go straight to their training.
+  const isManager = user.role === 'employer' || user.role === 'admin';
+  const guidedSteps = isManager && hasTraining && !!entitlements?.features.assessment;
+  const trainingLocked = guidedSteps && !hasFinishedAssessment;
 
   const getSectorLabel = (sector: string) => {
     switch (sector) {
@@ -85,9 +100,53 @@ export default function Dashboard() {
           )}
         </motion.div>
 
-        {/* Quarterly reassessment is an organisation task, for the people who run the account */}
-        {(user.role === 'employer' || user.role === 'admin') && <ReassessmentBanner />}
+        {/* Quarterly reassessment is an organisation task, for the people who run the account.
+            The first assessment is prompted by the risk assessment card below, so the banner is for later ones. */}
+        {(user.role === 'employer' || user.role === 'admin') && hasFinishedAssessment && <ReassessmentBanner />}
 
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <HealthCheckCard entitlements={entitlements} assessments={assessments} step={guidedSteps ? 1 : undefined} />
+        </motion.div>
+
+        {trainingLocked ? (
+          <Card className="mb-6">
+            <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <div>
+                  <div className="font-medium">Step 2: Fraud Risk Awareness Workshop</div>
+                  <div className="text-sm text-muted-foreground">
+                    Opens once your risk assessment (step 1) is submitted, so the training builds on your organisation&apos;s own risks.
+                  </div>
+                </div>
+              </div>
+              <Button asChild>
+                <Link to="/assessment">Go to step 1</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : !hasTraining ? (
+          <Card className="mb-6">
+            <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <div>
+                  <div className="font-medium">Fraud Risk Awareness Workshop</div>
+                  <div className="text-sm text-muted-foreground">
+                    Staff training and certificates are included in Professional and Enterprise, together with everything in your current package.
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" asChild>
+                <Link to="/package/professional">See Professional</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Workshop Card */}
           <motion.div
@@ -233,6 +292,7 @@ export default function Dashboard() {
             )}
           </motion.div>
         </div>
+        )}
 
         {/* Quick Actions */}
         <motion.div
@@ -255,6 +315,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
+            {hasTraining && !trainingLocked && (<>
             <Card className="hover:shadow-md transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" role="button" tabIndex={0} onClick={() => navigate('/action-plan')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/action-plan'); } }}>
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center">
@@ -278,6 +339,7 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
+            </>)}
 
             {isCompleted && (
               <Card className="hover:shadow-md transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" role="button" tabIndex={0} onClick={() => navigate('/certificate')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/certificate'); } }}>
@@ -296,6 +358,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Module Overview */}
+        {hasTraining && !trainingLocked && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -338,6 +401,7 @@ export default function Dashboard() {
             })}
           </div>
         </motion.div>
+        )}
       </div>
     </Layout>
   );
