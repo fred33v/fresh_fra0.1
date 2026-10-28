@@ -282,6 +282,27 @@ describe('Index', () => {
 
   // ── CTA section ─────────────────────────────────
 
+  describe('FAQ section', () => {
+    it('shows the FAQ heading and opens an answer when a question is clicked', async () => {
+      setupAuth();
+      renderIndex();
+      expect(screen.getByRole('heading', { name: 'FAQ' })).toBeInTheDocument();
+      expect(screen.getByText('Common questions')).toBeInTheDocument();
+      expect(screen.queryByText(/came into force on 1 September 2025/)).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'What is the failure to prevent fraud offence?' }));
+      expect(screen.getByText(/came into force on 1 September 2025/)).toBeInTheDocument();
+    });
+
+    it('lists every package with its price in the package answer', async () => {
+      setupAuth();
+      renderIndex();
+      await userEvent.click(screen.getByRole('button', { name: 'Which package is right for us?' }));
+      expect(screen.getByText(/£795 one-time/)).toBeInTheDocument();
+      expect(screen.getByText(/£1,799 a year/)).toBeInTheDocument();
+      expect(screen.getByText(/£4,995 a year/)).toBeInTheDocument();
+    });
+  });
+
   describe('CTA section', () => {
     it('shows CTA heading', () => {
       renderIndex();
