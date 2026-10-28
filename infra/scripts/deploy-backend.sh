@@ -20,22 +20,26 @@ echo ""
 
 # --- Step 1: Build ---
 echo "[1/5] Building backend..."
-cd "$BACKEND_DIR"
-npm run build
+cd "$PROJECT_ROOT"
+pnpm --filter @stopfra/backend build
 echo "  Build complete."
 
 # --- Step 2: Package ---
 echo "[2/5] Packaging deployment..."
-DEPLOY_PKG=$(mktemp -d)/stopfra-backend.tar.gz
-tar -czf "$DEPLOY_PKG" \
-  -C "$BACKEND_DIR" \
+STAGE_DIR=$(mktemp -d)
+DEPLOY_PKG="$STAGE_DIR/stopfra-backend.tar.gz"
+# pnpm deploy writes a self-contained copy of the backend with real (not workspace-linked)
+# production node_modules. Google Chrome for PDF rendering is installed on the server instead.
+PUPPETEER_SKIP_DOWNLOAD=1 pnpm --filter @stopfra/backend deploy --prod "$STAGE_DIR/app"
+rm -rf "$STAGE_DIR/app/dist" && cp -r "$BACKEND_DIR/dist" "$STAGE_DIR/app/dist"
+cp "$SCRIPT_DIR/backup-database.sh" "$STAGE_DIR/app/backup-database.sh"
+tar -czf "$DEPLOY_PKG" -C "$STAGE_DIR/app" \
   dist/ \
   migrations/ \
   package.json \
-  package-lock.json \
   start.sh \
-  node_modules/ \
-  --exclude='node_modules/.cache'
+  backup-database.sh \
+  node_modules/
 
 echo "  Package: $(du -h "$DEPLOY_PKG" | cut -f1)"
 
@@ -63,7 +67,16 @@ fi
 echo "  Extracting new deployment..."
 sudo tar -xzf /tmp/stopfra-backend.tar.gz -C "$REMOTE_DIR"
 sudo chown -R stopfra:stopfra "$REMOTE_DIR"
-sudo chmod +x "$REMOTE_DIR/start.sh"
+sudo chmod +x "$REMOTE_DIR/start.sh" "$REMOTE_DIR/backup-database.sh"
+
+# Nightly database backup to S3 at 02:00, logged to the system journal
+echo '0 2 * * * stopfra /opt/stopfra/backend/backup-database.sh 2>&1 | logger -t stopfra-backup' \
+  | sudo tee /etc/cron.d/stopfra-backup > /dev/null
+sudo chmod 644 /etc/cron.d/stopfra-backup
+
+# Apply database migrations before the new code starts serving
+echo "  Running database migrations..."
+(cd "$REMOTE_DIR" && sudo -u stopfra ./start.sh migrate)
 
 # Chrome for the PDF reports (servers set up before it was added to ec2-user-data.sh)
 if ! command -v google-chrome-stable > /dev/null 2>&1; then
@@ -128,4 +141,4 @@ echo ""
 echo "=== Deployment Complete ==="
 
 # Cleanup temp file
-rm -f "$DEPLOY_PKG"
+rm -rf "$STAGE_DIR"

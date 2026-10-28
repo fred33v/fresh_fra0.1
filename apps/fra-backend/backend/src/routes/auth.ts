@@ -1,13 +1,13 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db.js';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { getRedis } from '../redis.js';
 import {
-  signupSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, profileUpdateSchema,
+  signupSchema, loginSchema, refreshSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, profileUpdateSchema,
   refreshSecret,
-  LOCKOUT_PREFIX, LOCKOUT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS,
+  LOCKOUT_PREFIX, LOCKOUT_MAX_ATTEMPTS, LOCKOUT_ACCOUNT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS,
   RATE_LIMITS,
 } from '../types.js';
 import type { User } from '../types.js';
@@ -19,10 +19,12 @@ import {
   dbGetOrganisationById,
   auditLog,
   setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken,
+  setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken,
+  dbMarkUserEmailVerified,
 } from '../db/index.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { createLogger } from '../logger.js';
-import { passwordChangedEmail, passwordResetEmail, sendEmailInBackground } from '../email.js';
+import { accountExistsEmail, passwordChangedEmail, passwordResetEmail, sendEmailInBackground, verifyEmailEmail } from '../email.js';
 
 const logger = createLogger('auth');
 
@@ -30,61 +32,113 @@ const { AUTH_WINDOW_MS, SIGNUP_MAX, LOGIN_MAX, FORGOT_PASSWORD_MAX, RESET_PASSWO
 
 // ── Auth helpers ────────────────────────────────────────────────
 
-async function checkAccountLockout(email: string): Promise<{ locked: boolean; remaining: number }> {
+// Failed logins are counted twice: per account and client address, which locks out
+// someone guessing a password, and per account across all addresses, a much higher
+// ceiling that stops a guesser spread over many addresses. Counting per address means
+// a stranger who knows an email cannot lock its owner out of their own account.
+//
+// The counters live in Redis when it is configured. If Redis errors, logins fall back
+// to the per-process counters rather than failing outright.
+function lockoutKeys(email: string, ip: string): { client: string; account: string } {
+  const account = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
+  return { client: `${account}:${ip}`, account };
+}
+
+function lockoutRedisError(err: unknown): void {
+  logger.warn('Account lockout Redis error, using in-memory fallback', { error: (err as Error).message });
+}
+
+async function readFailures(key: string): Promise<number> {
   const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
-
-  if (!redis) {
-    // In-memory fallback
-    const entry = accountLockouts.get(key);
-    if (!entry || entry.expiresAt < Date.now()) {
-      return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS };
+  if (redis) {
+    try {
+      return (await redis.get<number>(key)) ?? 0;
+    } catch (err) {
+      lockoutRedisError(err);
     }
-    if (entry.count >= LOCKOUT_MAX_ATTEMPTS) {
-      return { locked: true, remaining: 0 };
-    }
-    return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - entry.count };
   }
+  const entry = accountLockouts.get(key);
+  return entry && entry.expiresAt >= Date.now() ? entry.count : 0;
+}
 
-  const count = await redis.get<number>(key) ?? 0;
-  if (count >= LOCKOUT_MAX_ATTEMPTS) {
+async function addFailure(key: string): Promise<void> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const count = await redis.incr(key);
+      if (count === 1) {
+        await redis.expire(key, LOCKOUT_WINDOW_SECONDS);
+      }
+      return;
+    } catch (err) {
+      lockoutRedisError(err);
+    }
+  }
+  const entry = accountLockouts.get(key);
+  const now = Date.now();
+  if (!entry || entry.expiresAt < now) {
+    accountLockouts.set(key, { count: 1, expiresAt: now + LOCKOUT_WINDOW_SECONDS * 1000 });
+  } else {
+    entry.count += 1;
+  }
+}
+
+async function clearFailures(key: string): Promise<void> {
+  accountLockouts.delete(key);
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (err) {
+      lockoutRedisError(err);
+    }
+  }
+}
+
+async function checkAccountLockout(email: string, ip: string): Promise<{ locked: boolean; remaining: number }> {
+  const keys = lockoutKeys(email, ip);
+  const [clientFailures, accountFailures] = await Promise.all([readFailures(keys.client), readFailures(keys.account)]);
+  if (clientFailures >= LOCKOUT_MAX_ATTEMPTS || accountFailures >= LOCKOUT_ACCOUNT_MAX_ATTEMPTS) {
     return { locked: true, remaining: 0 };
   }
-  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - count };
+  return { locked: false, remaining: LOCKOUT_MAX_ATTEMPTS - clientFailures };
 }
 
-async function recordFailedLogin(email: string): Promise<void> {
-  const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
+async function recordFailedLogin(email: string, ip: string): Promise<void> {
+  const keys = lockoutKeys(email, ip);
+  await Promise.all([addFailure(keys.client), addFailure(keys.account)]);
+}
 
-  if (!redis) {
-    // In-memory fallback
-    const entry = accountLockouts.get(key);
-    const now = Date.now();
-    if (!entry || entry.expiresAt < now) {
-      accountLockouts.set(key, { count: 1, expiresAt: now + LOCKOUT_WINDOW_SECONDS * 1000 });
-    } else {
-      entry.count += 1;
-    }
-    return;
-  }
+async function clearFailedLogins(email: string, ip: string): Promise<void> {
+  // A correct password from one address clears that address only; the account-wide
+  // count keeps running so a guesser elsewhere is still held back
+  await clearFailures(lockoutKeys(email, ip).client);
+}
 
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, LOCKOUT_WINDOW_SECONDS);
+// ── Email confirmation ─────────────────────────────────────────
+
+/** Issues a confirmation link and emails it. Returns the token (shown to developers outside production). */
+async function sendVerificationLink(user: User): Promise<string | undefined> {
+  const token = crypto.randomUUID();
+  try {
+    await setEmailVerificationToken(token, user.id);
+    sendEmailInBackground(verifyEmailEmail(user.email, user.name, token), { userId: user.id, kind: 'verify_email' });
+    return token;
+  } catch (err: unknown) {
+    logger.error('Could not issue an email confirmation link', { userId: user.id, error: String(err) });
+    return undefined;
   }
 }
 
-async function clearFailedLogins(email: string): Promise<void> {
-  const redis = getRedis();
-  const key = `${LOCKOUT_PREFIX}${email.toLowerCase()}`;
-
-  if (!redis) {
-    accountLockouts.delete(key);
-    return;
-  }
-
-  await redis.del(key);
+function signupPendingResponse(c: Context, email: string, verificationToken?: string) {
+  const data: Record<string, unknown> = { pendingVerification: true, email };
+  // Lets local development and tests finish sign-up without an inbox
+  if (process.env.NODE_ENV !== 'production' && verificationToken) data.verificationToken = verificationToken;
+  return c.json({
+    success: true,
+    message: 'Check your email: we have sent a link to confirm your address and finish setting up your account.',
+    data,
+  });
 }
 
 // Dummy hash for timing-safe comparison when user is not found
@@ -104,9 +158,20 @@ auth.post('/auth/signup', async (c) => {
   const { email, password, name } = parsed.data;
   const emailLc = email.toLowerCase();
   const existing = hasDatabase() ? await dbGetUserByEmail(emailLc) : usersByEmail.get(emailLc);
-  if (existing) return jsonError(c, 409, 'SIGNUP_FAILED', 'Unable to create account. Please try signing in or resetting your password.');
-
+  // Hashed either way, so a new and an already-registered email take the same time
   const passwordHash = await bcrypt.hash(password, 12);
+
+  if (existing) {
+    // Same reply as a new sign-up, so the form cannot be used to find out who has an
+    // account. The owner gets an email telling them, or a fresh link if never confirmed.
+    if (existing.emailVerifiedAt === null) {
+      void sendVerificationLink(existing);
+    } else {
+      sendEmailInBackground(accountExistsEmail(existing.email, existing.name), { userId: existing.id, kind: 'account_exists' });
+    }
+    return signupPendingResponse(c, emailLc);
+  }
+
   const now = new Date().toISOString();
   const user: User = {
     id: crypto.randomUUID(),
@@ -116,12 +181,10 @@ auth.post('/auth/signup', async (c) => {
     role: 'employer',
     organisationId: crypto.randomUUID(),
     createdAt: now,
+    emailVerifiedAt: null,
   };
 
   const orgName = parsed.data.organisationName ?? 'Organisation';
-
-  let workshopProfile = null;
-  const workshopRoles: string[] = [];
 
   if (hasDatabase()) {
     const pool = getDbPool();
@@ -142,21 +205,18 @@ auth.post('/auth/signup', async (c) => {
       const sector = parsed.data.sector ?? 'private';
       const jobTitle = parsed.data.jobTitle ?? null;
 
-      const profileRes = await client.query(
+      await client.query(
         `INSERT INTO workshop_profiles (user_id, full_name, organization_name, sector, job_title)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id) DO NOTHING
-         RETURNING *`,
+         ON CONFLICT (user_id) DO NOTHING`,
         [user.id, fullName, orgName, sector, jobTitle]
       );
-      workshopProfile = profileRes.rows[0] ?? null;
 
       const role = 'participant';
       await client.query(
         'INSERT INTO workshop_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [user.id, role]
       );
-      workshopRoles.push(role);
 
       await client.query('COMMIT');
     } catch (err) {
@@ -173,11 +233,6 @@ auth.post('/auth/signup', async (c) => {
     });
   }
 
-  const { accessToken, refreshToken } = issueTokens(user);
-  if (hasDatabase()) {
-    await dbUpsertRefreshToken(refreshToken, user.id);
-  }
-
   await auditLog({
     eventType: 'auth.signup', actorId: user.id, actorEmail: user.email,
     organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
@@ -185,17 +240,8 @@ auth.post('/auth/signup', async (c) => {
     userAgent: c.req.header('user-agent'),
   });
 
-  return c.json({
-    success: true,
-    data: {
-      user: publicUser(user),
-      organisation: { organisationId: user.organisationId, name: orgName },
-      accessToken,
-      refreshToken,
-      profile: workshopProfile,
-      workshopRoles,
-    },
-  });
+  const verificationToken = await sendVerificationLink(user);
+  return signupPendingResponse(c, emailLc, verificationToken);
 });
 
 auth.post('/auth/login', async (c) => {
@@ -209,7 +255,7 @@ auth.post('/auth/login', async (c) => {
   const emailLc = email.toLowerCase();
 
   // Account lockout check
-  const lockout = await checkAccountLockout(emailLc);
+  const lockout = await checkAccountLockout(emailLc, getClientIp(c));
   if (lockout.locked) {
     await auditLog({
       eventType: 'auth.lockout', actorEmail: emailLc,
@@ -227,11 +273,11 @@ auth.post('/auth/login', async (c) => {
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
 
   if (!user) {
-    await recordFailedLogin(emailLc);
+    await recordFailedLogin(emailLc, getClientIp(c));
     return jsonError(c, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
   if (!ok) {
-    await recordFailedLogin(emailLc);
+    await recordFailedLogin(emailLc, getClientIp(c));
     await auditLog({
       eventType: 'auth.failed_login', actorEmail: emailLc,
       details: { remaining: lockout.remaining - 1 }, ipAddress: getClientIp(c),
@@ -241,7 +287,13 @@ auth.post('/auth/login', async (c) => {
   }
 
   // Successful login - clear lockout counter
-  await clearFailedLogins(emailLc);
+  await clearFailedLogins(emailLc, getClientIp(c));
+
+  // The right password proves who they are, so saying the email is unconfirmed reveals nothing
+  if (user.emailVerifiedAt === null) {
+    void sendVerificationLink(user);
+    return jsonError(c, 403, 'EMAIL_NOT_VERIFIED', 'Please confirm your email address first. We have sent you a new link.');
+  }
 
   const { accessToken, refreshToken } = issueTokens(user);
   if (hasDatabase()) {
@@ -414,15 +466,21 @@ auth.post('/auth/forgot-password', async (c) => {
   let resetToken: string | undefined;
 
   if (user) {
-    resetToken = crypto.randomUUID();
-    await setPasswordResetToken(resetToken, user.id);
-    // In the background, so the response time does not reveal whether the account exists
-    sendEmailInBackground(passwordResetEmail(user.email, user.name, resetToken), { userId: user.id, kind: 'password_reset' });
-
-    await auditLog({
-      eventType: 'auth.forgot_password', actorEmail: emailLc,
-      resourceType: 'user', resourceId: user.id, ipAddress: getClientIp(c),
-      userAgent: c.req.header('user-agent'),
+    const token = crypto.randomUUID();
+    resetToken = token;
+    const ipAddress = getClientIp(c);
+    const userAgent = c.req.header('user-agent');
+    // Everything that only happens for a real account runs in the background, so the
+    // response time does not reveal whether the account exists
+    void (async () => {
+      await setPasswordResetToken(token, user.id);
+      sendEmailInBackground(passwordResetEmail(user.email, user.name, token), { userId: user.id, kind: 'password_reset' });
+      await auditLog({
+        eventType: 'auth.forgot_password', actorEmail: emailLc,
+        resourceType: 'user', resourceId: user.id, ipAddress, userAgent,
+      });
+    })().catch((err: unknown) => {
+      logger.error('Password reset request failed', { userId: user.id, error: String(err) });
     });
   }
 
@@ -438,6 +496,73 @@ auth.post('/auth/forgot-password', async (c) => {
   }
 
   return c.json(response);
+});
+
+auth.post('/auth/verify-email', async (c) => {
+  const limited = await rateLimit('auth:verify', { windowMs: AUTH_WINDOW_MS, max: RESET_PASSWORD_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const parsed = verifyEmailSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid verify-email payload');
+
+  const userId = await getEmailVerificationUserId(parsed.data.token);
+  if (!userId) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
+  await deleteEmailVerificationToken(parsed.data.token);
+
+  const user = hasDatabase() ? await dbGetUserById(userId) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
+  if (!user) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
+
+  const verifiedAt = new Date().toISOString();
+  if (hasDatabase()) {
+    await dbMarkUserEmailVerified(user.id, verifiedAt);
+  } else {
+    user.emailVerifiedAt ??= verifiedAt;
+  }
+
+  await auditLog({
+    eventType: 'auth.email_verified', actorId: user.id, actorEmail: user.email,
+    organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+
+  // Following the link signs them in, so a new account goes straight to the app
+  const { accessToken, refreshToken } = issueTokens(user);
+  if (hasDatabase()) {
+    await dbUpsertRefreshToken(refreshToken, user.id);
+  }
+  let orgName = 'Organisation';
+  const org = hasDatabase() ? await dbGetOrganisationById(user.organisationId) : organisationsById.get(user.organisationId);
+  if (org) orgName = org.name;
+
+  return c.json({
+    success: true,
+    data: {
+      user: publicUser(user),
+      organisation: { organisationId: user.organisationId, name: orgName },
+      accessToken,
+      refreshToken,
+    },
+  });
+});
+
+auth.post('/auth/resend-verification', async (c) => {
+  const limited = await rateLimit('auth:resend-verification', { windowMs: AUTH_WINDOW_MS, max: FORGOT_PASSWORD_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const parsed = forgotPasswordSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid resend-verification payload');
+
+  const emailLc = parsed.data.email.toLowerCase();
+  // Looked up and sent in the background: the reply is the same whether or not the account exists
+  void (async () => {
+    const user = hasDatabase() ? await dbGetUserByEmail(emailLc) : usersByEmail.get(emailLc);
+    if (user && user.emailVerifiedAt === null) await sendVerificationLink(user);
+  })().catch((err: unknown) => logger.error('Resend verification failed', { error: String(err) }));
+
+  return c.json({
+    success: true,
+    message: 'If that email has an account waiting to be confirmed, we have sent a new link.',
+  });
 });
 
 auth.post('/auth/reset-password', async (c) => {
@@ -461,11 +586,15 @@ auth.post('/auth/reset-password', async (c) => {
   }
 
   const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  // The reset link reached their inbox, which confirms the address too
+  const verifiedAt = new Date().toISOString();
   if (hasDatabase()) {
     await dbUpdateUserPasswordHash(user.id, newHash);
+    await dbMarkUserEmailVerified(user.id, verifiedAt);
     await dbDeleteAllRefreshTokensForUser(user.id);
   } else {
     user.passwordHash = newHash;
+    user.emailVerifiedAt ??= verifiedAt;
     for (const token of Array.from(refreshTokenAllowlist.values())) {
       try {
         const payload = jwt.decode(token) as jwt.JwtPayload | null;

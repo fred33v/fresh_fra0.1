@@ -1,32 +1,35 @@
 /// <reference types="jest" />
 
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
-import { app, createAuthenticatedUser, authHeaders } from './helpers';
+import { app, createAuthenticatedUser, authHeaders, signUpAndConfirm } from './helpers';
 import { signupSchema } from '../src/types';
 
-// Helper to create a user and return tokens (keeps res/json shape for auth-specific tests)
+// Signs up and confirms the email, returning the confirmation response (res/json shape for auth-specific tests)
 async function signup(overrides: Record<string, unknown> = {}) {
   const email = overrides.email as string ?? `test+${Date.now()}+${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await app.request('http://localhost/api/v1/auth/signup', {
+  const { res, json } = await signUpAndConfirm({
+    email,
+    password: 'SecurePass123!',
+    name: 'Test User',
+    organisationName: 'Test Org',
+    ...overrides,
+  });
+  return { res, json, email };
+}
+
+function postSignup(body: Record<string, unknown>) {
+  return app.request('http://localhost/api/v1/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email,
-      password: 'SecurePass123!',
-      name: 'Test User',
-      organisationName: 'Test Org',
-      ...overrides,
-    }),
+    body: JSON.stringify(body),
   });
-  const json = (await res.json()) as any;
-  return { res, json, email };
 }
 
 describe('Auth endpoints', () => {
   // ── POST /auth/signup ──────────────────────────────────────────
 
   describe('POST /auth/signup', () => {
-    it('creates a new user and returns tokens', async () => {
+    it('creates a new user and signs them in once they confirm their email', async () => {
       const { res, json } = await signup();
       expect(res.status).toBe(200);
       expect(json.success).toBe(true);
@@ -46,7 +49,9 @@ describe('Auth endpoints', () => {
 
       const { res, json } = await signup({ workshopRole: 'facilitator' });
       expect(res.status).toBe(200);
-      expect(json.data.workshopRoles).not.toContain('facilitator');
+      const me = await app.request('http://localhost/api/v1/auth/me', { headers: authHeaders(json.data.accessToken) });
+      const meJson = (await me.json()) as any;
+      expect(meJson.data.workshopRoles).not.toContain('facilitator');
 
       // Without a training package the gated workshop routes stay closed
       const sessions = await app.request('http://localhost/api/v1/workshop/sessions', {
@@ -55,20 +60,38 @@ describe('Auth endpoints', () => {
       expect(sessions.status).toBe(403);
     });
 
-    it('rejects duplicate email', async () => {
+    it('returns no tokens until the email is confirmed', async () => {
+      const email = `pending+${crypto.randomUUID()}@example.com`;
+      const res = await postSignup({ email, password: 'SecurePass123!', name: 'New User' });
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as any;
+      expect(json.data.pendingVerification).toBe(true);
+      expect(json.data.accessToken).toBeUndefined();
+      expect(json.data.refreshToken).toBeUndefined();
+    });
+
+    it('gives the same reply for a registered email as for a new one', async () => {
       const { email } = await signup();
-      const res = await app.request('http://localhost/api/v1/auth/signup', {
+      const existingRes = await postSignup({ email, password: 'SecurePass123!', name: 'Another User' });
+      const newRes = await postSignup({ email: `new+${crypto.randomUUID()}@example.com`, password: 'SecurePass123!', name: 'Another User' });
+      expect(existingRes.status).toBe(newRes.status);
+      const existingJson = (await existingRes.json()) as any;
+      const newJson = (await newRes.json()) as any;
+      expect(existingJson.message).toBe(newJson.message);
+      expect(existingJson.data.pendingVerification).toBe(true);
+      expect(Object.keys(existingJson.data).filter((k) => k !== 'verificationToken').sort())
+        .toEqual(Object.keys(newJson.data).filter((k) => k !== 'verificationToken').sort());
+    });
+
+    it('does not let a second sign-up change the existing account', async () => {
+      const { email } = await signup();
+      await postSignup({ email, password: 'AttackerPass999!', name: 'Attacker' });
+      const login = await app.request('http://localhost/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password: 'SecurePass123!',
-          name: 'Another User',
-        }),
+        body: JSON.stringify({ email, password: 'SecurePass123!' }),
       });
-      expect(res.status).toBe(409);
-      const json = (await res.json()) as any;
-      expect(json.error.code).toBe('SIGNUP_FAILED');
+      expect(login.status).toBe(200);
     });
 
     it('rejects weak password (too short)', async () => {
@@ -123,6 +146,83 @@ describe('Auth endpoints', () => {
       const { json } = await signup();
       expect(json.data.user.passwordHash).toBeUndefined();
       expect(json.data.user.password).toBeUndefined();
+    });
+  });
+
+  // ── Email confirmation ────────────────────────────────────────
+
+  describe('Email confirmation', () => {
+    it('blocks login until the email is confirmed', async () => {
+      const email = `unconfirmed+${crypto.randomUUID()}@example.com`;
+      await postSignup({ email, password: 'SecurePass123!', name: 'New User' });
+      const res = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'SecurePass123!' }),
+      });
+      expect(res.status).toBe(403);
+      const json = (await res.json()) as any;
+      expect(json.error.code).toBe('EMAIL_NOT_VERIFIED');
+      expect(json.data?.accessToken).toBeUndefined();
+    });
+
+    it('still says the password is wrong for an unconfirmed account', async () => {
+      const email = `unconfirmed+${crypto.randomUUID()}@example.com`;
+      await postSignup({ email, password: 'SecurePass123!', name: 'New User' });
+      const res = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'WrongPass123!' }),
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('uses each confirmation link only once', async () => {
+      const email = `once+${crypto.randomUUID()}@example.com`;
+      const signupJson = (await (await postSignup({ email, password: 'SecurePass123!', name: 'Once' })).json()) as any;
+      const token = signupJson.data.verificationToken;
+      const verify = (t: string) => app.request('http://localhost/api/v1/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: t }),
+      });
+      expect((await verify(token)).status).toBe(200);
+      const again = await verify(token);
+      expect(again.status).toBe(400);
+      expect(((await again.json()) as any).error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('rejects an unknown confirmation link', async () => {
+      const res = await app.request('http://localhost/api/v1/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: crypto.randomUUID() }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('lets the user log in after confirming', async () => {
+      const { email } = await signup();
+      const res = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'SecurePass123!' }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it('gives the same resend reply whether or not the account exists', async () => {
+      const resend = (email: string) => app.request('http://localhost/api/v1/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const { email } = await signup();
+      const known = await resend(email);
+      const unknown = await resend(`nobody+${crypto.randomUUID()}@example.com`);
+      expect(known.status).toBe(200);
+      expect(unknown.status).toBe(200);
+      expect(((await known.json()) as any).message).toBe(((await unknown.json()) as any).message);
     });
   });
 

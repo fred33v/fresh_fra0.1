@@ -5,19 +5,33 @@ import { purchasesById } from '../src/stores';
 
 export { app };
 
+/**
+ * Signs up and follows the confirmation link, the way a new user gets their first tokens.
+ * Returns the verify-email response, shaped like a login: { user, organisation, accessToken, refreshToken }.
+ */
+export async function signUpAndConfirm(body: Record<string, unknown>) {
+  const signupRes = await app.request('http://localhost/api/v1/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const signupJson = (await signupRes.json()) as any;
+  const res = await app.request('http://localhost/api/v1/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: signupJson.data?.verificationToken }),
+  });
+  const json = (await res.json()) as any;
+  return { signupRes, signupJson, res, json };
+}
+
 export async function createAuthenticatedUser(overrides?: { email?: string; name?: string; organisationName?: string }) {
   const email = overrides?.email ?? `test-${crypto.randomUUID()}@example.com`;
   const name = overrides?.name ?? 'Test User';
   const organisationName = overrides?.organisationName ?? 'Test Org';
   const password = 'SecurePass123!';
 
-  const res = await app.request('http://localhost/api/v1/auth/signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, name, organisationName }),
-  });
-
-  const data = (await res.json()) as any;
+  const { json: data } = await signUpAndConfirm({ email, password, name, organisationName });
   return {
     accessToken: data.data.accessToken as string,
     refreshToken: data.data.refreshToken as string,

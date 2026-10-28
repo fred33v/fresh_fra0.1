@@ -443,16 +443,17 @@ payments.get('/purchases/organisation/:orgId', async (c) => {
 });
 
 function verifyStripeSignature(payload: string, sigHeader: string, secret: string): boolean {
-  const parts = sigHeader.split(',').reduce((acc, part) => {
+  // While a webhook secret is being rotated Stripe sends one v1 signature per secret,
+  // so the header can carry several; any one of them matching is enough.
+  let timestamp: string | undefined;
+  const signatures: string[] = [];
+  for (const part of sigHeader.split(',')) {
     const [key, value] = part.split('=');
-    acc[key] = value;
-    return acc;
-  }, {} as Record<string, string>);
+    if (key === 't') timestamp = value;
+    else if (key === 'v1' && value) signatures.push(value);
+  }
 
-  const timestamp = parts['t'];
-  const signature = parts['v1'];
-
-  if (!timestamp || !signature) return false;
+  if (!timestamp || signatures.length === 0) return false;
 
   // Check timestamp is within 5 minutes
   const tolerance = 300; // 5 minutes
@@ -460,12 +461,12 @@ function verifyStripeSignature(payload: string, sigHeader: string, secret: strin
   if (Math.abs(now - parseInt(timestamp, 10)) > tolerance) return false;
 
   const signedPayload = `${timestamp}.${payload}`;
-  const expectedSig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+  const expectedBuf = Buffer.from(crypto.createHmac('sha256', secret).update(signedPayload).digest('hex'));
 
-  const sigBuf = Buffer.from(signature);
-  const expectedBuf = Buffer.from(expectedSig);
-  if (sigBuf.length !== expectedBuf.length) return false;
-  return crypto.timingSafeEqual(sigBuf, expectedBuf);
+  return signatures.some((signature) => {
+    const sigBuf = Buffer.from(signature);
+    return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+  });
 }
 
 payments.post('/webhooks/stripe', async (c) => {

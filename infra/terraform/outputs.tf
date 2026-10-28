@@ -51,3 +51,13 @@ output "dashboard_url" {
   description = "Web dashboard URL"
   value       = "https://${var.dashboard_subdomain}.${var.domain_name}"
 }
+
+output "s3_backups_bucket" {
+  description = "S3 bucket holding nightly database backups"
+  value       = aws_s3_bucket.backups.bucket
+}
+
+output "ses_domain_verified" {
+  description = "Whether SES has verified the sending domain's DKIM records (may take up to an hour after apply)"
+  value       = aws_sesv2_email_identity.domain.verified_for_sending_status
+}

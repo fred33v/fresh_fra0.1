@@ -23,6 +23,16 @@ domain_name          = "fraud-risk.co.uk"
 api_subdomain        = "api"
 dashboard_subdomain  = "app"
 
+# The domain's DNS is on Cloudflare. Create a token at dash.cloudflare.com > My Profile >
+# API Tokens with Zone: Zone Read and Zone: DNS Edit, limited to this zone. If you set
+# mail_forward_to, it also needs Zone Settings Edit, Email Routing Rules Edit and
+# Account: Email Routing Addresses Edit.
+cloudflare_api_token = "your-cloudflare-api-token"
+# Incoming mail for @fraud-risk.co.uk is handled by Spacemail (its MX records are on
+# Cloudflare already). Leave this empty. Setting an inbox here instead turns on Cloudflare
+# Email Routing, which replaces the Spacemail MX records and forwards everything there.
+mail_forward_to = ""
+
 # --- Upstash Redis ---
 # Create at https://console.upstash.com
 upstash_redis_rest_url   = "https://eu2-XXXX.upstash.io"
@@ -39,3 +49,11 @@ s3_download_prefix       = "downloads/"
 s3_url_expires_seconds   = 3600
 s3_max_upload_bytes      = 10485760
 s3_allowed_content_types = "application/pdf,image/png,image/jpeg"
+
+# --- Monitoring ---
+# Each address gets a confirmation email from AWS; alerts start once it is confirmed
+alert_emails = ["you@example.com"] # an inbox you already read, such as your Gmail
+
+# --- Email (Amazon SES) ---
+# Terraform verifies the domain and stores the SMTP login itself. Optional sender override:
+# email_from = "FRAUD-RISK.CO.UK <no-reply@fraud-risk.co.uk>"

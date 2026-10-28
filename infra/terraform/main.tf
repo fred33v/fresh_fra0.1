@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.40"
+    }
   }
 
   # Remote state - update bucket name after initial creation
@@ -31,6 +35,11 @@ provider "aws" {
       Environment = var.environment
     })
   }
+}
+
+# The domain's DNS is hosted on Cloudflare
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 # ACM certificates must be in us-east-1 for CloudFront
@@ -249,6 +258,59 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
 }
 
 # ============================================================
+# S3 Bucket for database backups
+# The instance may only add backups; it cannot read, delete or overwrite them, so a
+# compromised server cannot destroy them. Old backups expire through the lifecycle rule.
+# ============================================================
+
+resource "aws_s3_bucket" "backups" {
+  bucket = "${var.project_name}-backups-${var.environment}"
+  tags   = { Name = "${var.project_name}-backups" }
+}
+
+resource "aws_s3_bucket_versioning" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "backups" {
+  bucket                  = aws_s3_bucket.backups.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  rule {
+    id     = "expire-old-backups"
+    status = "Enabled"
+    filter { prefix = "database/" }
+
+    expiration {
+      days = var.backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+# ============================================================
 # S3 Bucket for web dashboard (7.10)
 # ============================================================
 
@@ -319,7 +381,11 @@ resource "aws_iam_role_policy" "backend_ssm" {
           "ssm:GetParameter",
           "ssm:GetParametersByPath"
         ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend/*"
+        # GetParametersByPath (used by start.sh) is authorised against the path itself
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend",
+          "arn:aws:ssm:${var.aws_region}:*:parameter/fra/backend/*",
+        ]
       },
       {
         Effect   = "Allow"
@@ -349,6 +415,29 @@ resource "aws_iam_role_policy" "backend_s3" {
           aws_s3_bucket.uploads.arn,
           "${aws_s3_bucket.uploads.arn}/*"
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.backups.arn}/database/*"
+      }
+    ]
+  })
+}
+
+# Lets backup-database.sh report each successful backup to the backup_missing alarm
+resource "aws_iam_role_policy" "backend_metrics" {
+  name = "${var.project_name}-backup-metric"
+  role = aws_iam_role.backend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Action    = ["cloudwatch:PutMetricData"]
+        Resource  = "*"
+        Condition = { StringEquals = { "cloudwatch:namespace" = "StopFRA" } }
       }
     ]
   })
@@ -486,83 +575,79 @@ resource "aws_acm_certificate" "dashboard" {
 }
 
 # ============================================================
-# Route53 DNS (7.9)
+# DNS on Cloudflare (7.9)
+# Records are DNS-only (not proxied) so ACM, the ALB and CloudFront see real traffic.
 # ============================================================
 
-data "aws_route53_zone" "main" {
-  name         = var.domain_name
-  private_zone = false
+data "cloudflare_zone" "main" {
+  name = var.domain_name
 }
 
 # API DNS validation records
-resource "aws_route53_record" "api_cert_validation" {
+resource "cloudflare_record" "api_cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.api.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
+      name   = trimsuffix(dvo.resource_record_name, ".")
+      record = trimsuffix(dvo.resource_record_value, ".")
       type   = dvo.resource_record_type
     }
   }
 
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = data.cloudflare_zone.main.id
   name    = each.value.name
   type    = each.value.type
+  content = each.value.record
   ttl     = 60
-  records = [each.value.record]
+  proxied = false
 }
 
 resource "aws_acm_certificate_validation" "api" {
   certificate_arn         = aws_acm_certificate.api.arn
-  validation_record_fqdns = [for record in aws_route53_record.api_cert_validation : record.fqdn]
+  validation_record_fqdns = [for record in cloudflare_record.api_cert_validation : record.hostname]
 }
 
 # Dashboard DNS validation records
-resource "aws_route53_record" "dashboard_cert_validation" {
+resource "cloudflare_record" "dashboard_cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.dashboard.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
+      name   = trimsuffix(dvo.resource_record_name, ".")
+      record = trimsuffix(dvo.resource_record_value, ".")
       type   = dvo.resource_record_type
     }
   }
 
-  zone_id = data.aws_route53_zone.main.zone_id
+  zone_id = data.cloudflare_zone.main.id
   name    = each.value.name
   type    = each.value.type
+  content = each.value.record
   ttl     = 60
-  records = [each.value.record]
+  proxied = false
 }
 
 resource "aws_acm_certificate_validation" "dashboard" {
   provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.dashboard.arn
-  validation_record_fqdns = [for record in aws_route53_record.dashboard_cert_validation : record.fqdn]
+  validation_record_fqdns = [for record in cloudflare_record.dashboard_cert_validation : record.hostname]
 }
 
 # api.fraud-risk.co.uk -> ALB (7.9)
-resource "aws_route53_record" "api" {
-  zone_id = data.aws_route53_zone.main.zone_id
+resource "cloudflare_record" "api" {
+  zone_id = data.cloudflare_zone.main.id
   name    = "${var.api_subdomain}.${var.domain_name}"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.api.dns_name
-    zone_id                = aws_lb.api.zone_id
-    evaluate_target_health = true
-  }
+  type    = "CNAME"
+  content = aws_lb.api.dns_name
+  ttl     = 300
+  proxied = false
 }
 
 # app.fraud-risk.co.uk -> CloudFront
-resource "aws_route53_record" "dashboard" {
-  zone_id = data.aws_route53_zone.main.zone_id
+resource "cloudflare_record" "dashboard" {
+  zone_id = data.cloudflare_zone.main.id
   name    = "${var.dashboard_subdomain}.${var.domain_name}"
-  type    = "A"
-
-  alias {
-    name                   = aws_cloudfront_distribution.dashboard.domain_name
-    zone_id                = aws_cloudfront_distribution.dashboard.hosted_zone_id
-    evaluate_target_health = false
-  }
+  type    = "CNAME"
+  content = aws_cloudfront_distribution.dashboard.domain_name
+  ttl     = 300
+  proxied = false
 }
 
 # ============================================================
@@ -594,6 +679,7 @@ resource "aws_cloudfront_response_headers_policy" "dashboard_security" {
         "frame-ancestors 'none'",
         "form-action 'self' https://checkout.stripe.com",
         "base-uri 'self'",
+        "frame-src 'none'",
         "object-src 'none'",
         "upgrade-insecure-requests",
       ])
@@ -602,7 +688,6 @@ resource "aws_cloudfront_response_headers_policy" "dashboard_security" {
     strict_transport_security {
       access_control_max_age_sec = 63072000
       include_subdomains         = true
-      preload                    = true
       override                   = true
     }
     content_type_options { override = true }
@@ -619,7 +704,12 @@ resource "aws_cloudfront_response_headers_policy" "dashboard_security" {
   custom_headers_config {
     items {
       header   = "Permissions-Policy"
-      value    = "camera=(), microphone=(), geolocation=()"
+      value    = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
       override = true
     }
   }
@@ -757,4 +847,292 @@ resource "aws_ssm_parameter" "s3_content_types" {
   name  = "/fra/backend/S3_ALLOWED_CONTENT_TYPES"
   type  = "String"
   value = var.s3_allowed_content_types
+}
+
+# ============================================================
+# Monitoring: CloudWatch alarms, emailed through SNS
+# ============================================================
+
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts"
+}
+
+# AWS emails each address a confirmation link; alerts start once it is clicked
+resource "aws_sns_topic_subscription" "alerts_email" {
+  for_each  = toset(var.alert_emails)
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
+locals {
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  alb_dimensions = {
+    LoadBalancer = aws_lb.api.arn_suffix
+  }
+}
+
+# The health check fails when the API is down or cannot reach the database or Redis
+resource "aws_cloudwatch_metric_alarm" "api_unhealthy" {
+  alarm_name          = "${var.project_name}-api-unhealthy"
+  alarm_description   = "The API is failing its health check (/api/v1/health). Users cannot sign in or use the app."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HealthyHostCount"
+  dimensions          = merge(local.alb_dimensions, { TargetGroup = aws_lb_target_group.backend.arn_suffix })
+  statistic           = "Minimum"
+  period              = 60
+  evaluation_periods  = 3
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_5xx" {
+  alarm_name          = "${var.project_name}-api-5xx"
+  alarm_description   = "The API returned more than 10 server errors (5xx) in 5 minutes. Check the backend log."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  dimensions          = local.alb_dimensions
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# Errors from the load balancer itself: the API is unreachable or timing out
+resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  alarm_name          = "${var.project_name}-alb-5xx"
+  alarm_description   = "The load balancer returned more than 10 errors (502/503/504) in 5 minutes. The API is unreachable or too slow."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  dimensions          = local.alb_dimensions
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_slow" {
+  alarm_name          = "${var.project_name}-api-slow"
+  alarm_description   = "API responses have averaged over 2 seconds for 15 minutes."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  dimensions          = local.alb_dimensions
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# A failed AWS host check moves the instance to healthy hardware; the alarm also emails
+resource "aws_cloudwatch_metric_alarm" "ec2_system_check" {
+  alarm_name          = "${var.project_name}-ec2-system-check"
+  alarm_description   = "The backend server's AWS host failed its status check. AWS is recovering the instance onto new hardware."
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_System"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 2
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = concat(local.alarm_actions, ["arn:aws:automate:${var.aws_region}:ec2:recover"])
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "ec2_instance_check" {
+  alarm_name          = "${var.project_name}-ec2-instance-check"
+  alarm_description   = "The backend server failed its instance status check (out of memory, disk full, or not booting)."
+  namespace           = "AWS/EC2"
+  metric_name         = "StatusCheckFailed_Instance"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
+  alarm_name          = "${var.project_name}-ec2-cpu"
+  alarm_description   = "The backend server's CPU has been above 80% for 15 minutes."
+  namespace           = "AWS/EC2"
+  metric_name         = "CPUUtilization"
+  dimensions          = { InstanceId = aws_instance.backend.id }
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 80
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# backup-database.sh reports each successful backup; no report for 26 hours means the
+# nightly 02:00 backup did not happen
+resource "aws_cloudwatch_metric_alarm" "backup_missing" {
+  alarm_name          = "${var.project_name}-backup-missing"
+  alarm_description   = "No successful database backup in the last 26 hours. Check the backup cron on the backend server."
+  namespace           = "StopFRA"
+  metric_name         = "DatabaseBackupSucceeded"
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 26
+  datapoints_to_alarm = 26
+  comparison_operator = "LessThanThreshold"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# ============================================================
+# Email: Amazon SES sends sign-up confirmations and password resets
+# The domain is verified with DKIM records on Cloudflare, bounces use mail.<domain> so the
+# domain's own SPF and MX records are untouched, and the SMTP login is written straight
+# to Parameter Store for start.sh to load.
+# New SES accounts can only send to verified addresses until production access is
+# granted (SES console > Account dashboard > Request production access).
+# ============================================================
+
+resource "aws_sesv2_email_identity" "domain" {
+  email_identity = var.domain_name
+}
+
+resource "cloudflare_record" "ses_dkim" {
+  count   = 3
+  zone_id = data.cloudflare_zone.main.id
+  name    = "${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.domain_name}"
+  type    = "CNAME"
+  content = "${aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"
+  ttl     = 1800
+  proxied = false
+}
+
+resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
+  email_identity         = aws_sesv2_email_identity.domain.email_identity
+  mail_from_domain       = "mail.${var.domain_name}"
+  behavior_on_mx_failure = "USE_DEFAULT_VALUE"
+}
+
+resource "cloudflare_record" "ses_mail_from_mx" {
+  zone_id  = data.cloudflare_zone.main.id
+  name     = "mail.${var.domain_name}"
+  type     = "MX"
+  content  = "feedback-smtp.${var.aws_region}.amazonses.com"
+  priority = 10
+  ttl      = 1800
+}
+
+resource "cloudflare_record" "ses_mail_from_spf" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = "mail.${var.domain_name}"
+  type    = "TXT"
+  content = "v=spf1 include:amazonses.com -all"
+  ttl     = 1800
+}
+
+# Incoming mail: Cloudflare Email Routing forwards anything sent to @<domain> to an inbox
+# you already read. Turning it on adds the domain's MX and SPF records. The inbox gets a
+# confirmation email from Cloudflare, and forwarding starts once it is confirmed.
+resource "cloudflare_email_routing_settings" "main" {
+  count   = var.mail_forward_to == "" ? 0 : 1
+  zone_id = data.cloudflare_zone.main.id
+  enabled = true
+}
+
+resource "cloudflare_email_routing_address" "inbox" {
+  count      = var.mail_forward_to == "" ? 0 : 1
+  account_id = data.cloudflare_zone.main.account_id
+  email      = var.mail_forward_to
+}
+
+resource "cloudflare_email_routing_catch_all" "forward" {
+  count   = var.mail_forward_to == "" ? 0 : 1
+  zone_id = data.cloudflare_zone.main.id
+  name    = "Forward all mail to ${var.mail_forward_to}"
+  enabled = true
+
+  matcher {
+    type = "all"
+  }
+
+  action {
+    type  = "forward"
+    value = [cloudflare_email_routing_address.inbox[0].email]
+  }
+
+  depends_on = [cloudflare_email_routing_settings.main]
+}
+
+# SMTP login: an IAM user that may only send email from the domain
+resource "aws_iam_user" "smtp" {
+  name = "${var.project_name}-ses-smtp"
+}
+
+resource "aws_iam_user_policy" "smtp_send" {
+  name = "${var.project_name}-ses-send"
+  user = aws_iam_user.smtp.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ses:SendRawEmail", "ses:SendEmail"]
+        Resource = aws_sesv2_email_identity.domain.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_access_key" "smtp" {
+  user = aws_iam_user.smtp.name
+}
+
+resource "aws_ssm_parameter" "smtp_host" {
+  name  = "/fra/backend/SMTP_HOST"
+  type  = "String"
+  value = "email-smtp.${var.aws_region}.amazonaws.com"
+}
+
+resource "aws_ssm_parameter" "smtp_port" {
+  name  = "/fra/backend/SMTP_PORT"
+  type  = "String"
+  value = "587"
+}
+
+resource "aws_ssm_parameter" "smtp_user" {
+  name  = "/fra/backend/SMTP_USER"
+  type  = "SecureString"
+  value = aws_iam_access_key.smtp.id
+}
+
+resource "aws_ssm_parameter" "smtp_pass" {
+  name  = "/fra/backend/SMTP_PASS"
+  type  = "SecureString"
+  value = aws_iam_access_key.smtp.ses_smtp_password_v4
+}
+
+resource "aws_ssm_parameter" "email_from" {
+  name  = "/fra/backend/EMAIL_FROM"
+  type  = "String"
+  value = var.email_from != "" ? var.email_from : "FRAUD-RISK.CO.UK <no-reply@${var.domain_name}>"
 }

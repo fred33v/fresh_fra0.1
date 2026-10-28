@@ -14,7 +14,7 @@
 
 import nodemailer, { type Transporter } from 'nodemailer';
 import { createLogger } from './logger.js';
-import { PASSWORD_RESET_TTL_SECONDS } from './types.js';
+import { EMAIL_VERIFY_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from './types.js';
 import { webAppUrl } from './stripe.js';
 
 const logger = createLogger('email');
@@ -93,6 +93,37 @@ export function passwordResetEmail(to: string, name: string, token: string): Ema
     subject: 'Reset your FRAUD-RISK.CO.UK password',
     text: `${lines[0]}\n\n${lines[1]}\n\n${url}\n\n${lines[2]}\n`,
     html: layout('Reset your password', lines, { label: 'Choose a new password', url }),
+  };
+}
+
+export function verifyEmailEmail(to: string, name: string, token: string): Email {
+  const url = `${webAppUrl()}/auth?mode=verify&token=${encodeURIComponent(token)}`;
+  const hours = Math.round(EMAIL_VERIFY_TTL_SECONDS / 3600);
+  const lines = [
+    `Hello ${name},`,
+    `Thanks for creating a FRAUD-RISK.CO.UK account. Confirm your email address with the link below to start using it. The link expires in ${hours} hours.`,
+    'If you did not create this account, you can ignore this email and the account will not be activated.',
+  ];
+  return {
+    to,
+    subject: 'Confirm your FRAUD-RISK.CO.UK account',
+    text: `${lines[0]}\n\n${lines[1]}\n\n${url}\n\n${lines[2]}\n`,
+    html: layout('Confirm your email address', lines, { label: 'Confirm my email', url }),
+  };
+}
+
+/** Sent instead of a confirmation link when someone signs up with an email that already has an account. */
+export function accountExistsEmail(to: string, name: string): Email {
+  const lines = [
+    `Hello ${name},`,
+    'Someone tried to create a FRAUD-RISK.CO.UK account with this email address, but you already have one. You can sign in, or reset your password if you have forgotten it.',
+    'If this was not you, you can ignore this email: nothing has changed on your account.',
+  ];
+  return {
+    to,
+    subject: 'You already have a FRAUD-RISK.CO.UK account',
+    text: lines.join('\n\n') + '\n',
+    html: layout('You already have an account', lines, { label: 'Sign in', url: `${webAppUrl()}/auth` }),
   };
 }
 

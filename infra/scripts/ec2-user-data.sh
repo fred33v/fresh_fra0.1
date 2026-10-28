@@ -23,6 +23,10 @@ npm --version
 dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
 google-chrome-stable --version
 
+# --- Database client and cron for nightly backups (backup-database.sh) ---
+dnf install -y postgresql17 cronie
+systemctl enable --now crond
+
 # --- Install nginx ---
 dnf install -y nginx
 systemctl enable nginx

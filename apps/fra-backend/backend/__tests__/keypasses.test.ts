@@ -164,6 +164,32 @@ describe('Keypasses endpoints', () => {
       expect(res.status).toBe(400);
     });
 
+    it('does not sign in to an existing account and leaves the keypass unused', async () => {
+      const { accessToken, email: employerEmail } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 1 }),
+      });
+      const code = ((await allocRes.json()) as any).data.codes[0];
+
+      const res = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: employerEmail, name: 'Not The Employer', password: 'Employee-Pass-2026' }),
+      });
+      expect(res.status).toBe(409);
+      const json = (await res.json()) as any;
+      expect(json.data?.accessToken).toBeUndefined();
+
+      const retry = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `emp+${Date.now()}@example.com`, name: 'Emp', password: 'Employee-Pass-2026' }),
+      });
+      expect(retry.status).toBe(200);
+    });
+
     it('rejects non-existent keypass code', async () => {
       const res = await app.request('http://localhost/api/v1/keypasses/use', {
         method: 'POST',
