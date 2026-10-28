@@ -58,18 +58,25 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   };
 
+  const startSession = useCallback(async (data: KeyPassResponse) => {
+    await apiService.setTokens(data.accessToken, data.refreshToken);
+    setAccessToken(data.accessToken);
+    setRefreshToken(data.refreshToken);
+    setUser(data.user);
+  }, []);
+
+  // First visit: the key-pass creates the account. It works once, so the employee chooses a password too.
   const loginWithKeyPass = useCallback(
-    async (code: string): Promise<{ success: boolean; error?: string }> => {
+    async (code: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await apiService.post<KeyPassResponse>(API_CONFIG.ENDPOINTS.KEYPASSES.USE, {
           code,
+          email,
+          password,
         });
 
         if (result.success && result.data?.accessToken && result.data?.refreshToken) {
-          await apiService.setTokens(result.data.accessToken, result.data.refreshToken);
-          setAccessToken(result.data.accessToken);
-          setRefreshToken(result.data.refreshToken);
-          setUser(result.data.user);
+          await startSession(result.data);
           return { success: true };
         }
 
@@ -82,7 +89,30 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         return { success: false, error: 'Failed to authenticate with key-pass' };
       }
     },
-    []
+    [startSession]
+  );
+
+  // Later visits: sign in with the email and password chosen when joining
+  const loginWithPassword = useCallback(
+    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const result = await apiService.post<KeyPassResponse>(API_CONFIG.ENDPOINTS.AUTH.LOGIN, { email, password });
+
+        if (result.success && result.data?.accessToken && result.data?.refreshToken) {
+          await startSession(result.data);
+          return { success: true };
+        }
+
+        return {
+          success: false,
+          error: result.error?.message || 'Email or password is incorrect',
+        };
+      } catch (error: unknown) {
+        logger.error('Password login failed', error);
+        return { success: false, error: 'Failed to sign in' };
+      }
+    },
+    [startSession]
   );
 
   const signOut = useCallback(async () => {
@@ -106,6 +136,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isLoading,
     isAuthenticated: !!user,
     loginWithKeyPass,
+    loginWithPassword,
     signOut,
   };
 });

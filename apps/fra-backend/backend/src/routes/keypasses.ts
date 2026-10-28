@@ -172,7 +172,7 @@ keypasses.post('/keypasses/use', async (c) => {
 
   if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
 
-  const email = (parsed.data.email ?? `employee+${kp.code.toLowerCase()}@example.com`).toLowerCase();
+  const email = parsed.data.email.toLowerCase();
   const name = parsed.data.name ?? email.split('@')[0];
 
   // A keypass only ever creates a new employee account. Issuing tokens for an existing
@@ -204,7 +204,7 @@ keypasses.post('/keypasses/use', async (c) => {
     id: crypto.randomUUID(),
     email,
     name,
-    passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
+    passwordHash: await bcrypt.hash(parsed.data.password, 12),
     role: 'employee',
     organisationId: kp.organisationId,
     createdAt: now,

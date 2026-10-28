@@ -135,13 +135,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
    * Sign in with key-pass (for employees)
    */
   const signInWithKeyPass = useCallback(
-    async (email: string, keyPassCode: string): Promise<{ success: boolean; error?: string }> => {
+    async (email: string, keyPassCode: string, password: string): Promise<{ success: boolean; error?: string }> => {
       try {
         logger.info('Signing in with key-pass');
 
         const result = await apiService.post<KeyPassUseResponse>(
           API_CONFIG.ENDPOINTS.KEYPASSES.USE,
-          { code: keyPassCode, email, name: email.split('@')[0] },
+          { code: keyPassCode, email, password, name: email.split('@')[0] },
           { requiresAuth: false }
         );
 

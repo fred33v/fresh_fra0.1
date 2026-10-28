@@ -330,10 +330,15 @@ describe('AuthContext', () => {
 
       let kpResult;
       await act(async () => {
-        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'KEYPASS123');
+        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'KEYPASS123', 'Employee-Pass-2026');
       });
 
       expect(kpResult.success).toBe(true);
+      expect(apiService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ code: 'KEYPASS123', email: 'emp@example.com', password: 'Employee-Pass-2026' }),
+        expect.anything()
+      );
       expect(apiService.setTokens).toHaveBeenCalledWith('kp-at', 'kp-rt');
       expect(result.current.isAuthenticated).toBe(true);
     });
@@ -353,7 +358,7 @@ describe('AuthContext', () => {
 
       let kpResult;
       await act(async () => {
-        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'BAD');
+        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'BAD', 'Employee-Pass-2026');
       });
 
       expect(kpResult.success).toBe(false);
@@ -381,7 +386,7 @@ describe('AuthContext', () => {
 
       let kpResult;
       await act(async () => {
-        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'KEY');
+        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'KEY', 'Employee-Pass-2026');
       });
 
       expect(kpResult.success).toBe(false);

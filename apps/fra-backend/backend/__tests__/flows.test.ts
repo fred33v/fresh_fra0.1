@@ -242,7 +242,7 @@ describe('Integration flows', () => {
 
       // 11. Employee uses keypass to create account
       const empEmail = `flow+emp+${Date.now()}@example.com`;
-      const useRes = await post('/keypasses/use', { code, email: empEmail, name: 'Employee Flow' });
+      const useRes = await post('/keypasses/use', { code, email: empEmail, name: 'Employee Flow', password: 'Employee-Pass-2026' });
       expect(useRes.status).toBe(200);
       const useData = (await useRes.json()) as any;
       expect(useData.data.accessToken).toBeTruthy();
