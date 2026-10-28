@@ -174,12 +174,9 @@ describe('AuthContext', () => {
   // ── signUp ─────────────────────────────────────
 
   describe('signUp', () => {
-    it('sets user and org on successful signup', async () => {
+    it('stays signed out after signup until the email is confirmed', async () => {
       (authService.restoreSession).mockResolvedValue({ success: false });
-      (authService.signup).mockResolvedValue({
-        success: true,
-        data: { user: mockUser, organisation: mockOrg, accessToken: 'at', refreshToken: 'rt' },
-      });
+      (authService.signup).mockResolvedValue({ success: true, pendingVerification: true });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -192,9 +189,8 @@ describe('AuthContext', () => {
         signUpResult = await result.current.signUp('alice@example.com', 'pass123', 'Acme Ltd');
       });
 
-      expect(signUpResult.success).toBe(true);
-      expect(result.current.isAuthenticated).toBe(true);
-      expect(result.current.user?.email).toBe('alice@example.com');
+      expect(signUpResult).toEqual({ success: true, pendingVerification: true });
+      expect(result.current.isAuthenticated).toBe(false);
     });
 
     it('returns error on failed signup', async () => {

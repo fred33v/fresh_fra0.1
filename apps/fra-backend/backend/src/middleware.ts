@@ -81,18 +81,23 @@ export function rateLimit(keyPrefix: string, cfg: RateLimitConfig) {
 
     const redis = getRedis();
     if (redis) {
-      const count = await redis.incr(key);
-      if (count === 1) {
-        await redis.pexpire(key, cfg.windowMs);
-      }
+      try {
+        const count = await redis.incr(key);
+        if (count === 1) {
+          await redis.pexpire(key, cfg.windowMs);
+        }
 
-      if (count > cfg.max) {
-        const ttl = await redis.pttl(key);
-        c.header('Retry-After', String(Math.ceil(Math.max(ttl, 1000) / 1000)));
-        return jsonError(c, 429, 'RATE_LIMITED', 'Too many requests');
-      }
+        if (count > cfg.max) {
+          const ttl = await redis.pttl(key);
+          c.header('Retry-After', String(Math.ceil(Math.max(ttl, 1000) / 1000)));
+          return jsonError(c, 429, 'RATE_LIMITED', 'Too many requests');
+        }
 
-      return;
+        return;
+      } catch (err) {
+        // A Redis outage must not take the whole API down; limit per process until it recovers
+        logger.warn('Rate limiter Redis error, using in-memory fallback', { error: (err as Error).message });
+      }
     }
 
     const now = Date.now();
@@ -238,7 +243,14 @@ export function applyApiMiddleware(api: Hono, allowedOrigins: string[]) {
 
     // In production, validate Origin/Referer against allowed origins
     if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
-      const requestOrigin = origin ?? (referer ? new URL(referer).origin : null);
+      let requestOrigin = origin ?? null;
+      if (!requestOrigin && referer) {
+        try {
+          requestOrigin = new URL(referer).origin;
+        } catch {
+          return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
+        }
+      }
       if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
         return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
       }

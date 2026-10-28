@@ -46,6 +46,7 @@ const mockedApi = vi.mocked(api);
 
 const mockSignIn = vi.fn().mockResolvedValue({ error: null });
 const mockSignUp = vi.fn().mockResolvedValue({ error: null });
+const mockVerifyEmail = vi.fn().mockResolvedValue({ error: null });
 
 function setupAuth(overrides?: Record<string, unknown>) {
   mockedUseAuth.mockReturnValue({
@@ -55,6 +56,7 @@ function setupAuth(overrides?: Record<string, unknown>) {
     isLoading: false,
     signIn: mockSignIn,
     signUp: mockSignUp,
+    verifyEmail: mockVerifyEmail,
     signOut: vi.fn(),
     hasRole: vi.fn(),
     refreshProfile: vi.fn(),
@@ -256,8 +258,30 @@ describe('Auth', () => {
           job_title: '',
         });
       });
-      expect(toast.success).toHaveBeenCalledWith('Account created successfully!');
-      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+      // Signing in waits for the emailed link
+      expect(await screen.findByText('Check your email')).toBeInTheDocument();
+      expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('sends a new confirmation link from the "check your email" screen', async () => {
+      const { toast } = await import('sonner');
+      mockedApi.post.mockResolvedValueOnce({});
+      const user = userEvent.setup();
+      renderAuth('/auth?mode=signup');
+
+      await user.type(screen.getByLabelText('Full Name'), 'Alice Smith');
+      await user.type(screen.getByLabelText('Organisation Name'), 'Test Org');
+      await user.type(screen.getByLabelText('Email'), 'alice@example.com');
+      await user.type(screen.getByLabelText('Password'), 'StrongPass123');
+      await user.type(screen.getByLabelText('Confirm Password'), 'StrongPass123');
+      await user.click(screen.getByRole('button', { name: /Create Account/i }));
+      await user.click(await screen.findByRole('button', { name: /Send a new link/i }));
+
+      await waitFor(() => {
+        expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/auth/resend-verification', { email: 'alice@example.com' });
+      });
+      expect(toast.success).toHaveBeenCalled();
     });
 
     it('shows error toast on signup failure', async () => {
@@ -439,5 +463,32 @@ describe('Auth', () => {
 
       expect(screen.getByText('Fraud Risk Awareness')).toBeInTheDocument();
     });
+  });
+
+  describe('confirmation link', () => {
+    it('confirms the token from the link', async () => {
+      const { toast } = await import('sonner');
+      renderAuth('/auth?mode=verify&token=tok-123');
+      await waitFor(() => expect(mockVerifyEmail).toHaveBeenCalledWith('tok-123'));
+      expect(mockVerifyEmail).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Email confirmed. Welcome!'));
+    });
+
+    it('offers a new link when the token has expired', async () => {
+      mockVerifyEmail.mockResolvedValueOnce({ error: new ApiError('expired', 'INVALID_TOKEN') });
+      renderAuth('/auth?mode=verify&token=old');
+      expect(await screen.findByText('This link has expired')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Send a new link/i })).toBeInTheDocument();
+    });
+  });
+
+  it('shows the "check your email" screen when signing in before confirming', async () => {
+    mockSignIn.mockResolvedValueOnce({ error: new ApiError('Please confirm', 'EMAIL_NOT_VERIFIED') });
+    const user = userEvent.setup();
+    renderAuth('/auth');
+    await user.type(screen.getByLabelText('Email'), 'alice@example.com');
+    await user.type(screen.getByLabelText('Password'), 'StrongPass123');
+    await user.click(screen.getByRole('button', { name: /^Sign In$/i }));
+    expect(await screen.findByText('Check your email')).toBeInTheDocument();
   });
 });

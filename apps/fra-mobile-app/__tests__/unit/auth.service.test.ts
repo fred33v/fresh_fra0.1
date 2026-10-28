@@ -92,10 +92,10 @@ describe('AuthService', () => {
   // -----------------------------------------------------------------------
 
   describe('signup', () => {
-    it('should save tokens and user/org data on successful signup', async () => {
+    it('waits for email confirmation instead of signing in', async () => {
       (apiService.post as jest.Mock).mockResolvedValueOnce({
         success: true,
-        data: mockAuthResponse,
+        data: { pendingVerification: true, email: 'test@example.com' },
       });
 
       const result = await authService.signup({
@@ -105,17 +105,9 @@ describe('AuthService', () => {
         organisationName: 'Test Org',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockAuthResponse);
-      expect(apiService.setTokens).toHaveBeenCalledWith('access-123', 'refresh-456');
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        'user',
-        JSON.stringify(mockAuthResponse.user),
-      );
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        'organisation',
-        JSON.stringify(mockAuthResponse.organisation),
-      );
+      expect(result).toEqual({ success: true, pendingVerification: true });
+      expect(apiService.setTokens).not.toHaveBeenCalled();
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled();
     });
 
     it('should return error when API responds with failure', async () => {

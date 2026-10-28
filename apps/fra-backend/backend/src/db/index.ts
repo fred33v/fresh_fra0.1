@@ -1,4 +1,4 @@
-export { dbGetUserByEmail, dbGetUserById, dbInsertUser, dbUpdateUserPasswordHash, dbUpdateUserProfile, dbListUsersByOrganisation, dbGetEmployeeDashboardData } from './users.js';
+export { dbGetUserByEmail, dbGetUserById, dbInsertUser, dbUpdateUserPasswordHash, dbUpdateUserProfile, dbListUsersByOrganisation, dbGetEmployeeDashboardData, dbMarkUserEmailVerified } from './users.js';
 export { dbInsertAssessment, dbGetAssessmentById, dbListAssessmentsByOrganisation, dbUpdateAssessment } from './assessments.js';
 export { dbUpsertRefreshToken, dbHasRefreshToken, dbDeleteRefreshToken, dbDeleteAllRefreshTokensForUser } from './tokens.js';
 export { dbInsertOrganisation, dbGetOrganisationById, dbUpdateOrganisation } from './organisations.js';
@@ -6,4 +6,5 @@ export { rowToKeypass, dbInsertKeypass, dbInsertKeypassBatch, dbGetKeypassByCode
 export { dbInsertPurchase, dbGetPurchaseById, dbUpdatePurchaseStatus, dbSetPurchaseCheckoutSession, dbMarkPurchasePaid, dbListPurchasesByOrganisation, dbListPackages, dbGetPackageById } from './purchases.js';
 export { auditLog } from './audit.js';
 export { setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken } from './password-reset.js';
+export { setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken } from './email-verification.js';
 export * from './enterprise.js';

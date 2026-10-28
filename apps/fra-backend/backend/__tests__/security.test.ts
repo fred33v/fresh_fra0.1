@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
-import { app, createAuthenticatedUser, authHeaders, seedPurchase, createPaidUser } from './helpers';
+import { app, createAuthenticatedUser, authHeaders, seedPurchase, createPaidUser, signUpAndConfirm } from './helpers';
 import { accountLockouts, keypassesByCode, purchasesById, assessmentsById } from '../src/stores';
 
 async function signup() {
@@ -17,11 +17,7 @@ describe('Security hardening', () => {
 
     beforeAll(async () => {
       // Create the user first
-      await app.request('http://localhost/api/v1/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name: 'Lockout User', organisationName: 'Lock Org' }),
-      });
+      await signUpAndConfirm({ email, password, name: 'Lockout User', organisationName: 'Lock Org' });
     });
 
     afterAll(() => {
@@ -49,6 +45,24 @@ describe('Security hardening', () => {
         body: JSON.stringify({ email, password }),
       });
       expect(res.status).toBe(401);
+    }, 30000);
+
+    it('does not lock the owner out from a different address', async () => {
+      const attackerHeaders = { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.7' };
+      for (let i = 0; i < 6; i++) {
+        await app.request('http://localhost/api/v1/auth/login', {
+          method: 'POST',
+          headers: attackerHeaders,
+          body: JSON.stringify({ email, password: 'WrongPassword123!' }),
+        });
+      }
+
+      const owner = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '198.51.100.20' },
+        body: JSON.stringify({ email, password }),
+      });
+      expect(owner.status).toBe(200);
     }, 30000);
 
     it('allows login after lockout is cleared', async () => {
@@ -475,11 +489,7 @@ describe('Security hardening', () => {
       const password = 'SecurePass123!';
 
       // Create user
-      await app.request('http://localhost/api/v1/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name: 'Reset User', organisationName: 'Reset Org' }),
-      });
+      await signUpAndConfirm({ email, password, name: 'Reset User', organisationName: 'Reset Org' });
 
       // Request password reset
       const forgotRes = await app.request('http://localhost/api/v1/auth/forgot-password', {

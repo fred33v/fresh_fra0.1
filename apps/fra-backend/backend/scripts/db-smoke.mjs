@@ -54,8 +54,12 @@ function zipEntries(buf) {
 async function signup(email, name, organisationName) {
   const [s, p] = await call('POST', '/auth/signup', { email, password: PASSWORD, name, organisationName, sector: 'private' });
   check(`signup ${email}`, s, [200, 201], p);
-  const d = data(p) ?? {};
-  return (d.tokens ?? d).accessToken;
+  const [ls] = await call('POST', '/auth/login', { email, password: PASSWORD });
+  check('login blocked until email confirmed', ls, 403);
+  // The server runs in development here, so sign-up hands back the confirmation token
+  const [vs, vp] = await call('POST', '/auth/verify-email', { token: data(p)?.verificationToken });
+  check(`verify-email ${email}`, vs, 200, vp);
+  return data(vp)?.accessToken;
 }
 
 async function buy(token, packageId) {

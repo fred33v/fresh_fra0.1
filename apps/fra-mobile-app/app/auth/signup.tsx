@@ -67,7 +67,12 @@ export default function SignUpScreen() {
     try {
       const result = await signUp(email.trim().toLowerCase(), password, orgName.trim());
       if (result.success) {
-        router.replace(returnTo);
+        // The account is used once its email is confirmed, then the user signs in
+        Alert.alert(
+          'Check your email',
+          `We have sent a link to ${email.trim().toLowerCase()}. Follow it to confirm your address, then sign in. The link expires in 24 hours.`,
+          [{ text: 'OK', onPress: () => router.replace(returnTo === '/' ? '/auth/login' : { pathname: '/auth/login', params: { returnTo: String(returnTo) } }) }],
+        );
       } else {
         Alert.alert('Sign Up Failed', result.error || 'Could not create account');
       }

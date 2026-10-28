@@ -25,7 +25,7 @@ import {
 
 function requireUUID(c: Context, name: string): string | Response {
   const value = c.req.param(name);
-  if (!isValidUUID(value)) {
+  if (!value || !isValidUUID(value)) {
     return jsonError(c, 400, 'INVALID_PARAM', `Invalid ${name} format`);
   }
   return value;

@@ -5,6 +5,7 @@ import type { SpeakUpIntake, SpeakUpMessage, SpeakUpReport } from './speak-up.js
 // In-memory fallbacks (used only when DATABASE_URL is not set, e.g. tests)
 export const usersByEmail = new Map<string, User>();
 export const refreshTokenAllowlist = new Set<string>();
+export const emailVerificationTokens = new Map<string, { userId: string; expiresAt: number }>();
 export const passwordResetTokens = new Map<
   string,
   {
@@ -28,6 +29,9 @@ export const accountLockouts = new Map<string, { count: number; expiresAt: numbe
 function cleanupExpiredEntries() {
   const now = Date.now();
 
+  for (const [key, entry] of emailVerificationTokens) {
+    if (entry.expiresAt < now) emailVerificationTokens.delete(key);
+  }
   for (const [key, entry] of passwordResetTokens) {
     if (entry.expiresAt < now) passwordResetTokens.delete(key);
   }

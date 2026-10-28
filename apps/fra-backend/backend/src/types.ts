@@ -17,6 +17,8 @@ export type User = {
   organisationId: string;
   department?: string;
   createdAt: string;
+  /** null: signed up but has not confirmed their email yet. Missing: treated as confirmed. */
+  emailVerifiedAt?: string | null;
 };
 
 export type AssessmentStatus = 'draft' | 'in_progress' | 'submitted' | 'completed';
@@ -207,6 +209,7 @@ export type DbUserRow = {
   organisation_id: string;
   department: string | null;
   created_at: string;
+  email_verified_at?: string | null;
 };
 
 export type DbKeypassRow = {
@@ -275,7 +278,7 @@ export function isValidUUID(value: string | undefined): value is string {
 
 export function requireUUIDParam(c: Context, paramName: string): string | Response {
   const value = c.req.param(paramName);
-  if (!isValidUUID(value)) {
+  if (!value || !isValidUUID(value)) {
     return jsonError(c, 400, 'INVALID_PARAM', `Invalid ${paramName} format`);
   }
   return value;
@@ -284,7 +287,8 @@ export function requireUUIDParam(c: Context, paramName: string): string | Respon
 // ── Account lockout constants ───────────────────────────────────
 
 export const LOCKOUT_PREFIX = 'lockout:';
-export const LOCKOUT_MAX_ATTEMPTS = 5;
+export const LOCKOUT_MAX_ATTEMPTS = 5; // per account and client address
+export const LOCKOUT_ACCOUNT_MAX_ATTEMPTS = 50; // per account, across all addresses
 export const LOCKOUT_WINDOW_SECONDS = 15 * 60; // 15 minutes
 
 // ── Security constants ──────────────────────────────────────────
@@ -296,6 +300,8 @@ export const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export const PASSWORD_RESET_PREFIX = 'pwreset:';
 export const PASSWORD_RESET_TTL_SECONDS = 3600; // 1 hour
+export const EMAIL_VERIFY_PREFIX = 'emailverify:';
+export const EMAIL_VERIFY_TTL_SECONDS = 24 * 3600; // 24 hours
 
 // ── Rate limit constants ────────────────────────────────────────
 
@@ -368,7 +374,11 @@ export function paginate<T>(items: T[], page: number, pageSize: number): { items
 
 // ── Zod schemas ─────────────────────────────────────────────────
 
-export const passwordSchema = z.string().min(12).refine(
+// The upper bound stops a huge password tying up the event loop in bcrypt (which only
+// reads the first 72 bytes anyway).
+export const MAX_PASSWORD_LENGTH = 128;
+
+export const passwordSchema = z.string().min(12).max(MAX_PASSWORD_LENGTH).refine(
   (pw) => /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw),
   { message: 'Password must contain uppercase, lowercase, and a number' }
 );
@@ -386,7 +396,7 @@ export const signupSchema = z.object({
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });
 
 export const refreshSchema = z.object({
@@ -395,6 +405,10 @@ export const refreshSchema = z.object({
 
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1).max(200),
 });
 
 export const resetPasswordSchema = z.object({

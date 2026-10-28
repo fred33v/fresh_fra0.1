@@ -68,6 +68,18 @@ variable "domain_name" {
   default     = "fraud-risk.co.uk"
 }
 
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for the domain's zone (Zone: Zone Read and DNS Edit; with mail_forward_to also Zone Settings Edit, Email Routing Rules Edit and Account: Email Routing Addresses Edit)"
+  type        = string
+  sensitive   = true
+}
+
+variable "mail_forward_to" {
+  description = "Inbox that receives mail sent to any @domain_name address via Cloudflare Email Routing (empty: no incoming mail)"
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "API subdomain"
   type        = string
@@ -146,7 +158,25 @@ variable "tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
   default = {
-    Project     = "StopFRA"
-    ManagedBy   = "Terraform"
+    Project   = "StopFRA"
+    ManagedBy = "Terraform"
   }
+}
+
+variable "backup_retention_days" {
+  description = "Days to keep nightly database backups in S3"
+  type        = number
+  default     = 35
+}
+
+variable "alert_emails" {
+  description = "Email addresses that receive CloudWatch alarm alerts (each must confirm the subscription email from AWS)"
+  type        = list(string)
+  default     = []
+}
+
+variable "email_from" {
+  description = "Sender for app emails, on the SES-verified domain (default: FRAUD-RISK.CO.UK <no-reply@domain_name>)"
+  type        = string
+  default     = ""
 }
