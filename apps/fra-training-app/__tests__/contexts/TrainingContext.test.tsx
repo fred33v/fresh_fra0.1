@@ -14,6 +14,22 @@ jest.mock('@/utils/logger', () => ({
   }),
 }));
 
+// Signed out by default, so these tests cover the phone-only behaviour; the
+// 'server sync' tests sign in and mock the workshop API
+const mockAuth = { isAuthenticated: false };
+jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }));
+
+const mockStartProgress = jest.fn();
+const mockUpdateProgress = jest.fn();
+const mockIssueCertificate = jest.fn();
+jest.mock('@/services/workshop.service', () => ({
+  startProgress: (...args: unknown[]) => mockStartProgress(...args),
+  updateProgress: (...args: unknown[]) => mockUpdateProgress(...args),
+  issueCertificate: (...args: unknown[]) => mockIssueCertificate(...args),
+  isPackageRequired: (res: { error?: { code?: string } }) => res.error?.code === 'PACKAGE_REQUIRED',
+  isOffline: (res: { error?: { code?: string } }) => res.error?.code === 'NETWORK_ERROR' || res.error?.code === 'TIMEOUT',
+}));
+
 const mockedStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -30,12 +46,16 @@ const defaultProgress = {
   currentSection: 0,
   completedAt: null,
   certificateNumber: null,
+  certificateIssuedAt: null,
+  pendingQuizAnswers: {},
+  serverProgressId: null,
 };
 
 // ── Tests ───────────────────────────────────────────────────
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockAuth.isAuthenticated = false;
   mockedStorage.getItem.mockResolvedValue(null);
   mockedStorage.setItem.mockResolvedValue(undefined);
 });
@@ -151,38 +171,21 @@ describe('TrainingContext', () => {
     });
   });
 
-  // ── saveQuizScore ───────────────────────────────────────
+  // ── saveQuizAnswer ──────────────────────────────────────
 
-  describe('saveQuizScore', () => {
-    it('saves a quiz score for a section', async () => {
+  describe('saveQuizAnswer', () => {
+    it('shows the result straight away and keeps the answer for the server', async () => {
       const { result } = renderHook(() => useTraining(), { wrapper });
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-      act(() => {
-        result.current.saveQuizScore(1, 85);
+      await act(async () => {
+        await result.current.saveQuizAnswer(1, 2, false);
       });
 
-      await waitFor(() => {
-        expect(result.current.quizScores).toEqual({ 1: 85 });
-      });
-
+      expect(result.current.quizScores).toEqual({ 1: 0 });
+      expect(result.current.pendingQuizAnswers).toEqual({ '1': 2 });
+      expect(result.current.hasPendingSync).toBe(true);
       expect(mockedStorage.setItem).toHaveBeenCalled();
-    });
-
-    it('overwrites an existing quiz score', async () => {
-      const saved = { ...defaultProgress, quizScores: { 1: 60 } };
-      mockedStorage.getItem.mockResolvedValue(JSON.stringify(saved));
-
-      const { result } = renderHook(() => useTraining(), { wrapper });
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-      act(() => {
-        result.current.saveQuizScore(1, 95);
-      });
-
-      await waitFor(() => {
-        expect(result.current.quizScores).toEqual({ 1: 95 });
-      });
     });
   });
 
@@ -300,29 +303,6 @@ describe('TrainingContext', () => {
     });
   });
 
-  // ── completeCourse ──────────────────────────────────────
-
-  describe('completeCourse', () => {
-    it('sets completedAt timestamp and certificate number', async () => {
-      const { result } = renderHook(() => useTraining(), { wrapper });
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-      act(() => {
-        result.current.completeCourse('CERT-001');
-      });
-
-      await waitFor(() => {
-        expect(result.current.certificateNumber).toBe('CERT-001');
-      });
-
-      expect(result.current.completedAt).toBeTruthy();
-      // Verify it's a valid ISO date string
-      expect(new Date(result.current.completedAt!).toISOString()).toBe(
-        result.current.completedAt,
-      );
-    });
-  });
-
   // ── resetProgress ───────────────────────────────────────
 
   describe('resetProgress', () => {
@@ -418,5 +398,106 @@ describe('TrainingContext', () => {
         expect(result.current.completedSections).toContain(0);
       });
     });
+  });
+});
+
+// ── Server sync ─────────────────────────────────────────────
+
+describe('TrainingContext server sync', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'prog-1', current_section: 0, completed_sections: [], quiz_scores: {}, scenario_choices: {}, completed_at: null, ...over,
+  });
+
+  beforeEach(() => {
+    mockAuth.isAuthenticated = true;
+  });
+
+  it('is locked when the organisation has no package with the workshop', async () => {
+    mockStartProgress.mockResolvedValue({ success: false, error: { code: 'PACKAGE_REQUIRED' } });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+
+    await waitFor(() => expect(result.current.access).toBe('locked'));
+    expect(mockUpdateProgress).not.toHaveBeenCalled();
+  });
+
+  it('keeps answers on the phone while offline and sends them when back online', async () => {
+    mockStartProgress.mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR' } });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+    await waitFor(() => expect(result.current.access).toBe('offline'));
+
+    await act(async () => {
+      await result.current.saveQuizAnswer(1, 1, true);
+    });
+    expect(result.current.pendingQuizAnswers).toEqual({ '1': 1 });
+
+    // Back online: the server marks the answer and its score replaces the phone's
+    mockStartProgress.mockResolvedValue({ success: true, data: row() });
+    mockUpdateProgress.mockResolvedValue({ success: true, data: row({ quiz_scores: { 1: 100 } }) });
+    await act(async () => {
+      await result.current.sync();
+    });
+
+    expect(mockUpdateProgress).toHaveBeenCalledWith('prog-1', expect.objectContaining({ quizAnswers: { '1': 1 } }));
+    expect(result.current.pendingQuizAnswers).toEqual({});
+    expect(result.current.quizScores).toEqual({ 1: 100 });
+    expect(result.current.access).toBe('granted');
+  });
+
+  it('sends completed sections to the server', async () => {
+    mockStartProgress.mockResolvedValue({ success: true, data: row({ completed_sections: [0] }) });
+    mockUpdateProgress.mockResolvedValue({ success: true, data: row({ completed_sections: [0, 1] }) });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+    await waitFor(() => expect(result.current.access).toBe('granted'));
+
+    await act(async () => {
+      await result.current.completeSection(1);
+    });
+
+    expect(mockUpdateProgress).toHaveBeenCalledWith('prog-1', expect.objectContaining({ completedSections: [0, 1] }));
+    expect(result.current.completedSections).toEqual([0, 1]);
+  });
+
+  it('gets the certificate from the server once it agrees the workshop is complete', async () => {
+    const all = [0, 1, 2, 3, 4, 5, 6];
+    mockStartProgress.mockResolvedValue({ success: true, data: row({ completed_sections: all }) });
+    mockUpdateProgress.mockResolvedValue({ success: true, data: row({ completed_sections: all, completed_at: '2026-10-18T10:00:00.000Z' }) });
+    mockIssueCertificate.mockResolvedValue({ success: true, data: { id: 'c1', certificate_number: 'FRA-ABC-123456', issued_at: '2026-10-18T10:00:01.000Z' } });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+    await waitFor(() => expect(result.current.access).toBe('granted'));
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.issueCertificate();
+    });
+
+    expect(outcome).toEqual({ ok: true });
+    expect(mockUpdateProgress).toHaveBeenCalledWith('prog-1', { completedAt: expect.any(String) });
+    expect(result.current.certificateNumber).toBe('FRA-ABC-123456');
+    expect(result.current.completedAt).toBe('2026-10-18T10:00:00.000Z');
+  });
+
+  it('issues no certificate when the server says the workshop is not finished', async () => {
+    mockStartProgress.mockResolvedValue({ success: true, data: row() });
+    mockUpdateProgress.mockResolvedValue({ success: false, error: { code: 'NOT_COMPLETED', message: 'Workshop not finished' } });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+    await waitFor(() => expect(result.current.access).toBe('granted'));
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.issueCertificate();
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: 'not-completed', message: 'Workshop not finished' });
+    expect(mockIssueCertificate).not.toHaveBeenCalled();
+    expect(result.current.certificateNumber).toBeNull();
+  });
+
+  it('drops a certificate number made up on the phone by an older version', async () => {
+    mockedStorage.getItem.mockResolvedValue(JSON.stringify({ ...defaultProgress, certificateNumber: 'FRA-LOCAL01' }));
+    mockStartProgress.mockResolvedValue({ success: false, error: { code: 'NETWORK_ERROR' } });
+    const { result } = renderHook(() => useTraining(), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.certificateNumber).toBeNull();
   });
 });

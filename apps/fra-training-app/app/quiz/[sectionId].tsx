@@ -12,7 +12,7 @@ import { quizQuestions } from '@/constants/data/quizQuestions';
 export default function QuizScreen() {
   const { sectionId } = useLocalSearchParams<{ sectionId: string }>();
   const router = useRouter();
-  const { saveQuizScore, completeSection } = useTraining();
+  const { saveQuizAnswer, completeSection } = useTraining();
 
   const sectionIdNum = parseInt(sectionId, 10);
   const question = quizQuestions[sectionIdNum];
@@ -46,8 +46,9 @@ export default function QuizScreen() {
   const isCorrect = selectedAnswer === question.correctAnswer;
 
   const handleContinue = async () => {
-    const score = isCorrect ? 1 : 0;
-    await saveQuizScore(sectionIdNum, score);
+    if (selectedAnswer === null) return;
+    // The chosen option is sent; the server marks it for the training record
+    await saveQuizAnswer(sectionIdNum, selectedAnswer, isCorrect);
     await completeSection(sectionIdNum);
     router.back();
   };

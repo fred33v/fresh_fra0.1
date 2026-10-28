@@ -1,18 +1,21 @@
 import { useRouter } from 'expo-router';
-import { Award } from 'lucide-react-native';
+import { Award, Lock } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import ScreenContainer from '@/components/ScreenContainer';
 import ProgressHeader from '@/components/ProgressHeader';
 import SectionCard from '@/components/SectionCard';
 import ActionButton from '@/components/ActionButton';
+import InfoBanner from '@/components/InfoBanner';
+import { useAuth } from '@/contexts/AuthContext';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { useTraining } from '@/contexts/TrainingContext';
 import { workshopSections } from '@/constants/data/workshopContent';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { completedSections, isComplete, isLoading } = useTraining();
+  const { completedSections, isComplete, isLoading, access, hasPendingSync, sync } = useTraining();
+  const { signOut } = useAuth();
 
   const handleSectionPress = (sectionId: number) => {
     router.push(`/section/${sectionId}`);
@@ -42,6 +45,37 @@ export default function HomeScreen() {
         </Text>
       </View>
 
+      {/* Training is part of the Health Check + Training and Full Dashboard packages */}
+      {access === 'locked' && (
+        <View style={styles.lockedCard} accessibilityRole="alert">
+          <Lock color={colors.textSecondary} size={32} />
+          <Text style={styles.lockedTitle}>Training is not included yet</Text>
+          <Text style={styles.lockedText}>
+            The workshop is part of the Health Check + Training and Full Dashboard packages.
+            Ask the person who manages Fraud Risk Assessment for your organisation to add one,
+            then check again.
+          </Text>
+          <View style={styles.lockedButtons}>
+            <ActionButton label="Check again" onPress={() => sync()} />
+            <ActionButton label="Sign out" onPress={() => signOut()} variant="outline" />
+          </View>
+        </View>
+      )}
+
+      {access === 'offline' && (
+        <View style={styles.banner}>
+          <InfoBanner
+            variant="warning"
+            message={
+              hasPendingSync
+                ? 'You are offline. Your answers are saved on this phone and will be sent when you are back online.'
+                : 'You are offline. Your progress is saved on this phone and will be sent when you are back online.'
+            }
+          />
+        </View>
+      )}
+
+      {access !== 'locked' && (<>
       {/* Progress */}
       <View style={styles.progressSection}>
         <ProgressHeader
@@ -85,11 +119,40 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+      </>)}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  lockedCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
+  },
+  lockedTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  lockedText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  lockedButtons: {
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  banner: {
+    marginBottom: spacing.md,
+  },
   header: {
     marginBottom: spacing.lg,
   },

@@ -1,20 +1,18 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CheckCircle, Shield } from 'lucide-react-native';
 import ActionButton from '@/components/ActionButton';
 import { colors, spacing, borderRadius } from '@/constants/theme';
-import { useTraining } from '@/contexts/TrainingContext';
+import { type CertificateResult, useTraining } from '@/contexts/TrainingContext';
 
-function generateCertificateNumber(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'FRA-';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+const FAILURE_MESSAGES: Record<Exclude<CertificateResult, { ok: true }>['reason'], string> = {
+  offline: 'You are offline. Connect to the internet and try again to get your certificate.',
+  locked: 'Training is not included in your organisation\'s package, so a certificate cannot be issued.',
+  'not-completed': 'Some sections or quiz questions are not finished yet. Complete them, then try again.',
+  error: 'Your certificate could not be issued just now. Please try again.',
+};
 
 function formatDate(dateString: string | null): string {
   if (!dateString) {
@@ -33,29 +31,58 @@ function formatDate(dateString: string | null): string {
 
 export default function CertificateScreen() {
   const router = useRouter();
-  const { completedAt, certificateNumber, completeCourse, isComplete } =
+  const { completedAt, certificateNumber, certificateIssuedAt, issueCertificate, isComplete } =
     useTraining();
 
-  const [certNumber, setCertNumber] = useState<string>(
-    certificateNumber || ''
-  );
+  // The certificate is issued by the server, which checks the training was really completed,
+  // so it counts as training evidence for the organisation
+  const [issuing, setIssuing] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const requestCertificate = useCallback(async () => {
+    setIssuing(true);
+    setFailure(null);
+    const result = await issueCertificate();
+    if (!result.ok) setFailure(FAILURE_MESSAGES[result.reason]);
+    setIssuing(false);
+  }, [issueCertificate]);
 
   useEffect(() => {
-    const ensureCertificate = async () => {
-      if (isComplete && !certificateNumber) {
-        const newCertNumber = generateCertificateNumber();
-        setCertNumber(newCertNumber);
-        await completeCourse(newCertNumber);
-      } else if (certificateNumber) {
-        setCertNumber(certificateNumber);
-      }
-    };
-    ensureCertificate();
-  }, [isComplete, certificateNumber, completeCourse]);
+    if (isComplete && !certificateNumber) requestCertificate();
+    // Ask once when the screen opens; "Try again" asks again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBackToHome = () => {
     router.navigate('/home');
   };
+
+  if (!certificateNumber) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          {issuing ? (
+            <>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.subheading}>Issuing your certificate…</Text>
+            </>
+          ) : (
+            <>
+              <Shield color={colors.primary} size={48} />
+              <Text style={styles.heading}>Certificate not issued yet</Text>
+              <Text style={styles.subheading} accessibilityRole="alert">
+                {failure ?? FAILURE_MESSAGES['not-completed']}
+              </Text>
+              <View style={styles.buttonContainer}>
+                {isComplete && <ActionButton label="Try again" onPress={requestCertificate} />}
+                <ActionButton label="Back to Home" onPress={handleBackToHome} variant="outline" />
+              </View>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -88,10 +115,10 @@ export default function CertificateScreen() {
             <Text style={styles.detailLabel}>Certificate Number</Text>
             <Text
               style={styles.detailValue}
-              accessibilityLabel={`Certificate number: ${certNumber}`}
+              accessibilityLabel={`Certificate number: ${certificateNumber}`}
               selectable
             >
-              {certNumber}
+              {certificateNumber}
             </Text>
           </View>
 
@@ -100,7 +127,7 @@ export default function CertificateScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date of Completion</Text>
             <Text style={styles.detailValue}>
-              {formatDate(completedAt)}
+              {formatDate(completedAt ?? certificateIssuedAt)}
             </Text>
           </View>
 
@@ -117,7 +144,7 @@ export default function CertificateScreen() {
         {/* Compliance badge */}
         <View style={styles.complianceBadge}>
           <Text style={styles.complianceText}>
-            GovS-013 &amp; ECCTA 2023 Compliant
+            Built for GovS 013 &amp; ECCTA 2023
           </Text>
         </View>
 
@@ -226,5 +253,6 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     width: '100%',
+    gap: spacing.sm,
   },
 });
