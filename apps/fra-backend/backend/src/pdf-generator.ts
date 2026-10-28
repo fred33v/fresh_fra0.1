@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import type { Assessment } from './types.js';
 import { createLogger } from './logger.js';
+import { buildAssessmentResults } from './assessment-modules.js';
 
 const logger = createLogger('pdf-generator');
 
@@ -94,51 +95,8 @@ function createReportHTML(options: PDFGenerationOptions): string {
   const { assessment, riskSummary, organizationName, title, enhancedData } = options;
   const answerCount = Object.keys(assessment.answers ?? {}).length;
 
-  // Determine risk level based on answer count and enhanced data
-  let riskLevel = 'Low';
-  let riskScore = 0;
-
-  if (answerCount >= 50) {
-    riskLevel = 'High';
-    riskScore = 75;
-  } else if (answerCount >= 25) {
-    riskLevel = 'Medium';
-    riskScore = 45;
-  } else {
-    riskLevel = 'Low';
-    riskScore = 25;
-  }
-
-  // Adjust risk score based on enhanced procurement data
-  if (enhancedData?.procurement) {
-    const { dueDiligenceLevel, monthlySpend, recentFraud, controlMaturity } = enhancedData.procurement;
-
-    if (dueDiligenceLevel && dueDiligenceLevel < 3) riskScore += 10;
-    if (monthlySpend && monthlySpend > 100000) riskScore += 15; // High spend increases risk
-    if (recentFraud === 'yes') riskScore += 20;
-    if (controlMaturity && controlMaturity < 3) riskScore += 10;
-
-    // Recalculate risk level based on enhanced score
-    if (riskScore >= 70) riskLevel = 'High';
-    else if (riskScore >= 40) riskLevel = 'Medium';
-    else riskLevel = 'Low';
-  }
-
-  // Adjust risk score based on enhanced IT systems data
-  if (enhancedData?.itSystems) {
-    const { cybersecurityMaturity, securityIncidentsCount, hasCriticalSystems, backupTestingFrequency, mfaAdoption } = enhancedData.itSystems;
-
-    if (cybersecurityMaturity && cybersecurityMaturity < 3) riskScore += 15;
-    if (securityIncidentsCount && securityIncidentsCount > 5) riskScore += 20;
-    if (hasCriticalSystems === 'yes') riskScore += 10; // Critical systems increase risk exposure
-    if (backupTestingFrequency && backupTestingFrequency < 3) riskScore += 10;
-    if (mfaAdoption && mfaAdoption < 3) riskScore += 15;
-
-    // Recalculate risk level based on enhanced score
-    if (riskScore >= 70) riskLevel = 'High';
-    else if (riskScore >= 40) riskLevel = 'Medium';
-    else riskLevel = 'Low';
-  }
+  // Same scoring as the results page, so the report and the screen always agree
+  const { overallScore: riskScore, riskLevel } = buildAssessmentResults(assessment.id, assessment.answers ?? {});
 
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
@@ -386,7 +344,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
               </div>
               <div class="stat-box">
                 <div class="stat-label">Risk Score</div>
-                <div class="stat-value">${riskScore}%</div>
+                <div class="stat-value">${riskScore}/100</div>
               </div>
               <div class="stat-box">
                 <div class="stat-label">Questions Answered</div>

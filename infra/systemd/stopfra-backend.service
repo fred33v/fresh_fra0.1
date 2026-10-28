@@ -32,14 +32,21 @@ PrivateTmp=true
 # Environment
 Environment=NODE_ENV=production
 Environment=PORT=3001
+# Chrome for the PDF reports, installed by ec2-user-data.sh. Its profile and
+# cache go to the private /tmp, since the home directory is read-only here
+Environment=PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+Environment=XDG_CONFIG_HOME=/tmp/.config
+Environment=XDG_CACHE_HOME=/tmp/.cache
 
 # Resource limits
 LimitNOFILE=65535
-MemoryMax=512M
+# Node plus a headless Chrome while a PDF renders
+MemoryMax=1G
 CPUQuota=80%
 
-# Watchdog - restart if unresponsive for 30s
-WatchdogSec=30
+# No WatchdogSec: the app never sends systemd's WATCHDOG=1 keep-alive, so a
+# watchdog would kill it every 30s. Restart=always covers crashes, and the
+# deploy script checks /api/v1/health.
 
 [Install]
 WantedBy=multi-user.target

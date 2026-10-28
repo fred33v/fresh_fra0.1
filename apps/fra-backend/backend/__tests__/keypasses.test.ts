@@ -237,6 +237,31 @@ describe('Keypasses endpoints', () => {
       });
       expect(res.status).toBe(403);
     });
+
+    it('hides the code list and stats from employees of the same org', async () => {
+      const { accessToken, organisationId } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 2 }),
+      });
+      const [code] = ((await allocRes.json()) as any).data.codes;
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `staff-${Date.now()}@example.com`, password: 'Employee-Pass-2026' }),
+      });
+      expect(useRes.status).toBe(200);
+      const employeeToken = ((await useRes.json()) as any).data.accessToken;
+
+      for (const path of ['', '/stats']) {
+        const res = await app.request(`http://localhost/api/v1/keypasses/organisation/${organisationId}${path}`, {
+          headers: { Authorization: `Bearer ${employeeToken}` },
+        });
+        expect(res.status).toBe(403);
+      }
+    });
   });
 
   // ── GET /keypasses/organisation/:orgId/stats ───────────────────
@@ -258,6 +283,44 @@ describe('Keypasses endpoints', () => {
       expect(json.success).toBe(true);
       expect(typeof json.data.totals).toBe('number');
       expect(json.data.totals).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  // ── POST /keypasses/bulk-revoke ────────────────────────────────
+
+  describe('POST /keypasses/bulk-revoke', () => {
+    it('refuses redeemed codes so their slots stay counted', async () => {
+      const { accessToken, organisationId } = await signup();
+      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ quantity: 2 }),
+      });
+      const [usedCode, spareCode] = ((await allocRes.json()) as any).data.codes;
+
+      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: usedCode, email: `staff-${Date.now()}@example.com`, password: 'Employee-Pass-2026' }),
+      });
+      expect(useRes.status).toBe(200);
+
+      const res = await app.request('http://localhost/api/v1/keypasses/bulk-revoke', {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify({ codes: [usedCode, spareCode] }),
+      });
+      expect(res.status).toBe(200);
+      const { results } = ((await res.json()) as any).data;
+      expect(results).toEqual([
+        { code: usedCode, revoked: false, reason: 'already_used' },
+        { code: spareCode, revoked: true },
+      ]);
+
+      const quotaRes = await app.request(`http://localhost/api/v1/keypasses/organisation/${organisationId}/quota`, {
+        headers: authHeaders(accessToken),
+      });
+      expect(((await quotaRes.json()) as any).data.used).toBe(1);
     });
   });
 

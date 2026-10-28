@@ -36,7 +36,11 @@ export default function ProgressHeader({
     : -1;
 
   return (
-    <View style={styles.container} accessibilityRole="progressbar" accessibilityValue={{ now: completed, min: 0, max: total }}>
+    <View
+      style={styles.container}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${completed} of ${total} sections completed`}
+      accessibilityValue={{ now: completed, min: 0, max: total }}>
       <View style={styles.textRow}>
         <Text style={styles.label}>
           {completed} of {total} sections completed

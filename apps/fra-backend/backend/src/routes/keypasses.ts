@@ -299,6 +299,10 @@ keypasses.post('/keypasses/revoke', async (c) => {
 keypasses.get('/keypasses/organisation/:orgId', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
+  // Unused codes let anyone join the organisation, so only employers and admins may see them
+  if (auth.role !== 'employer' && auth.role !== 'admin') {
+    return jsonError(c, 403, 'FORBIDDEN', 'Requires employer or admin role');
+  }
 
   const orgId = requireUUIDParam(c, 'orgId');
   if (orgId instanceof Response) return orgId;
@@ -328,6 +332,9 @@ keypasses.get('/keypasses/organisation/:orgId', async (c) => {
 keypasses.get('/keypasses/organisation/:orgId/stats', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
+  if (auth.role !== 'employer' && auth.role !== 'admin') {
+    return jsonError(c, 403, 'FORBIDDEN', 'Requires employer or admin role');
+  }
 
   const orgId = requireUUIDParam(c, 'orgId');
   if (orgId instanceof Response) return orgId;
@@ -434,6 +441,12 @@ keypasses.post('/keypasses/bulk-revoke', async (c) => {
 
     if (kp.status === 'revoked') {
       results.push({ code, revoked: false, reason: 'already_revoked' });
+      continue;
+    }
+
+    // A redeemed code belongs to an employee; revoking it would free a slot past the package allowance
+    if (kp.status === 'used') {
+      results.push({ code, revoked: false, reason: 'already_used' });
       continue;
     }
 

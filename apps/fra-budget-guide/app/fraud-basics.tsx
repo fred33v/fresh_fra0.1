@@ -41,7 +41,7 @@ export default function FraudBasicsScreen() {
               </Text>
             </View>
             <View style={styles.triangleNode}>
-              <Text style={styles.triangleNodeLabel}>RATIONALIZATION</Text>
+              <Text style={styles.triangleNodeLabel}>RATIONALISATION</Text>
               <Text style={styles.triangleNodeText}>Everyone does it{'\n'}I deserve this</Text>
             </View>
           </View>
@@ -51,7 +51,7 @@ export default function FraudBasicsScreen() {
       <View style={styles.insightCard}>
         <Text style={styles.insightTitle}>Your Control Point</Text>
         <Text style={styles.insightText}>
-          You cannot control employee financial pressures or their ability to rationalize.
+          You cannot control employee financial pressures or their ability to rationalise.
         </Text>
         <Text style={[styles.insightText, styles.insightTextBold]}>
           But you CAN remove opportunities through robust controls.
@@ -76,7 +76,7 @@ export default function FraudBasicsScreen() {
           <View style={styles.infoItem}>
             <View style={styles.bullet} />
             <Text style={styles.infoText}>
-              <Text style={styles.infoBold}>Rationalization:</Text> Justifying dishonest behavior through mental gymnastics
+              <Text style={styles.infoBold}>Rationalisation:</Text> Justifying dishonest behaviour through mental gymnastics
             </Text>
           </View>
         </View>
