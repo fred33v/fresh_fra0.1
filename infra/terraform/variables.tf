@@ -158,15 +158,9 @@ variable "tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
   default = {
-    Project     = "StopFRA"
-    ManagedBy   = "Terraform"
+    Project   = "StopFRA"
+    ManagedBy = "Terraform"
   }
-}
-
-variable "ssh_allowed_cidrs" {
-  description = "CIDR blocks allowed to SSH to the backend instance, e.g. [\"203.0.113.4/32\"]. Empty closes port 22."
-  type        = list(string)
-  default     = []
 }
 
 variable "backup_retention_days" {
