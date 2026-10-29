@@ -11,6 +11,7 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 | Upstash Redis REST URL and token | Upstash console, the database, "REST API" |
 | Two JWT secrets | Run `openssl rand -hex 32` twice. The two values must be different |
 | Stripe live secret key (`sk_live_…`) | Stripe dashboard, Developers > API keys |
+| Stripe VAT rate id (`txr_…`), optional | Stripe dashboard > Tax rates > create "VAT", 20%, **exclusive**. Without it the backend adds VAT as its own line item |
 | Your alert email address | Where alarm emails should go |
 | Cloudflare API token | The domain's DNS is on Cloudflare. dash.cloudflare.com > My Profile > API Tokens > Create Token > Custom. Permissions: Zone: Zone Read and Zone: DNS Edit. Limit it to fraud-risk.co.uk |
 
@@ -79,6 +80,29 @@ aws ssm get-parameters-by-path --path /fra/backend/ --region eu-west-2 --query '
 
 The list should include SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM, STRIPE_SECRET_KEY,
 STRIPE_WEBHOOK_SECRET, CORS_ORIGINS and WEB_APP_URL.
+
+## Before the first deploy
+
+- **Take a database snapshot first.** The first deploy runs migrations 025 (hashes stored
+  refresh tokens) and 026 (email confirmation). Migration 025 cannot be undone: if you roll
+  the code back afterwards, every user has to sign in again. In Neon, create a branch of the
+  production database and keep it until the release is stable.
+- **Read `terraform plan` before every `apply`.** On a fresh account it should only create
+  resources.
+- **Stripe test mode first.** Put an `sk_test_…` key and its webhook secret in step 5. The
+  backend logs a warning (it will not refuse to start), and no real money moves. Buy a
+  package with Stripe's published test card `4242 4242 4242 4242`, then switch to the live
+  key and make one small real payment that you refund.
+- **Real company details.** `apps/fra-web-dashboard/src/lib/legal.ts` still needs the
+  company's legal name, address and registration number, and the privacy notice and terms
+  need legal sign-off before real organisations sign up.
+- **n8n.** If a workflow calls `/webhooks/assessment-submitted`, it must sign the raw body
+  with `INBOUND_WEBHOOK_SECRET` and send `X-StopFRA-Signature: t=<unix seconds>,v1=<hex
+  HMAC-SHA256 of "<t>.<body>">`. A plain shared-secret header is rejected. Without the secret
+  the endpoint is off.
+- **`NODE_ENV`.** `start.sh` defaults it to `production`. Do not override it on any server
+  that real people can reach: outside production, sign-up returns the email confirmation
+  token in its response.
 
 ## 6. Deploy
 
