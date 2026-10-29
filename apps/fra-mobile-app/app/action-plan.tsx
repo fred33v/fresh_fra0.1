@@ -45,7 +45,7 @@ export default function ActionPlanScreen() {
       </View>
 
       <Text style={styles.intro}>
-        Based on your assessment, here are prioritized actions to strengthen your fraud prevention framework.
+        Based on your assessment, here are prioritised actions to strengthen your fraud prevention framework.
       </Text>
 
       {highPriorityActions.length > 0 && (

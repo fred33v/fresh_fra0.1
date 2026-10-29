@@ -14,7 +14,7 @@ import {
   AlertCircle,
   ChevronRight,
 } from 'lucide-react';
-import { getPackage } from '@/data/packages';
+import { getPackage, formatGbp } from '@/data/packages';
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
@@ -110,7 +110,7 @@ export default function Checkout() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Amount</span>
                       <span className="font-medium">
-                        {'\u00A3'}{total.toFixed(2)}
+                        {formatGbp(total)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -199,15 +199,15 @@ export default function Checkout() {
                   <div className="space-y-3 border-t border-primary-foreground/20 pt-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-primary-foreground/70">Subtotal</span>
-                      <span>{'\u00A3'}{price.toFixed(2)}</span>
+                      <span>{formatGbp(price)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-primary-foreground/70">VAT (20%)</span>
-                      <span>{'\u00A3'}{vat.toFixed(2)}</span>
+                      <span>{formatGbp(vat)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-bold border-t border-primary-foreground/20 pt-3">
                       <span>Total</span>
-                      <span>{'\u00A3'}{total.toFixed(2)}</span>
+                      <span>{formatGbp(total)}</span>
                     </div>
                   </div>
 
@@ -260,7 +260,7 @@ export default function Checkout() {
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                           Opening secure payment…
                         </>
-                      ) : `Continue to payment \u00B7 \u00A3${total.toFixed(2)}`}
+                      ) : `Continue to payment \u00B7 ${formatGbp(total)}`}
                     </Button>
 
                     <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">

@@ -148,31 +148,41 @@ function ScaleQuestion({ question, value, onChange, labelledBy }: QuestionRender
   }
 
   // Use button grid for smaller ranges
+  const endsId = labels.length > 0 && labelledBy ? `${labelledBy}-ends` : undefined;
   return (
-    <div role="group" aria-labelledby={labelledBy} className="grid grid-cols-5 gap-2">
-      {Array.from({ length: max - min + 1 }).map((_, idx) => {
-        const buttonValue = min + idx;
-        const isSelected = value === buttonValue;
+    <>
+      <div role="group" aria-labelledby={labelledBy} aria-describedby={endsId} className="grid grid-cols-5 gap-2">
+        {Array.from({ length: max - min + 1 }).map((_, idx) => {
+          const buttonValue = min + idx;
+          const isSelected = value === buttonValue;
 
-        return (
-          <motion.button
-            key={buttonValue}
-            type="button"
-            aria-pressed={isSelected}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onChange(buttonValue)}
-            className={`py-3 rounded-lg font-semibold transition-all ${
-              isSelected
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'bg-muted hover:bg-muted-foreground/20'
-            }`}
-          >
-            {buttonValue}
-          </motion.button>
-        );
-      })}
-    </div>
+          return (
+            <motion.button
+              key={buttonValue}
+              type="button"
+              aria-pressed={isSelected}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => onChange(buttonValue)}
+              className={`py-3 rounded-lg font-semibold transition-all ${
+                isSelected
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'bg-muted hover:bg-muted-foreground/20'
+              }`}
+            >
+              {buttonValue}
+            </motion.button>
+          );
+        })}
+      </div>
+      {labels.length > 0 && (
+        // Say which end is which, so nobody has to guess whether 5 is the good answer
+        <div id={endsId} className="mt-2 flex justify-between text-xs text-muted-foreground">
+          <span>{min} = {labels[0]}</span>{' '}
+          <span>{max} = {labels[labels.length - 1]}</span>
+        </div>
+      )}
+    </>
   );
 }
 

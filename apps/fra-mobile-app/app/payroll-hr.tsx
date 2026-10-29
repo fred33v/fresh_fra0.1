@@ -42,7 +42,7 @@ export default function PayrollHRScreen() {
       />
 
       <YesNoQuestion
-        question="Have you detected any unauthorized payroll changes (salary, bank details, etc.)?"
+        question="Have you detected any unauthorised payroll changes (salary, bank details, etc.)?"
         value={assessment.payrollHR.unauthorizedChangesDetected}
         onChange={(value) =>
           updateAssessment({ payrollHR: { ...assessment.payrollHR, unauthorizedChangesDetected: value } })

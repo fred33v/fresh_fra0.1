@@ -75,7 +75,7 @@ describe('Checkout', () => {
     it('uses the catalogue price and ignores a price in the URL', () => {
       renderCheckout('?package=Professional&price=1');
 
-      expect(screen.getByText('£1799.00')).toBeInTheDocument();
+      expect(screen.getByText('£1,799.00')).toBeInTheDocument();
       expect(screen.queryByText('£1.00')).not.toBeInTheDocument();
     });
   });
@@ -124,11 +124,11 @@ describe('Checkout', () => {
       renderCheckout('?package=Professional');
 
       // Subtotal £1,799 from the catalogue
-      expect(screen.getByText('£1799.00')).toBeInTheDocument();
+      expect(screen.getByText('£1,799.00')).toBeInTheDocument();
       // VAT (20%) = £359.80
       expect(screen.getByText('£359.80')).toBeInTheDocument();
       // Total = £2,158.80
-      expect(screen.getByText('£2158.80')).toBeInTheDocument();
+      expect(screen.getByText('£2,158.80')).toBeInTheDocument();
     });
 
     it('shows compliance badge', () => {
@@ -153,7 +153,7 @@ describe('Checkout', () => {
     it('shows the continue button with the total amount', () => {
       renderCheckout('?package=Professional');
 
-      expect(screen.getByRole('button', { name: /Continue to payment · £2158\.80/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Continue to payment · £2,158\.80/ })).toBeInTheDocument();
     });
 
     it('shows breadcrumb navigation', () => {
@@ -217,7 +217,7 @@ describe('Checkout', () => {
 
       await waitFor(() => expect(screen.getByText('Payment Successful!')).toBeInTheDocument());
       expect(api.post).toHaveBeenLastCalledWith('/api/v1/purchases/purchase-1/confirm', { paymentIntentId: 'pi_sim' });
-      expect(screen.getByText('£2158.80')).toBeInTheDocument();
+      expect(screen.getByText('£2,158.80')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Go to Dashboard' })).toHaveAttribute('href', '/dashboard');
       expect(assign).not.toHaveBeenCalled();
     });

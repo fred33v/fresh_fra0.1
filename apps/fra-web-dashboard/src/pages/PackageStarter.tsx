@@ -151,7 +151,7 @@ export default function PackageStarter() {
               Complete Assessment of 13 Key Areas
             </h2>
             <p className="text-lg text-muted-foreground text-center mb-12 max-w-2xl mx-auto">
-              Our comprehensive assessment covers all critical fraud risk areas, helping you build a complete picture of your organization's vulnerabilities and readiness.
+              Our comprehensive assessment covers all critical fraud risk areas, helping you build a complete picture of your organisation's vulnerabilities and readiness.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               {assessmentModules.map((module) => (
