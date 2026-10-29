@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { api } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('ActionPlan');
@@ -24,9 +26,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// The one template action that asks for the risk assessment. Once the organisation has submitted
+// one, it would send people back to something they have already done.
+const ASSESSMENT_ITEM_TITLE = 'Complete the Fraud Risk Self-Assessment';
+
 export default function ActionPlan() {
   const { user, profile } = useAuth();
   useWorkshopProgress();
+  const { entitlements, isLoading: entitlementsLoading } = useEntitlements();
+  const { isLoading: assessmentsLoading, hasFinishedAssessment } = useOrgAssessments(!!entitlements?.features.assessment);
   const navigate = useNavigate();
   const [actionPlan, setActionPlan] = useState<ActionPlanType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,12 +53,12 @@ export default function ActionPlan() {
       if (data) {
         setActionPlan({
           ...data,
-          action_items: (data.action_items as unknown as ActionItem[]) || generateDefaultItems(),
+          action_items: (data.action_items as unknown as ActionItem[]) || generateDefaultItems(hasFinishedAssessment),
         });
         setCustomCommitments(data.commitments?.join('\n') || '');
       } else {
         // Create default action plan
-        const defaultItems = generateDefaultItems();
+        const defaultItems = generateDefaultItems(hasFinishedAssessment);
         const newPlan = await api.post<ActionPlanType>('/api/v1/workshop/action-plans', {
           actionItems: defaultItems,
           commitments: [],
@@ -68,16 +76,18 @@ export default function ActionPlan() {
     }
 
     setIsLoading(false);
-  }, [user]);
+  }, [user, hasFinishedAssessment]);
 
+  // Wait until we know whether the assessment is done, so a new plan starts with the right items
+  const ready = !entitlementsLoading && !assessmentsLoading;
   useEffect(() => {
-    if (user) {
+    if (user && ready) {
       fetchActionPlan();
     }
-  }, [user, fetchActionPlan]);
+  }, [user, ready, fetchActionPlan]);
 
-  const generateDefaultItems = (): ActionItem[] => {
-    return [
+  const generateDefaultItems = (assessmentDone: boolean): ActionItem[] => {
+    const items = [
       ...actionPlanTemplates.immediate.map((item, i) => ({
         id: `immediate-${i}`,
         title: item,
@@ -103,6 +113,7 @@ export default function ActionPlan() {
         completed: false,
       })),
     ];
+    return assessmentDone ? items.filter(i => i.title !== ASSESSMENT_ITEM_TITLE) : items;
   };
 
   const toggleItemComplete = async (itemId: string) => {
@@ -201,14 +212,19 @@ export default function ActionPlan() {
     );
   }
 
+  // Plans saved before the assessment was submitted still hold the "complete the assessment" action
+  const items = hasFinishedAssessment
+    ? actionPlan.action_items.filter(i => i.title !== ASSESSMENT_ITEM_TITLE)
+    : actionPlan.action_items;
+
   const groupedItems = {
-    immediate: actionPlan.action_items.filter(i => i.timeframe === 'Immediate'),
-    thirtyDays: actionPlan.action_items.filter(i => i.timeframe === '30 Days'),
-    ninetyDays: actionPlan.action_items.filter(i => i.timeframe === '90 Days'),
+    immediate: items.filter(i => i.timeframe === 'Immediate'),
+    thirtyDays: items.filter(i => i.timeframe === '30 Days'),
+    ninetyDays: items.filter(i => i.timeframe === '90 Days'),
   };
 
-  const totalItems = actionPlan.action_items.length;
-  const completedItems = actionPlan.action_items.filter(i => i.completed).length;
+  const totalItems = items.length;
+  const completedItems = items.filter(i => i.completed).length;
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
   return (

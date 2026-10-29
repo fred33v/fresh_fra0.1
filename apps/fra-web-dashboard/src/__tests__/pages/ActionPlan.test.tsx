@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import ActionPlan from '@/pages/ActionPlan';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { api } from '@/lib/api';
 import { actionPlanTemplates } from '@/data/workshopContent';
 
@@ -18,6 +20,8 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
+vi.mock('@/hooks/useEntitlements');
+vi.mock('@/hooks/useOrgAssessments');
 
 vi.mock('@/lib/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
@@ -45,6 +49,8 @@ vi.mock('sonner', () => ({
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseWorkshopProgress = vi.mocked(useWorkshopProgress);
+const mockedUseEntitlements = vi.mocked(useEntitlements);
+const mockedUseOrgAssessments = vi.mocked(useOrgAssessments);
 const mockedApi = vi.mocked(api);
 
 // ── Helpers ────────────────────────────────────────────────
@@ -143,6 +149,18 @@ function setupProgress() {
   } as ReturnType<typeof useWorkshopProgress>);
 }
 
+function setupAssessment(finished: boolean, loading = false) {
+  mockedUseEntitlements.mockReturnValue({
+    isLoading: false,
+    entitlements: { features: { assessment: true } },
+  } as ReturnType<typeof useEntitlements>);
+  mockedUseOrgAssessments.mockReturnValue({
+    assessments: [],
+    isLoading: loading,
+    hasFinishedAssessment: finished,
+  } as ReturnType<typeof useOrgAssessments>);
+}
+
 function renderActionPlan() {
   return render(
     <MemoryRouter>
@@ -157,6 +175,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setupAuth();
   setupProgress();
+  setupAssessment(false);
   // Default: existing action plan
   mockedApi.get.mockResolvedValue(makeActionPlan());
 });
@@ -339,6 +358,52 @@ describe('ActionPlan', () => {
   });
 
   // ── Toggle completion ─────────────────────────
+
+  describe('after the risk assessment is submitted', () => {
+    const ASSESSMENT_ITEM = 'Complete the Fraud Risk Self-Assessment';
+
+    it('the template still has the assessment action, so the filter below keeps matching it', () => {
+      expect(actionPlanTemplates.thirtyDays).toContain(ASSESSMENT_ITEM);
+    });
+
+    it('keeps the assessment action while no assessment has been submitted', async () => {
+      renderActionPlan();
+      expect(await screen.findByText(ASSESSMENT_ITEM)).toBeInTheDocument();
+    });
+
+    it('hides the assessment action from a plan saved earlier, and leaves it out of the count', async () => {
+      setupAssessment(true);
+      renderActionPlan();
+
+      await screen.findByText('Your Action Plan');
+      expect(screen.queryByText(ASSESSMENT_ITEM)).not.toBeInTheDocument();
+      expect(screen.getByText(actionPlanTemplates.thirtyDays[1])).toBeInTheDocument();
+      const total = makeActionItems().length - 1;
+      expect(screen.getByText(`0/${total}`)).toBeInTheDocument();
+    });
+
+    it('starts a new plan without the assessment action', async () => {
+      setupAssessment(true);
+      mockedApi.get.mockResolvedValue(null);
+      mockedApi.post.mockResolvedValue(makeActionPlan({ action_items: makeActionItems().filter((i) => i.title !== ASSESSMENT_ITEM) }));
+      renderActionPlan();
+
+      await waitFor(() => expect(mockedApi.post).toHaveBeenCalled());
+      const sent = (mockedApi.post.mock.calls[0][1] as { actionItems: { title: string }[] }).actionItems;
+      expect(sent.map((i) => i.title)).not.toContain(ASSESSMENT_ITEM);
+      expect(sent).toHaveLength(makeActionItems().length - 1);
+    });
+
+    it('waits to know whether the assessment is done before creating a plan', async () => {
+      setupAssessment(false, true);
+      mockedApi.get.mockResolvedValue(null);
+      renderActionPlan();
+
+      await new Promise((r) => setTimeout(r, 30));
+      expect(mockedApi.get).not.toHaveBeenCalled();
+      expect(mockedApi.post).not.toHaveBeenCalled();
+    });
+  });
 
   describe('toggle completion', () => {
     it('toggles item and calls API with updated items', async () => {
