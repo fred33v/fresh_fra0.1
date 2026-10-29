@@ -5,6 +5,7 @@ import type { KeyPass, EmployeeCount, OrganisationSize, PackageType } from '@/ty
 import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { createLogger } from '@/utils/logger';
+import { keyPassErrorMessage } from '@stopfra/shared';
 import { keyPassAllocation } from '@/constants/packages';
 import type { User as AuthUser, Organisation as AuthOrg } from '@/services/auth.service';
 
@@ -161,7 +162,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
         return {
           success: false,
-          error: result.error?.message || 'Invalid key-pass code',
+          error: keyPassErrorMessage(result.error),
         };
       } catch (error: unknown) {
         logger.error('Key-pass sign in error:', error);

@@ -361,6 +361,27 @@ describe('AuthContext', () => {
       expect(kpResult.error).toBe('Key-pass expired');
     });
 
+    it('explains in plain language when the organisation package is no longer active', async () => {
+      (authService.restoreSession).mockResolvedValue({ success: false });
+      (apiService.post).mockResolvedValue({
+        success: false,
+        error: { code: 'PACKAGE_INACTIVE', message: "This organisation's package is no longer active" },
+      });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let kpResult;
+      await act(async () => {
+        kpResult = await result.current.signInWithKeyPass('emp@example.com', 'CODE12345678', 'Employee-Pass-2026');
+      });
+
+      expect(kpResult.success).toBe(false);
+      expect(kpResult.error).toBe("Your organisation's package is no longer active. Ask your employer to renew it, then try again.");
+    });
+
     it('returns error when token persistence fails', async () => {
       (authService.restoreSession).mockResolvedValue({ success: false });
       (apiService.post).mockResolvedValue({
