@@ -2,6 +2,8 @@
 
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
+import { purchasesById } from '../src/stores';
+import { RATE_LIMITS } from '../src/types';
 
 async function signup() {
   const { accessToken, email, organisationId, userId } = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
@@ -396,6 +398,103 @@ describe('Keypasses endpoints', () => {
         });
         expect(res.status).toBe(400);
       }
+    });
+  });
+
+  // ── Package limits ─────────────────────────────────────────────
+
+  describe('package limits', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    async function allocate(accessToken: string, body: Record<string, unknown> = { quantity: 1, expiresInDays: 365 }, path = 'allocate') {
+      const res = await app.request(`http://localhost/api/v1/keypasses/${path}`, {
+        method: 'POST',
+        headers: authHeaders(accessToken),
+        body: JSON.stringify(body),
+      });
+      return { res, json: (await res.json()) as any };
+    }
+
+    it('does not let a code outlive the package that paid for it', async () => {
+      // pkg_full runs for 365 days; this one was bought 360 days ago, so 5 days remain
+      const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
+      const boughtAt = new Date(Date.now() - 360 * DAY_MS);
+      seedPurchase(user.organisationId, user.userId, 'pkg_full', boughtAt.toISOString());
+
+      const { res, json } = await allocate(user.accessToken, { quantity: 1, expiresInDays: 365 });
+      expect(res.status).toBe(200);
+      const packageEnd = boughtAt.getTime() + 365 * DAY_MS;
+      expect(new Date(json.data.expiresAt).getTime()).toBeLessThanOrEqual(packageEnd);
+      expect(new Date(json.data.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('keeps the requested expiry when the package lasts longer', async () => {
+      const { accessToken } = await signup();
+      const { json } = await allocate(accessToken, { quantity: 1, expiresInDays: 30 });
+      const days = (new Date(json.data.expiresAt).getTime() - Date.now()) / DAY_MS;
+      expect(days).toBeGreaterThan(29);
+      expect(days).toBeLessThanOrEqual(30);
+    });
+
+    it('refuses to redeem or validate a code once the package has lapsed, and leaves the code unused', async () => {
+      const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
+      const purchaseId = seedPurchase(user.organisationId, user.userId) as string;
+      const { json } = await allocate(user.accessToken, { quantity: 1, expiresInDays: 30 });
+      const code = json.data.codes[0];
+
+      // The package ends: bought more than a year ago
+      purchasesById.get(purchaseId)!.createdAt = new Date(Date.now() - 400 * DAY_MS).toISOString();
+
+      const use = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `late+${Date.now()}@example.com`, password: 'Employee-Pass-2026', name: 'Late' }),
+      });
+      expect(use.status).toBe(403);
+      expect(((await use.json()) as any).error.code).toBe('PACKAGE_INACTIVE');
+
+      const validate = await app.request('http://localhost/api/v1/keypasses/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      expect(validate.status).toBe(403);
+
+      // Renewing the package makes the same code work again, so it was not burned
+      seedPurchase(user.organisationId, user.userId);
+      const retry = await app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `renewed+${Date.now()}@example.com`, password: 'Employee-Pass-2026', name: 'Back' }),
+      });
+      expect(retry.status).toBe(200);
+    });
+
+    it('issues codes under both /generate and /allocate', async () => {
+      const { accessToken } = await signup();
+      for (const path of ['generate', 'allocate']) {
+        const { res, json } = await allocate(accessToken, { quantity: 1 }, path);
+        expect(res.status).toBe(200);
+        expect(json.data.codes).toHaveLength(1);
+      }
+    });
+
+    it('does not return the internal organisation id when validating a code', async () => {
+      const { accessToken } = await signup();
+      const { json } = await allocate(accessToken, { quantity: 1 });
+      const res = await app.request('http://localhost/api/v1/keypasses/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: json.data.codes[0] }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.valid).toBe(true);
+      expect(body.data.organisationId).toBeUndefined();
+    });
+
+    it('allows about 20 redemption attempts a minute so shared offices are not locked out', () => {
+      expect(RATE_LIMITS.KEYPASS_MAX).toBeGreaterThanOrEqual(20);
     });
   });
 });

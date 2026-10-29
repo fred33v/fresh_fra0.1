@@ -49,7 +49,7 @@ export function authHeaders(token: string) {
 }
 
 /** Seed a succeeded purchase in the in-memory store so keypass quota checks pass. */
-export function seedPurchase(organisationId: string, userId: string, packageId = 'pkg_full') {
+export function seedPurchase(organisationId: string, userId: string, packageId = 'pkg_full', createdAt = new Date().toISOString()) {
   const id = crypto.randomUUID();
   purchasesById.set(id, {
     id,
@@ -59,8 +59,9 @@ export function seedPurchase(organisationId: string, userId: string, packageId =
     status: 'succeeded',
     amountCents: 499500,
     currency: 'gbp',
-    createdAt: new Date().toISOString(),
+    createdAt,
   });
+  return id;
 }
 
 /** Sign up a user whose organisation has paid for the given package. */
