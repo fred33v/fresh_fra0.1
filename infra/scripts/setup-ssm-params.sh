@@ -46,8 +46,9 @@ echo ""
 read -rp "DATABASE_URL (Enter to keep the current value): " DATABASE_URL
 read -rp "JWT_SECRET (Enter to keep the current value): " JWT_SECRET
 read -rp "JWT_REFRESH_SECRET (Enter to keep the current value): " JWT_REFRESH_SECRET
-read -rp "STRIPE_SECRET_KEY (sk_live_...): " STRIPE_SECRET_KEY
-read -rp "STRIPE_WEBHOOK_SECRET (whsec_...): " STRIPE_WEBHOOK_SECRET
+read -rsp "STRIPE_SECRET_KEY (sk_live_...): " STRIPE_SECRET_KEY; echo
+read -rsp "STRIPE_WEBHOOK_SECRET (whsec_...): " STRIPE_WEBHOOK_SECRET; echo
+read -rp "STRIPE_VAT_TAX_RATE_ID (txr_..., optional: 20% UK VAT rate; Enter to skip, VAT is then a separate line item): " STRIPE_VAT_TAX_RATE_ID
 # SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and EMAIL_FROM are written by Terraform
 # (Amazon SES, infra/terraform/main.tf), so they are not asked for here
 read -rp "CORS_ORIGINS [https://app.fraud-risk.co.uk]: " CORS_ORIGINS
@@ -90,6 +91,7 @@ echo "Setting parameters..."
 # Non-secret configuration (String)
 put_param "/fra/backend/CORS_ORIGINS" "$CORS_ORIGINS" "String"
 put_param "/fra/backend/WEB_APP_URL" "$WEB_APP_URL" "String"
+[ -n "$STRIPE_VAT_TAX_RATE_ID" ] && put_param "/fra/backend/STRIPE_VAT_TAX_RATE_ID" "$STRIPE_VAT_TAX_RATE_ID" "String"
 [ -n "$S3_BUCKET" ] && put_param "/fra/backend/S3_BUCKET" "$S3_BUCKET" "String"
 put_param "/fra/backend/S3_REGION" "$S3_REGION" "String"
 put_param "/fra/backend/S3_UPLOAD_PREFIX" "$S3_UPLOAD_PREFIX" "String"
