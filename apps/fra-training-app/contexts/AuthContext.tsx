@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiService } from '@/services/api.service';
 import { API_CONFIG } from '@/constants/api';
 import { createLogger } from '@/utils/logger';
+import { keyPassErrorMessage } from '@stopfra/shared';
 const logger = createLogger('AuthContext');
 
 interface User {
@@ -82,7 +83,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
         return {
           success: false,
-          error: result.error?.message || 'Invalid key-pass code',
+          error: keyPassErrorMessage(result.error),
         };
       } catch (error: unknown) {
         logger.error('Key-pass login failed', error);

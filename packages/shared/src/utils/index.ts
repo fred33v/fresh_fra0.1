@@ -184,3 +184,5 @@ export function formatCurrencyGBP(amount: number, decimals = 2): string {
 export function generateUUID(): string {
   return crypto.randomUUID();
 }
+
+export * from './keypass';
