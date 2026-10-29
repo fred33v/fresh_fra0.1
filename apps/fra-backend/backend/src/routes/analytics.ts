@@ -205,7 +205,7 @@ analytics.get('/analytics/dashboard', async (c) => {
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === auth.organisationId);
 
   if (!hasPackageEntitlement(orgPurchases, 'pkg_full')) {
-    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Dashboard requires the Full package');
+    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Dashboard requires the Enterprise package');
   }
 
   const orgAssessments = hasDatabase()
@@ -269,7 +269,7 @@ analytics.get('/analytics/employees', async (c) => {
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === auth.organisationId);
 
   if (!hasPackageEntitlement(orgPurchases, 'pkg_full')) {
-    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Employee analytics requires the Full package');
+    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Employee analytics requires the Enterprise package');
   }
 
   // Fetch employee data with assessment progress
@@ -394,7 +394,7 @@ analytics.get('/analytics/employees/:userId', async (c) => {
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === auth.organisationId);
 
   if (!hasPackageEntitlement(orgPurchases, 'pkg_full')) {
-    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Employee detail requires the Full package');
+    return jsonError(c, 403, 'PACKAGE_REQUIRED', 'Employee detail requires the Enterprise package');
   }
 
   // Verify user belongs to same org

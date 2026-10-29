@@ -19,6 +19,8 @@ describe('GET /analytics/dashboard', () => {
     expect(res.status).toBe(403);
     const body = (await res.json()) as any;
     expect(body.error?.code).toBe('PACKAGE_REQUIRED');
+    // The site calls pkg_full "Enterprise"
+    expect(body.error?.message).toBe('Dashboard requires the Enterprise package');
   });
 
   it('returns dashboard aggregates with pkg_full', async () => {
