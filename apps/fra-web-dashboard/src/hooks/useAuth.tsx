@@ -24,6 +24,8 @@ interface AuthContextType {
   /** Confirms the email from the link's token and signs the user in */
   verifyEmail: (token: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  /** Redeems an employer's access code: creates the employee account and signs the new user in */
+  joinWithKeypass: (input: { code: string; email: string; password: string; name?: string }) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -184,6 +186,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const joinWithKeypass = useCallback(async (input: { code: string; email: string; password: string; name?: string }) => {
+    try {
+      const data = await api.post<AuthResponse>('/api/v1/keypasses/use', {
+        code: input.code,
+        email: input.email,
+        password: input.password,
+        ...(input.name ? { name: input.name } : {}),
+      });
+      setTokens(data.accessToken, data.refreshToken);
+      setUser(data.user);
+      await hydrateFromMe();
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: err as Error };
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       const refreshToken = getRefreshToken();
@@ -207,10 +226,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     verifyEmail,
     signIn,
+    joinWithKeypass,
     signOut,
     hasRole,
     refreshProfile,
-  }), [user, profile, roles, isLoading, signUp, verifyEmail, signIn, signOut, hasRole, refreshProfile]);
+  }), [user, profile, roles, isLoading, signUp, verifyEmail, signIn, joinWithKeypass, signOut, hasRole, refreshProfile]);
 
   return (
     <AuthContext.Provider value={value}>

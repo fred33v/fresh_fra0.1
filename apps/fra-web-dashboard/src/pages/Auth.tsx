@@ -377,6 +377,12 @@ export default function Auth() {
                         Create one
                       </button>
                     </div>
+                    <div className="mt-2 text-center text-sm text-muted-foreground">
+                      Got an access code from your employer?{' '}
+                      <Link to="/join" className="text-primary font-medium hover:underline">
+                        Join with your code
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
