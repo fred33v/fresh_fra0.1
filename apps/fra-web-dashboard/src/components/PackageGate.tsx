@@ -46,7 +46,7 @@ export function PackageGate({ feature, children }: PackageGateProps) {
         <Card>
           <CardHeader>
             <Lock className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
-            <CardTitle>Included in the {required.name} package</CardTitle>
+            <CardTitle level={1}>Included in the {required.name} package</CardTitle>
             <CardDescription>
               {entitlements?.packageName
                 ? `Your organisation is on the ${entitlements.packageName} package, which does not include this feature.`

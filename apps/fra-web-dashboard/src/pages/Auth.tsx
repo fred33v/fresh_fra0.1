@@ -288,6 +288,8 @@ export default function Auth() {
       {/* Right side - Form */}
       <main className="flex-1 flex items-center justify-center p-6 bg-background">
         <div className="w-full max-w-md">
+          {/* The branding panel with the page heading is hidden on small screens */}
+          <h1 className="sr-only lg:hidden">Sign in or create an account</h1>
           <Button
             variant="ghost"
             className="mb-6 lg:hidden"
@@ -308,7 +310,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">Welcome back</CardTitle>
+                    <CardTitle level={2} className="text-2xl">Welcome back</CardTitle>
                     <CardDescription>
                       Sign in to continue your fraud risk awareness journey
                     </CardDescription>
@@ -396,7 +398,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">Reset your password</CardTitle>
+                    <CardTitle level={2} className="text-2xl">Reset your password</CardTitle>
                     <CardDescription>
                       Enter your email address and we'll send you a reset link
                     </CardDescription>
@@ -469,7 +471,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">Check your email</CardTitle>
+                    <CardTitle level={2} className="text-2xl">Check your email</CardTitle>
                     <CardDescription>One more step to finish setting up your account</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -509,7 +511,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">{verifyFailed ? 'This link has expired' : 'Confirming your email'}</CardTitle>
+                    <CardTitle level={2} className="text-2xl">{verifyFailed ? 'This link has expired' : 'Confirming your email'}</CardTitle>
                     <CardDescription>
                       {verifyFailed
                         ? 'Confirmation links work once and expire after 24 hours. Enter your email and we will send a new one.'
@@ -570,7 +572,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">Set a new password</CardTitle>
+                    <CardTitle level={2} className="text-2xl">Set a new password</CardTitle>
                     <CardDescription>
                       {tokenFromLink ? 'Choose a new password for your account' : 'Enter the reset code from your email and choose a new password'}
                     </CardDescription>
@@ -662,7 +664,7 @@ export default function Auth() {
               >
                 <Card className="border-0 shadow-xl">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl">Create an account</CardTitle>
+                    <CardTitle level={2} className="text-2xl">Create an account</CardTitle>
                     <CardDescription>
                       Join the fraud risk awareness workshop
                     </CardDescription>

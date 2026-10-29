@@ -77,6 +77,12 @@ describe('Join page', () => {
     }
   });
 
+  it('keeps the headings in order: one h1, then the card title as an h2', () => {
+    renderJoin();
+    expect(screen.getByRole('heading', { level: 2, name: 'Use your access code' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
+  });
+
   it('fills in the code from the link, ignoring case and dashes', () => {
     renderJoin('/join?code=k7qx-4mpa-9wtd');
     expect(screen.getByLabelText('Access code')).toHaveValue('K7QX4MPA9WTD');

@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ConfirmProvider } from "@/hooks/useConfirm";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RouteTitle } from "@/components/RouteTitle";
 import { PackageGate } from "@/components/PackageGate";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
@@ -65,6 +66,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <RouteTitle />
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Index />} />

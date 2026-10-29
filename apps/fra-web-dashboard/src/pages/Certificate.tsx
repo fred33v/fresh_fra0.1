@@ -157,7 +157,7 @@ export default function Certificate() {
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Award className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
               </div>
-              <h2 className="text-xl font-semibold mb-2">Complete the Workshop First</h2>
+              <h1 className="text-xl font-semibold mb-2">Complete the Workshop First</h1>
               <p className="text-muted-foreground mb-6">
                 You need to complete all workshop sections before you can receive your certificate.
               </p>

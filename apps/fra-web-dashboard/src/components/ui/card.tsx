@@ -14,10 +14,16 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-2xl font-semibold leading-none tracking-tight", className)} {...props} />
-  ),
+interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  /** Heading level, so a card title can sit at the right place in the page outline. Defaults to 3. */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
+}
+
+const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
+  ({ className, level = 3, ...props }, ref) => {
+    const Heading = `h${level}` as const;
+    return <Heading ref={ref} className={cn("text-2xl font-semibold leading-none tracking-tight", className)} {...props} />;
+  },
 );
 CardTitle.displayName = "CardTitle";
 
