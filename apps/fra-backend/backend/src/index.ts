@@ -5,6 +5,7 @@ import { Hono, type Context } from 'hono';
 import { getDbPool, closeDbPool } from './db.js';
 import { getRedis } from './redis.js';
 import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
+import { checkProductionEnv } from './production-env.js';
 import { createLogger } from './logger.js';
 import { scheduleRetention } from './retention.js';
 import { scheduleReassessmentReminders } from './reassessment.js';
@@ -153,60 +154,10 @@ const hostname =
 function validateProductionEnv(): void {
   if (process.env.NODE_ENV !== 'production') return;
 
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  // Required (fatal)
-  if (!process.env.DATABASE_URL) {
-    errors.push('DATABASE_URL must be set');
-  } else if (!process.env.DATABASE_URL.includes('sslmode=require')) {
-    warnings.push('DATABASE_URL has no sslmode=require — database traffic is not encrypted');
-  }
-  if (usingDevJwtSecret) {
-    errors.push('JWT_SECRET must not use the development default');
-  }
-  if (usingDevRefreshSecret) {
-    errors.push('JWT_REFRESH_SECRET must not use the development default');
-  }
-  const jwtSecretValue = process.env.JWT_SECRET ?? '';
-  const refreshSecretValue = process.env.JWT_REFRESH_SECRET ?? '';
-  if (jwtSecretValue.length < 32 || refreshSecretValue.length < 32) {
-    errors.push('JWT_SECRET and JWT_REFRESH_SECRET must each be at least 32 characters (e.g. openssl rand -hex 32)');
-  } else if (jwtSecretValue === refreshSecretValue) {
-    errors.push('JWT_SECRET and JWT_REFRESH_SECRET must be different');
-  }
-  if (!process.env.CORS_ORIGINS) {
-    errors.push('CORS_ORIGINS must be set');
-  }
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    errors.push('STRIPE_WEBHOOK_SECRET must be set');
-  }
-  if (!process.env.STRIPE_SECRET_KEY) {
-    errors.push('STRIPE_SECRET_KEY must be set (card payments are refused without it)');
-  } else if (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
-    warnings.push('STRIPE_SECRET_KEY is a test key — no real payments will be taken');
-  }
-  if (!process.env.SMTP_HOST) {
-    errors.push('SMTP_HOST must be set (password reset emails cannot be sent without it)');
-  } else if (process.env.SMTP_REQUIRE_TLS === 'false') {
-    errors.push('SMTP_REQUIRE_TLS=false is for local mail catchers only; email must be sent over TLS in production');
-  } else if (!process.env.EMAIL_FROM) {
-    warnings.push('EMAIL_FROM is not set — emails come from no-reply@fraud-risk.co.uk');
-  }
-  if (!process.env.WEB_APP_URL?.startsWith('https://')) {
-    errors.push('WEB_APP_URL must be set to the web app\'s https:// address (Stripe returns buyers there)');
-  }
-
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    // Without Redis, password-reset links and login lockouts live in one process's memory
-    // and are lost on every restart or deploy
-    errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set');
-  }
-
-  // Recommended (warn)
-  if (!process.env.S3_BUCKET) {
-    warnings.push('S3_BUCKET is not set — file uploads will be unavailable');
-  }
+  const { errors, warnings } = checkProductionEnv(process.env, {
+    usingDevSecret: usingDevJwtSecret,
+    usingDevRefreshSecret: usingDevRefreshSecret,
+  });
 
   for (const w of warnings) {
     logger.warn(`[env] ${w}`);
