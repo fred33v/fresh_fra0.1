@@ -1,6 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
-import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
+import { getActiveWindows, hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { keypassGenerateSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
 import type { User, Keypass } from '../types.js';
 import { usersByEmail, organisationsById, keypassesByCode } from '../stores.js';
@@ -37,11 +37,28 @@ async function getOrgKeypassQuota(orgId: string): Promise<{ allowance: number; u
   return { allowance, used };
 }
 
+// ── Package window helper ───────────────────────────────────────
+
+/**
+ * When the org's current packages stop: a Date, null when a package with no end date
+ * (Starter) is active, or undefined when no package is active at all.
+ */
+async function getPackageEnd(orgId: string): Promise<Date | null | undefined> {
+  const windows = getActiveWindows(await listOrgPurchases(orgId));
+  if (windows.length === 0) return undefined;
+  if (windows.some((w) => w.expiresAt === null)) return null;
+  return new Date(Math.max(...windows.map((w) => (w.expiresAt as Date).getTime())));
+}
+
 // ── Keypass creation helper ──────────────────────────────────────
 
-async function createKeypasses(orgId: string, quantity: number, expiresInDays: number): Promise<{ codes: string[]; expiresAt: string }> {
+async function createKeypasses(
+  orgId: string, quantity: number, expiresInDays: number, packageEnd: Date | null,
+): Promise<{ codes: string[]; expiresAt: string }> {
   const now = Date.now();
-  const expiresAt = new Date(now + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  // A code never outlives the package that paid for it
+  const requestedEnd = now + expiresInDays * 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(packageEnd ? Math.min(requestedEnd, packageEnd.getTime()) : requestedEnd).toISOString();
   const createdAt = new Date(now).toISOString();
 
   const keypasses: Keypass[] = [];
@@ -72,8 +89,8 @@ async function createKeypasses(orgId: string, quantity: number, expiresInDays: n
 
 const keypasses = new Hono();
 
-keypasses.post('/keypasses/generate', async (c) => {
-  const limited = await rateLimit('keypass:generate', { windowMs: RATE_LIMITS.KEYPASS_GENERATE_WINDOW_MS, max: RATE_LIMITS.KEYPASS_GENERATE_MAX })(c);
+async function issueKeypasses(c: Context, kind: 'generate' | 'allocate') {
+  const limited = await rateLimit(`keypass:${kind}`, { windowMs: RATE_LIMITS.KEYPASS_GENERATE_WINDOW_MS, max: RATE_LIMITS.KEYPASS_GENERATE_MAX })(c);
   if (limited instanceof Response) return limited;
 
   const auth = requireAuth(c);
@@ -83,7 +100,7 @@ keypasses.post('/keypasses/generate', async (c) => {
   }
 
   const parsed = keypassGenerateSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid keypass generate payload');
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', `Invalid keypass ${kind} payload`);
 
   const quota = await getOrgKeypassQuota(auth.organisationId);
   if (quota.allowance === 0) {
@@ -94,51 +111,22 @@ keypasses.post('/keypasses/generate', async (c) => {
     return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
   }
 
-  const { codes, expiresAt } = await createKeypasses(auth.organisationId, parsed.data.quantity, parsed.data.expiresInDays);
+  const packageEnd = (await getPackageEnd(auth.organisationId)) ?? null;
+  const { codes, expiresAt } = await createKeypasses(auth.organisationId, parsed.data.quantity, parsed.data.expiresInDays, packageEnd);
 
   await auditLog({
-    eventType: 'keypass.generate', actorId: auth.userId, actorEmail: auth.email,
+    eventType: `keypass.${kind}`, actorId: auth.userId, actorEmail: auth.email,
     organisationId: auth.organisationId, resourceType: 'keypass',
     details: { quantity: parsed.data.quantity }, ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
   });
 
   return c.json({ success: true, data: { organisationId: auth.organisationId, expiresAt, codes } });
-});
+}
 
-keypasses.post('/keypasses/allocate', async (c) => {
-  const limited = await rateLimit('keypass:allocate', { windowMs: RATE_LIMITS.KEYPASS_GENERATE_WINDOW_MS, max: RATE_LIMITS.KEYPASS_GENERATE_MAX })(c);
-  if (limited instanceof Response) return limited;
-
-  const auth = requireAuth(c);
-  if (auth instanceof Response) return auth;
-  if (auth.role !== 'employer' && auth.role !== 'admin') {
-    return jsonError(c, 403, 'FORBIDDEN', 'Requires employer or admin role');
-  }
-
-  const parsed = keypassGenerateSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid keypass allocate payload');
-
-  const quota = await getOrgKeypassQuota(auth.organisationId);
-  if (quota.allowance === 0) {
-    return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
-  }
-  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
-  if (parsed.data.quantity > remaining) {
-    return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
-  }
-
-  const { codes, expiresAt } = await createKeypasses(auth.organisationId, parsed.data.quantity, parsed.data.expiresInDays);
-
-  await auditLog({
-    eventType: 'keypass.allocate', actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'keypass',
-    details: { quantity: parsed.data.quantity }, ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
-  });
-
-  return c.json({ success: true, data: { organisationId: auth.organisationId, expiresAt, codes } });
-});
+keypasses.post('/keypasses/generate', (c) => issueKeypasses(c, 'generate'));
+// Same behaviour under the name the mobile app calls
+keypasses.post('/keypasses/allocate', (c) => issueKeypasses(c, 'allocate'));
 
 keypasses.post('/keypasses/use', async (c) => {
   const limited = await rateLimit('keypass:use', { windowMs: RATE_LIMITS.KEYPASS_WINDOW_MS, max: RATE_LIMITS.KEYPASS_MAX })(c);
@@ -171,6 +159,17 @@ keypasses.post('/keypasses/use', async (c) => {
   }
 
   if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
+
+  // A code only works while the package that paid for it is active, even inside the grace period
+  if ((await getPackageEnd(kp.organisationId)) === undefined) {
+    await auditLog({
+      eventType: 'keypass.use_rejected', actorEmail: parsed.data.email.toLowerCase(),
+      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+      details: { reason: 'package_inactive' }, ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    });
+    return jsonError(c, 403, 'PACKAGE_INACTIVE', "This organisation's package is no longer active");
+  }
 
   const email = parsed.data.email.toLowerCase();
   const name = parsed.data.name ?? email.split('@')[0];
@@ -383,13 +382,16 @@ keypasses.post('/keypasses/validate', async (c) => {
     return jsonError(c, 400, 'EXPIRED', 'Keypass is expired');
   }
 
+  if ((await getPackageEnd(kp.organisationId)) === undefined) {
+    return jsonError(c, 403, 'PACKAGE_INACTIVE', "This organisation's package is no longer active");
+  }
+
   const inGracePeriod = Date.now() > expiresAtMs;
 
   return c.json({
     success: true,
     data: {
       valid: true,
-      organisationId: kp.organisationId,
       expiresAt: kp.expiresAt,
       ...(inGracePeriod ? { warning: 'Keypass is in grace period and will expire soon' } : {}),
     },

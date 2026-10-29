@@ -312,7 +312,9 @@ export const RATE_LIMITS = {
   FORGOT_PASSWORD_MAX: 5,
   RESET_PASSWORD_MAX: 5,
   KEYPASS_WINDOW_MS: 60 * 1000,    // 1 minute
-  KEYPASS_MAX: 3,
+  // Codes are 12 characters from a 32-letter alphabet (60 bits), so 20 tries a minute is no help to a
+  // guesser; shared office networks put many employees behind one address
+  KEYPASS_MAX: 20,
   PURCHASE_WINDOW_MS: 60 * 60 * 1000,   // 1 hour
   PURCHASE_MAX: 10,
   REPORT_WINDOW_MS: 60 * 60 * 1000,     // 1 hour
