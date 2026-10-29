@@ -1,229 +1,96 @@
-# Start FRA - Fraud Risk Assessment Platform
+# Stop FRA
 
-## Unified Project Repository
+A fraud risk assessment and awareness platform for UK organisations: a 13-module risk assessment
+with scoring, risk registers and action plans, staff training with certificates, access for
+employees by key-pass codes, and reports that map to the Economic Crime and Corporate
+Transparency Act 2023 (ECCTA) and GovS-013.
 
-This repository consolidates all fraud risk assessment and prevention projects into a single organized structure.
+It helps an organisation put proportionate fraud prevention procedures in place, record them and
+review them. It is not legal advice, an independent audit or a substitute for the organisation's
+own counter-fraud function, and using it does not by itself make an organisation compliant.
 
----
+The code is a pnpm and Turborepo monorepo.
 
-## Directory Structure
+## What is in the repository
 
-```
-start_fra/
-├── README.md                          # This file
-├── AI_AGENT_WORKFLOW_GUIDE.md         # Best practices for AI agents
-│
-├── .claude/
-│   └── agents/                        # Shared AI agent definitions
-│       ├── system-architect.md
-│       ├── frontend-engineer.md
-│       ├── backend-architect.md
-│       ├── qa-testing-agent.md
-│       ├── devops-agent.md
-│       └── documentation-agent.md
-│
-├── apps/                              # Application codebases
-│   ├── fra_desk/                      # Fraud Prevention Dashboard (React Native/Expo)
-│   ├── risk_awe_gov/                  # Risk Aware Training Platform (React/Vite)
-│   ├── stop_fra_repo_clas/            # Stop FRA Main Repository
-│   ├── rork-fraud-risk-workshop/      # Fraud Risk Workshop App
-│   ├── jan_26/                        # January 26 Release Version
-│   ├── stop_fra/                      # Stop FRA Development
-│   └── fraud-risk-app-main/           # Fraud Risk App Main
-│
-├── docs/
-│   └── markdown/                      # Markdown documentation
-│       ├── Compliance guides
-│       ├── Technical specifications
-│       ├── Agent definitions
-│       └── Project reports
-│
-└── reference/
-    └── pdf_documents/                 # Reference PDF documents
-        ├── GovS-013 Standards
-        ├── ECCTA 2023 Guidance
-        ├── Fraud Risk Management Guides
-        └── Training Materials
-```
+| Folder | What it is |
+|--------|------------|
+| `apps/fra-backend` | The API (`backend/`): Hono on Node, PostgreSQL, Stripe, email, PDF reports. The only backend |
+| `apps/fra-web-dashboard` | The web app: Vite, React and Tailwind. Employers, facilitators and employees |
+| `apps/fra-mobile-app` | The mobile app (Expo, React Native): assessment, and joining with a key-pass |
+| `apps/fra-training-app` | The staff training app (Expo, React Native) |
+| `apps/fra-budget-guide` | The budget-holder guide (Expo, React Native) |
+| `packages/types` | TypeScript types shared by the apps |
+| `packages/shared` | API client, secure token storage, workshop and quiz content |
+| `packages/ui-core` | Design tokens and accessibility helpers |
+| `infra/` | Terraform for AWS and Cloudflare, nginx, systemd, deploy and backup scripts, and the launch runbook |
+| `docs/` | Architecture, compliance notes, guides and training material |
+| `reference/` | Source PDFs (GovS-013, ECCTA guidance) |
+| `workflows/` | An n8n workflow |
+| `.claude/agents/` | Definitions for the AI assistants that help on this repository |
 
----
+`apps/fra-web-dashboard/supabase/` is left over from an earlier version that used Supabase. The
+web app now talks only to the API in `apps/fra-backend`.
 
-## Applications Overview
+## Tech stack
 
-| App | Type | Framework | Purpose |
-|-----|------|-----------|---------|
-| `fra_desk` | Mobile | React Native/Expo | Fraud Prevention Dashboard |
-| `risk_awe_gov` | Web | React/Vite | Risk Awareness Training |
-| `stop_fra_repo_clas` | Mobile | React Native/Expo | Main FRA Platform |
-| `rork-fraud-risk-workshop` | Mobile | React Native/Expo | Workshop Training App |
-| `jan_26` | Mobile | React Native/Expo | Release Version |
-| `stop_fra` | Mobile | React Native/Expo | Development Version |
-| `fraud-risk-app-main` | Mobile | React Native/Expo | Production App |
+- **API:** Node 20+, Hono, `pg` (plain SQL with numbered migrations), Zod, JWT with refresh
+  tokens stored hashed, bcrypt, Stripe Checkout, Nodemailer (Amazon SES in production),
+  Puppeteer for PDFs, Upstash Redis, S3.
+- **Web:** React, React Router, TanStack Query, React Hook Form with Zod, Tailwind and shadcn/ui.
+- **Mobile:** Expo SDK 54, React Native 0.81, Expo Router.
+- **Infrastructure:** AWS (EC2 behind an ALB, S3, CloudFront, SES, CloudWatch) managed by
+  Terraform, Cloudflare for DNS, Neon for PostgreSQL.
 
----
+## Getting started
 
-## Quick Start
-
-### 1. Choose Your App
+You need Node 20 or later and pnpm 9 (`corepack enable` picks up the version in `package.json`).
 
 ```bash
-cd apps/<app-name>
+pnpm install
+pnpm dev:backend     # API on http://localhost:3000
+pnpm dev:web         # web app on http://localhost:8080 (in another terminal)
 ```
 
-### 2. Install Dependencies
+With no `DATABASE_URL` the API keeps everything in memory, which is enough to click through the
+whole product. Outside production it prints confirmation and password-reset emails to its log
+instead of sending them, and sign-up returns the confirmation token in its response so tests can
+finish without an inbox. To use PostgreSQL, set `DATABASE_URL` and run `pnpm db:migrate`. The
+variables the API reads are listed in `apps/fra-backend/.env.example`.
+
+The apps:
 
 ```bash
-bun install
-# or
-npm install
+pnpm dev:mobile      # Expo, mobile app
+pnpm dev:training    # Expo, training app
+pnpm dev:budget      # Expo, budget guide
 ```
 
-### 3. Start Development Server
-
-**For React Native/Expo apps:**
-```bash
-bun run start        # Start Expo dev server
-bun run start-web    # Start web preview
-```
-
-**For React/Vite web apps:**
-```bash
-bun run dev          # Start Vite dev server
-```
-
----
-
-## AI Agent Workflow
-
-Each app includes AI agents for development assistance. See `AI_AGENT_WORKFLOW_GUIDE.md` for best practices.
-
-### Available Agents
-
-| Agent | Purpose |
-|-------|---------|
-| `system-architect` | Architecture design & planning |
-| `frontend-engineer` | UI/UX implementation |
-| `backend-architect` | API & database development |
-| `qa-testing-agent` | Testing & quality assurance |
-| `devops-agent` | CI/CD & deployment |
-| `documentation-agent` | Technical documentation |
-
-### Workflow Pattern
-
-```
-PLAN → BUILD → TEST → DOCUMENT → DEPLOY
-  │       │       │        │         │
-  ↓       ↓       ↓        ↓         ↓
-system  frontend  qa    documentation devops
-architect backend  testing   agent      agent
-```
-
----
-
-## Compliance Standards
-
-This platform addresses:
-
-- **GovS-013** - UK Government Functional Standard for Counter-Fraud
-- **ECCTA 2023** - Economic Crime and Corporate Transparency Act
-- **GDPR** - Data protection compliance
-- **WCAG 2.1 AA** - Accessibility standards
-
----
-
-## Technology Stack
-
-### Mobile Apps (React Native/Expo)
-- React Native 0.74+
-- Expo SDK 51+
-- Expo Router (file-based routing)
-- TypeScript
-- React Query
-- Lucide Icons
-
-### Web Apps (React/Vite)
-- React 18
-- Vite
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Supabase
-
-### Backend Services
-- PostgreSQL
-- Supabase (Auth, Database, Real-time)
-- n8n (Workflow automation)
-- Stripe (Payments)
-
----
-
-## Development Commands
-
-### Common Commands
+## Everyday commands
 
 ```bash
-# Install dependencies
-bun install
-
-# Start development
-bun run start       # Expo
-bun run dev         # Vite
-
-# Build for production
-bun run build
-
-# Run tests
-bun test
-
-# Lint code
-bun run lint
-
-# Type check
-bun run typecheck
+pnpm lint
+pnpm typecheck
+pnpm test            # unit and API tests in every package
+pnpm test:e2e        # Playwright tests for the web app
+pnpm build
 ```
 
-### Expo/EAS Commands
+## Continuous integration
 
-```bash
-# Build for platforms
-eas build --platform ios
-eas build --platform android
+Every pull request runs lint and typecheck, the tests, a job against a real PostgreSQL database,
+and the build (`.github/workflows/ci.yml`). All four must pass before merging.
 
-# Submit to stores
-eas submit --platform ios
-eas submit --platform android
+## Going live
 
-# OTA updates
-eas update --branch production
-```
+Production does not start with weak or missing settings: the API refuses to boot without the
+database, Redis, JWT secrets, Stripe keys, email and web address it needs, and says which one is
+missing. The steps to launch, the settings to gather and the checks to run afterwards are in
+[`infra/LAUNCH.md`](infra/LAUNCH.md).
 
----
+## Further reading
 
-## Documentation
-
-| Document | Location |
-|----------|----------|
-| AI Workflow Guide | `./AI_AGENT_WORKFLOW_GUIDE.md` |
-| Markdown Docs | `./docs/markdown/` |
-| PDF References | `./reference/pdf_documents/` |
-| App-specific docs | `./apps/<app>/docs/` |
-
----
-
-## Contributing
-
-1. Choose the appropriate app directory
-2. Create a feature branch
-3. Follow the AI Agent Workflow Guide
-4. Submit a pull request
-
----
-
-## License
-
-[TBD]
-
----
-
-**Last Updated:** January 2026
-**Maintained By:** FRA Development Team
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the pieces fit together
+- [`SECURITY.md`](SECURITY.md): how to run the security audit
+- [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md): how the features map to GovS-013, ECCTA and GDPR
+- [`infra/LAUNCH.md`](infra/LAUNCH.md): the launch runbook
