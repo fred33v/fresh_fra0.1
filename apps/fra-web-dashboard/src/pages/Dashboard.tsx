@@ -137,12 +137,16 @@ export default function Dashboard() {
                 <div>
                   <div className="font-medium">Fraud Risk Awareness Workshop</div>
                   <div className="text-sm text-muted-foreground">
-                    Staff training and certificates are included in Professional and Enterprise, together with everything in your current package.
+                    {entitlements?.packageName
+                      ? 'Staff training and certificates are included in Professional and Enterprise, together with everything in your current package.'
+                      : 'Choose a package to unlock your organisation\u2019s risk assessment. Staff training and certificates are included in Professional and Enterprise.'}
                   </div>
                 </div>
               </div>
               <Button variant="outline" asChild>
-                <Link to="/package/professional">See Professional</Link>
+                {entitlements?.packageName
+                  ? <Link to="/package/professional">See Professional</Link>
+                  : <Link to="/#packages">See the packages</Link>}
               </Button>
             </CardContent>
           </Card>

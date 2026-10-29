@@ -526,6 +526,24 @@ describe('Dashboard', () => {
       expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
     });
 
+    it('no package: offers the packages, not the workshop, and does not talk about a current package', () => {
+      mockedUseEntitlements.mockReturnValue({
+        isLoading: false,
+        entitlements: {
+          packageId: null, packageName: null, tier: 0, expiresAt: null, keypassAllowance: 0,
+          features: { assessment: false, training: false, certificates: false, dashboard: false, compliance: false },
+          assessments: { allowed: false, limit: 0, used: 0 },
+        },
+      });
+      renderDashboard();
+
+      expect(screen.queryByText('Start Workshop')).not.toBeInTheDocument();
+      expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
+      expect(screen.getByText(/Choose a package to unlock/)).toBeInTheDocument();
+      expect(screen.queryByText(/your current package/)).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'See the packages' })).toHaveAttribute('href', '/#packages');
+    });
+
     it('waits for the package before showing the dashboard', () => {
       mockedUseEntitlements.mockReturnValue({ isLoading: true, entitlements: null });
       renderDashboard();
