@@ -35,7 +35,7 @@ export default function ITSystemsScreen() {
       <CurrencyQuestion
         kind="count"
         question="How many cybersecurity incidents have you experienced in the last 12 months?"
-        hint="Include breaches, malware, unauthorized access, etc."
+        hint="Include breaches, malware, unauthorised access, etc."
         value={assessment.itSystems.securityIncidentsCount}
         onChange={(value) =>
           updateAssessment({ itSystems: { ...assessment.itSystems, securityIncidentsCount: value } })

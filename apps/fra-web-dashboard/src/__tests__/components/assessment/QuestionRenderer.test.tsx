@@ -32,6 +32,24 @@ describe('QuestionRenderer accessibility', () => {
     expect(onChange).toHaveBeenCalledWith(5);
   });
 
+  it('says which end of a 1 to 5 scale is which, so nobody has to guess the best answer', () => {
+    renderQuestion({
+      id: 'procurement.controlMaturity', text: 'How mature are your purchasing approval controls?', type: 'scale',
+      metadata: { min: 1, max: 5, scaleLabels: ['Very weak', 'Very strong'] },
+    });
+
+    expect(screen.getByText('1 = Very weak')).toBeVisible();
+    expect(screen.getByText('5 = Very strong')).toBeVisible();
+    // Screen readers hear the ends when they reach the group
+    const group = screen.getByRole('group', { name: 'How mature are your purchasing approval controls?' });
+    expect(group).toHaveAccessibleDescription('1 = Very weak 5 = Very strong');
+  });
+
+  it('shows no end labels when the question has none', () => {
+    renderQuestion({ id: 'x.y', text: 'Rate it', type: 'scale' });
+    expect(screen.queryByText(/ = /)).not.toBeInTheDocument();
+  });
+
   it('names yes/no answers by their question and exposes the choice', () => {
     renderQuestion({ id: 'fraudResponse.responsePlan', text: 'Do you have a documented fraud response plan?', type: 'yesno' }, 'no');
 

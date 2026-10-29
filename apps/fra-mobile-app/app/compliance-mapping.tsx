@@ -39,7 +39,7 @@ function calculateComplianceStatus(assessment: any) {
     status.govS013.score += 15;
     status.fraudPreventionStandard.score += 15;
   } else if (assessment.payrollHR.unauthorizedChangesDetected === 'yes') {
-    status.govS013.gaps.push('Critical: Unauthorized payroll changes detected');
+    status.govS013.gaps.push('Critical: Unauthorised payroll changes detected');
     status.govS013.actions.push('URGENT: Conduct investigation and implement multi-level approval controls');
     status.fraudPreventionStandard.gaps.push('Payroll fraud risk requires immediate attention');
   } else {

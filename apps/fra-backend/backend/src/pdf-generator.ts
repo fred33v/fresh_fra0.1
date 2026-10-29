@@ -375,7 +375,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
             ${enhancedData.procurement.recentFraud === 'yes' ? `
             <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; margin-top: 15px; border-radius: 4px;">
               <div style="font-weight: 600; color: #dc2626; margin-bottom: 4px;">⚠️ Recent Fraud Incident</div>
-              <div style="font-size: 14px; color: #991b1b;">This organization has experienced procurement fraud in the last 2 years, indicating heightened risk.</div>
+              <div style="font-size: 14px; color: #991b1b;">This organisation has experienced procurement fraud in the last 2 years, indicating heightened risk.</div>
             </div>
             ` : ''}
           </div>
@@ -407,7 +407,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
             ${enhancedData.itSystems.hasCriticalSystems === 'yes' ? `
             <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 12px 16px; margin-top: 15px; border-radius: 4px;">
               <div style="font-weight: 600; color: #d97706; margin-bottom: 4px;">⚠️ Critical Systems Identified</div>
-              <div style="font-size: 14px; color: #92400e;">Organization has critical systems that could cause significant business disruption if compromised.</div>
+              <div style="font-size: 14px; color: #92400e;">Organisation has critical systems that could cause significant business disruption if compromised.</div>
             </div>
             ` : ''}
           </div>
@@ -448,7 +448,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
                 <div class="heatmap-value">${enhancedData.payrollHR.totalEmployeeCount || 'N/A'}</div>
               </div>
               <div class="heatmap-item">
-                <div class="heatmap-label">Unauthorized Changes</div>
+                <div class="heatmap-label">Unauthorised Changes</div>
                 <div class="heatmap-value">${enhancedData.payrollHR.unauthorizedChangesDetected === 'yes' ? '⚠️ Yes' : 'No'}</div>
               </div>
               <div class="heatmap-item">
@@ -458,8 +458,8 @@ function createReportHTML(options: PDFGenerationOptions): string {
             </div>
             ${enhancedData.payrollHR.unauthorizedChangesDetected === 'yes' ? `
             <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; margin-top: 15px; border-radius: 4px;">
-              <div style="font-weight: 600; color: #dc2626; margin-bottom: 4px;">🚨 CRITICAL - Unauthorized Payroll Changes</div>
-              <div style="font-size: 14px; color: #991b1b;">Unauthorized payroll changes have been detected. Immediate investigation and remediation required.</div>
+              <div style="font-weight: 600; color: #dc2626; margin-bottom: 4px;">🚨 CRITICAL - Unauthorised Payroll Changes</div>
+              <div style="font-size: 14px; color: #991b1b;">Unauthorised payroll changes have been detected. Immediate investigation and remediation required.</div>
             </div>
             ` : ''}
           </div>
@@ -510,7 +510,7 @@ function createReportHTML(options: PDFGenerationOptions): string {
               Total responses recorded: <strong>${answerCount}</strong>
             </div>
             <div style="margin-top: 15px; font-size: 13px; color: #666;">
-              <p>This assessment was conducted to evaluate fraud risk across the organisation. The responses provided have been analyzed to determine the overall risk level and identify areas for improvement.</p>
+              <p>This assessment was conducted to evaluate fraud risk across the organisation. The responses provided have been analysed to determine the overall risk level and identify areas for improvement.</p>
               <p style="margin-top: 10px;">For detailed findings and recommendations, please review the full assessment results in the dashboard.</p>
             </div>
           </div>
@@ -618,7 +618,7 @@ function generateRecommendations(riskLevel: string, enhancedData?: any): Array<{
     if (unauthorizedChangesDetected === 'yes') {
       recommendations.push({
         priority: 'CRITICAL - Payroll Fraud Investigation',
-        text: 'Unauthorized payroll changes detected. Initiate immediate investigation and implement multi-level approval controls.'
+        text: 'Unauthorised payroll changes detected. Initiate immediate investigation and implement multi-level approval controls.'
       });
     }
 

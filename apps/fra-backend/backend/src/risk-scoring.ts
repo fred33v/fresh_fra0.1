@@ -197,10 +197,10 @@ function scorePayrollHR(data?: RiskScoringInput['payrollHR']): { score: number; 
     factors.push(`Medium workforce (${data.totalEmployeeCount} employees)`);
   }
 
-  // Unauthorized changes
+  // Unauthorised changes
   if (data.unauthorizedChangesDetected === 'yes') {
     score += 25;
-    factors.push('Unauthorized payroll changes detected');
+    factors.push('Unauthorised payroll changes detected');
   }
 
   // Weak controls

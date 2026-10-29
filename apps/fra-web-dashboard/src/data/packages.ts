@@ -81,6 +81,11 @@ export function getPackage(idOrName: string): CataloguePackage | undefined {
   return PACKAGES.find((p) => p.id === idOrName || p.name === idOrName || p.slug === idOrName);
 }
 
+/** A price in pounds with pence and thousands separators, e.g. £2,158.80. */
+export function formatGbp(amount: number): string {
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+}
+
 /** "£1,799" */
 export function formatPrice(pkg: CataloguePackage): string {
   return `£${pkg.priceGbp.toLocaleString('en-GB')}`;

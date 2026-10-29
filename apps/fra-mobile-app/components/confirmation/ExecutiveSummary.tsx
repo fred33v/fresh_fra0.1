@@ -61,7 +61,7 @@ export default function ExecutiveSummary({
 
         <View style={styles.subsection}>
           <Text style={styles.subsectionTitle}>Purpose</Text>
-          <Text style={styles.bodyText}>This assessment identifies, evaluates, and prioritizes fraud risks and establishes proportionate prevention procedures.</Text>
+          <Text style={styles.bodyText}>This assessment identifies, evaluates, and prioritises fraud risks and establishes proportionate prevention procedures.</Text>
         </View>
 
         <View style={styles.subsection}>
