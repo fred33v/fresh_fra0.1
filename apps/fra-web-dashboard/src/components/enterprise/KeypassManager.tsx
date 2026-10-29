@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Copy, Download, KeyRound, Loader2 } from 'lucide-react';
+import { Copy, Download, KeyRound, Link2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -38,6 +38,11 @@ const STATUS_STYLE: Record<Keypass['status'], string> = {
 
 const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+/** The page an employee opens to use a key-pass, with the code filled in. */
+function joinLink(code: string): string {
+  return `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+}
 
 function downloadCodes(codes: string[], expiresAt: string) {
   const csv = ['Key-pass,Expires', ...codes.map((c) => `${c},${expiresAt.slice(0, 10)}`)].join('\n');
@@ -127,10 +132,10 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
     }
   };
 
-  const copyCodes = async (codes: string[]) => {
+  const copyText = async (text: string, success: string) => {
     try {
-      await navigator.clipboard.writeText(codes.join('\n'));
-      toast.success('Codes copied');
+      await navigator.clipboard.writeText(text);
+      toast.success(success);
     } catch {
       toast.error('Copy failed — download the CSV instead');
     }
@@ -156,7 +161,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg"><KeyRound className="h-5 w-5" aria-hidden="true" /> Issue key-passes</CardTitle>
           <CardDescription>
-            Give one key-pass to each employee. They enter it in the Stop FRA app to join your organisation and start their assessment.
+            Give one key-pass to each employee. They use it once to join your organisation and start their assessment, on the join page ({`${window.location.origin}/join`}) or in the Stop FRA app.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -189,8 +194,11 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
               </p>
               <p className="font-mono text-sm break-all">{newCodes.codes.join('  ')}</p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => copyCodes(newCodes.codes)}>
+                <Button variant="outline" size="sm" onClick={() => copyText(newCodes.codes.join('\n'), 'Codes copied')}>
                   <Copy className="mr-2 h-4 w-4" aria-hidden="true" /> Copy all
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => copyText(newCodes.codes.map(joinLink).join('\n'), 'Join links copied')}>
+                  <Link2 className="mr-2 h-4 w-4" aria-hidden="true" /> Copy join links
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => downloadCodes(newCodes.codes, newCodes.expiresAt)}>
                   <Download className="mr-2 h-4 w-4" aria-hidden="true" /> Download CSV
@@ -247,7 +255,12 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                       </TableCell>
                       <TableCell className="text-right">
                         {k.status === 'available' && (
-                          <Button variant="ghost" size="sm" onClick={() => revoke(k.code)} aria-label={`Revoke key-pass ${k.code}`}>Revoke</Button>
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => copyText(joinLink(k.code), 'Join link copied')} aria-label={`Copy join link for key-pass ${k.code}`}>
+                              <Link2 className="mr-1 h-4 w-4" aria-hidden="true" /> Copy link
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => revoke(k.code)} aria-label={`Revoke key-pass ${k.code}`}>Revoke</Button>
+                          </>
                         )}
                       </TableCell>
                     </TableRow>

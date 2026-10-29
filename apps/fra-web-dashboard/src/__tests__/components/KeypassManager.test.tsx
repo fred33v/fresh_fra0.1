@@ -60,6 +60,42 @@ describe('KeypassManager', () => {
   });
 });
 
+describe('KeypassManager join links', () => {
+  it('copies the join link for an available key-pass, and offers none for a redeemed one', async () => {
+    const user = userEvent.setup();
+    mockKeypasses({ allowance: -1, unlimited: true, used: 2, remaining: null });
+    render(<KeypassManager organisationId="org-1" />);
+
+    const usedRow = (await screen.findByText('USED5678')).closest('tr')!;
+    expect(within(usedRow).queryByRole('button', { name: /Copy join link/ })).not.toBeInTheDocument();
+
+    const availRow = screen.getByText('AVAIL1234').closest('tr')!;
+    await user.click(within(availRow).getByRole('button', { name: 'Copy join link for key-pass AVAIL1234' }));
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/join?code=AVAIL1234`);
+  });
+
+  it('copies one join link per new key-pass', async () => {
+    const user = userEvent.setup();
+    mockKeypasses({ allowance: -1, unlimited: true, used: 0, remaining: null });
+    mockedApi.post.mockResolvedValue({ codes: ['NEWCODE01', 'NEWCODE02'], expiresAt: '2026-10-29T00:00:00Z' });
+    render(<KeypassManager organisationId="org-1" />);
+    await screen.findByText('AVAIL1234');
+    await user.click(screen.getByRole('button', { name: /create key-passes/i }));
+    await user.click(await screen.findByRole('button', { name: 'Copy join links' }));
+
+    expect(await navigator.clipboard.readText()).toBe(
+      [`${window.location.origin}/join?code=NEWCODE01`, `${window.location.origin}/join?code=NEWCODE02`].join('\n'),
+    );
+  });
+
+  it('tells employers where employees use their code', async () => {
+    mockKeypasses({ allowance: -1, unlimited: true, used: 0, remaining: null });
+    render(<KeypassManager organisationId="org-1" />);
+    await screen.findByText('AVAIL1234');
+    expect(screen.getByText(new RegExp(`${window.location.origin}/join`))).toBeInTheDocument();
+  });
+});
+
 describe('SubscriptionCard', () => {
   const base = { packageId: 'pkg_full', packageName: 'Enterprise', tier: 3 } as Entitlements;
 
