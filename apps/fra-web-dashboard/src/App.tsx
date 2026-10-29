@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
+const Join = lazy(() => import("./pages/Join"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Workshop = lazy(() => import("./pages/Workshop"));
 const Assessment = lazy(() => import("./pages/Assessment"));
@@ -68,6 +69,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/join" element={<Join />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/workshop" element={<ProtectedRoute><PackageGate feature="training"><Workshop /></PackageGate></ProtectedRoute>} />
                 <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
