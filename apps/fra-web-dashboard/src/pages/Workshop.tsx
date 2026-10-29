@@ -84,7 +84,7 @@ export default function Workshop() {
           <Card>
             <CardHeader className="text-center">
               <ClipboardCheck className="h-10 w-10 text-primary mx-auto mb-2" aria-hidden="true" />
-              <CardTitle>Start with your risk assessment</CardTitle>
+              <CardTitle level={1}>Start with your risk assessment</CardTitle>
               <CardDescription>
                 Your package begins with step 1, your organisation&apos;s fraud risk assessment. The training
                 workshop (step 2) opens once it is submitted, so it builds on your own risks.

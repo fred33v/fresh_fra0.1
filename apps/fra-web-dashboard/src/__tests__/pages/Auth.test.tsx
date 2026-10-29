@@ -448,6 +448,17 @@ describe('Auth', () => {
 
   // ── Branding panel ────────────────────────────
 
+  describe('page heading', () => {
+    it('has a heading for small screens, where the branding panel with the main heading is hidden', () => {
+      setupAuth();
+      renderAuth();
+      const small = screen.getByRole('heading', { level: 1, name: 'Sign in or create an account' });
+      expect(small).toHaveClass('sr-only', 'lg:hidden');
+      // The card title sits under it as an h2, not an h3
+      expect(screen.getByRole('heading', { level: 2, name: 'Welcome back' })).toBeInTheDocument();
+    });
+  });
+
   describe('branding panel', () => {
     it('shows Back to Home button that navigates to /', async () => {
       const user = userEvent.setup();

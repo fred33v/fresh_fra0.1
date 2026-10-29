@@ -114,7 +114,7 @@ export default function Join() {
           {user && !submitting ? (
             <>
               <CardHeader className="space-y-1">
-                <CardTitle className="text-xl">You are already signed in</CardTitle>
+                <CardTitle level={2} className="text-xl">You are already signed in</CardTitle>
                 <CardDescription>
                   You are signed in as {user.email}. Sign out first if you want to join with a different account.
                 </CardDescription>
@@ -128,7 +128,7 @@ export default function Join() {
           ) : (
             <>
               <CardHeader className="space-y-1">
-                <CardTitle className="text-xl">Use your access code</CardTitle>
+                <CardTitle level={2} className="text-xl">Use your access code</CardTitle>
                 <CardDescription>
                   Your employer gave you a code that works once. Choose a password so you can sign back in later.
                 </CardDescription>
