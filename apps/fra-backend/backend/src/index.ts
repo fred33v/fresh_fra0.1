@@ -28,6 +28,8 @@ import organisationRoutes from './routes/organisations.js';
 import speakUpRoutes from './routes/speak-up.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
+import clientErrorRoutes from './routes/client-errors.js';
+import { scheduleClientErrorMetrics } from './client-errors.js';
 
 const app = new Hono();
 
@@ -126,6 +128,7 @@ api.route('/', apiKeyRoutes);
 api.route('/', riskRegisterRoutes);
 api.route('/', webhookEndpointRoutes);
 api.route('/', organisationRoutes);
+api.route('/', clientErrorRoutes);
 api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);
@@ -177,11 +180,14 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const stopRetention = hasDatabase() ? scheduleRetention() : () => {};
   // Daily quarterly-reassessment reminders (audit trail and reassessment.due webhooks)
   const stopReminders = scheduleReassessmentReminders();
+  // Frontend error count to CloudWatch once a minute (production only)
+  const stopClientErrorMetrics = scheduleClientErrorMetrics();
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully`);
     stopRetention();
     stopReminders();
+    stopClientErrorMetrics();
     server.close(async () => {
       await closeDbPool();
       logger.info('Shutdown complete');

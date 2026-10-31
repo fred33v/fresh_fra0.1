@@ -425,7 +425,8 @@ resource "aws_iam_role_policy" "backend_s3" {
   })
 }
 
-# Lets backup-database.sh report each successful backup to the backup_missing alarm
+# Lets backup-database.sh report each successful backup to the backup_missing alarm, and the
+# backend report the frontend error count to the frontend_errors alarm
 resource "aws_iam_role_policy" "backend_metrics" {
   name = "${var.project_name}-backup-metric"
   role = aws_iam_role.backend.id
@@ -999,6 +1000,24 @@ resource "aws_cloudwatch_metric_alarm" "backup_missing" {
   comparison_operator = "LessThanThreshold"
   threshold           = 1
   treat_missing_data  = "breaching"
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
+}
+
+# Errors in users' browsers. The web dashboard reports them to /api/v1/client-errors and the
+# backend sends the count each minute (src/client-errors.ts). The details are in the backend
+# log: sudo journalctl -u stopfra-backend | grep '"client-error"'
+resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
+  alarm_name          = "${var.project_name}-frontend-errors"
+  alarm_description   = "Users' browsers reported more than 5 errors in 15 minutes. See Frontend errors in infra/LAUNCH.md to read them in the backend log."
+  namespace           = "StopFRA"
+  metric_name         = "ClientErrors"
+  statistic           = "Sum"
+  period              = 900
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
   alarm_actions       = local.alarm_actions
   ok_actions          = local.alarm_actions
 }

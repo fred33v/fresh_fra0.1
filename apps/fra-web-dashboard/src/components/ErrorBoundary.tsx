@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { reportError } from '@/lib/errorReporter';
 const logger = createLogger('ErrorBoundary');
 
 interface Props {
@@ -26,6 +27,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     logger.error('Uncaught error', { error, info });
+    reportError('react', error, info.componentStack ?? undefined);
   }
 
   render() {
