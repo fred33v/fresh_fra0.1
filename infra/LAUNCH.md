@@ -1,7 +1,7 @@
 # Production launch: settings and first deploy
 
 Run these from your own machine. You need the AWS CLI signed in to the production account
-(region eu-west-2), Terraform 1.5 or later, pnpm, and `ssh` access to the server.
+(region eu-north-1, Stockholm), Terraform 1.5 or later, pnpm, and `ssh` access to the server.
 
 ## 1. Gather the values
 
@@ -18,6 +18,26 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 Email needs no values: Terraform sets up Amazon SES and stores the SMTP login itself.
 
 ## 2. Terraform
+
+Terraform keeps its state in an S3 bucket and a lock table, which must exist before
+`terraform init`. Create them once:
+
+```bash
+aws s3api create-bucket --bucket stopfra-terraform-state --region eu-north-1 \
+  --create-bucket-configuration LocationConstraint=eu-north-1
+aws s3api put-bucket-versioning --bucket stopfra-terraform-state \
+  --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption --bucket stopfra-terraform-state \
+  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+aws s3api put-public-access-block --bucket stopfra-terraform-state \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws dynamodb create-table --table-name stopfra-terraform-locks --region eu-north-1 \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST
+```
+
+Also create the server's SSH key pair `stopfra-prod-key` in eu-north-1 (EC2 > Key pairs),
+and keep the .pem file safe.
 
 ```bash
 cd infra/terraform
@@ -43,7 +63,7 @@ alarm emails reach you.
 1. Wait for the domain to verify, which can take up to an hour. Check with
    `terraform output ses_domain_verified`, which should print `true`.
 2. A new SES account can only send to addresses you have verified yourself. To send to
-   anyone, go to the SES console (London, eu-west-2), then Account dashboard >
+   anyone, go to the SES console (Stockholm, eu-north-1), then Account dashboard >
    **Request production access**. Choose "Transactional", and describe the use as account
    emails: sign-up confirmation, password reset and password-changed notices. AWS usually
    answers within a day.
@@ -75,7 +95,7 @@ it generates `INBOUND_WEBHOOK_SECRET`; give that value to n8n if you use it.
 Check that everything is there:
 
 ```bash
-aws ssm get-parameters-by-path --path /fra/backend/ --region eu-west-2 --query 'Parameters[].Name'
+aws ssm get-parameters-by-path --path /fra/backend/ --region eu-north-1 --query 'Parameters[].Name'
 ```
 
 The list should include SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_FROM, STRIPE_SECRET_KEY,

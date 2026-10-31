@@ -71,7 +71,7 @@ const sections: LegalSection[] = [
     body: <>
       <p>We use these service providers (processors) under contracts that require them to protect the data:</p>
       <ul>
-        <li><strong>Amazon Web Services</strong>: application hosting and file storage, London (eu-west-2).</li>
+        <li><strong>Amazon Web Services</strong>: application hosting and file storage, Stockholm, Sweden (eu-north-1).</li>
         <li><strong>Neon</strong>: managed PostgreSQL database, encrypted at rest. [Region to be confirmed.]</li>
         <li><strong>Stripe</strong>: card payments. Stripe is the controller for the card details you give it.</li>
         <li><strong>Upstash</strong>: short-lived security data such as rate limits and password reset links.</li>
@@ -83,8 +83,9 @@ const sections: LegalSection[] = [
   {
     id: 'transfers', title: 'Transfers outside the UK',
     body: <p>
-      Our main hosting is in the UK. Where a provider processes data outside the UK, such as Stripe in the United States, we rely on
-      UK adequacy regulations or the International Data Transfer Agreement or Addendum to protect it. [Confirm against each provider's terms.]
+      Our main hosting is in Sweden, in the European Economic Area, which the UK recognises as adequate. Where a provider processes
+      data elsewhere outside the UK, such as Stripe in the United States, we rely on UK adequacy regulations or the International
+      Data Transfer Agreement or Addendum to protect it. [Confirm against each provider's terms.]
     </p>,
   },
   {
