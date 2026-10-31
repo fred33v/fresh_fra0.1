@@ -45,6 +45,9 @@ cp terraform.tfvars.example terraform.tfvars   # never commit this file
 # Fill in neon_database_url, upstash_redis_rest_url/token, jwt_secret,
 # jwt_refresh_secret, alert_emails and cloudflare_api_token. Leave mail_forward_to
 # empty: incoming mail for the domain goes to Spacemail
+# If you signed in with `aws login`, the AWS provider cannot read that session directly.
+# Export short-lived credentials into this terminal first (prints nothing):
+eval "$(aws configure export-credentials --format env)"
 terraform init
 terraform plan        # read it: it should only create resources
 terraform apply
