@@ -18,7 +18,8 @@ vi.mock('@/lib/api', () => ({
   },
   ApiError: class ApiError extends Error {
     code: string;
-    constructor(code: string, message: string) { super(message); this.code = code; }
+    details?: unknown;
+    constructor(code: string, message: string, details?: unknown) { super(message); this.code = code; this.details = details; }
   },
 }));
 
@@ -523,6 +524,27 @@ describe('useWorkshopProgress', () => {
       expect(ok).toBe(false);
       expect(result.current.progress?.completed_at).toBeNull();
       expect(toast.error).toHaveBeenCalledWith('Please complete every section and answer every quiz question first');
+    });
+  });
+
+  describe('markComplete under the quiz pass mark', () => {
+    it('gives the score and the sections to retake', async () => {
+      const { ApiError } = await import('@/lib/api');
+      mockGet.mockResolvedValueOnce(makeProgressRow());
+      mockPatch.mockRejectedValueOnce(new (ApiError as unknown as new (code: string, message: string, details?: unknown) => Error)('QUIZ_NOT_PASSED', 'Quiz score 75%', { percent: 75, passMark: 80, wrongSections: [2] }));
+
+      const { result } = renderHook(() => useWorkshopProgress());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const onQuizNotPassed = vi.fn();
+      let ok: boolean | undefined;
+      await act(async () => { ok = await result.current.markComplete(onQuizNotPassed); });
+
+      expect(ok).toBe(false);
+      expect(onQuizNotPassed).toHaveBeenCalledWith([2]);
+      expect(toast.error).toHaveBeenCalledWith(
+        'Your quiz score is 75%. You need 80% for the certificate, so answer the question you missed again.',
+      );
     });
   });
 

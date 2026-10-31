@@ -19,7 +19,7 @@ vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
 
 vi.mock('@/lib/api', () => ({
-  api: { get: vi.fn(), post: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), download: vi.fn() },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -336,8 +336,9 @@ describe('Certificate', () => {
   // ── PDF download ──────────────────────────────
 
   describe('pdf download', () => {
-    it('calls window.print when Download PDF is clicked', async () => {
+    it('downloads the PDF made by the server, not the browser print dialog', async () => {
       mockedApi.get.mockResolvedValue(makeCertificate());
+      vi.mocked(mockedApi.download).mockResolvedValue(undefined);
       const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
 
       const user = userEvent.setup();
@@ -349,8 +350,22 @@ describe('Certificate', () => {
 
       await user.click(screen.getByText('Download PDF'));
 
-      expect(printSpy).toHaveBeenCalled();
+      const number = makeCertificate().certificate_number;
+      await waitFor(() => {
+        expect(vi.mocked(mockedApi.download)).toHaveBeenCalledWith(
+          `/api/v1/certificates/${encodeURIComponent(number)}/pdf`,
+          `certificate-${number}.pdf`,
+        );
+      });
+      expect(printSpy).not.toHaveBeenCalled();
       printSpy.mockRestore();
+    });
+
+    it('links to the public verification page', async () => {
+      mockedApi.get.mockResolvedValue(makeCertificate());
+      renderCertificate();
+      const link = await screen.findByRole('link', { name: /certificate\/verify/ });
+      expect(link.getAttribute('href')).toContain(`/certificate/verify?n=${encodeURIComponent(makeCertificate().certificate_number)}`);
     });
   });
 
@@ -378,9 +393,10 @@ describe('Certificate', () => {
       await user.click(screen.getByText('Share Certificate'));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Certificate link copied to clipboard');
+        expect(toast.success).toHaveBeenCalledWith('Verification link copied to clipboard');
       });
-      expect(writeTextSpy).toHaveBeenCalled();
+      // The shared link is the public verification page, which works without signing in
+      expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining('/certificate/verify?n='));
 
       // Restore
       writeTextSpy.mockRestore();

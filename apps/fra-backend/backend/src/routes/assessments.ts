@@ -13,9 +13,12 @@ import { ASSESSMENT_MODULES, buildAssessmentResults } from '../assessment-module
 import { emitOrgEvent } from '../webhooks-out.js';
 import { scoreAssessment } from '../assessment-risk.js';
 import { organisationReassessmentStatus } from '../reassessment.js';
+import { issueAssessmentCertificateLater } from '../certificates.js';
 
 // Answers stay out of webhook payloads; integrations fetch detail via the API if needed
 function notifySubmitted(a: Assessment) {
+  // Every submitted assessment gets its own verifiable certificate
+  issueAssessmentCertificateLater(a);
   const risk = scoreAssessment(a);
   const assessment = {
     id: a.id, title: a.title, status: a.status, createdByUserId: a.createdByUserId,

@@ -23,10 +23,13 @@ type ApiResponse<T> = {
 
 export class ApiError extends Error {
   code: string;
-  constructor(code: string, message: string) {
+  /** Extra detail some refusals carry, e.g. the quiz score when the pass mark is not reached */
+  details?: unknown;
+  constructor(code: string, message: string, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -121,8 +124,8 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   }
 
   if (!json.success) {
-    const err = json as { success: false; error: { code: string; message: string } };
-    throw new ApiError(err.error.code, err.error.message);
+    const err = json as { success: false; error: { code: string; message: string }; data?: unknown };
+    throw new ApiError(err.error.code, err.error.message, err.data);
   }
 
   return json.data;

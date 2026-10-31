@@ -11,6 +11,7 @@ const FAILURE_MESSAGES: Record<Exclude<CertificateResult, { ok: true }>['reason'
   offline: 'You are offline. Connect to the internet and try again to get your certificate.',
   locked: 'Training is not included in your organisation\'s package, so a certificate cannot be issued.',
   'not-completed': 'Some sections or quiz questions are not finished yet. Complete them, then try again.',
+  'quiz-not-passed': 'The certificate needs 80% of the quiz questions right. Open the quizzes you missed, answer them again, then try again.',
   error: 'Your certificate could not be issued just now. Please try again.',
 };
 
