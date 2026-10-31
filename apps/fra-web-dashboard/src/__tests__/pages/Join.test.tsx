@@ -167,4 +167,25 @@ describe('Join page', () => {
     expect(screen.queryByLabelText('Key-pass')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to your dashboard' })).toHaveAttribute('href', '/dashboard');
   });
+
+  it('fills in and locks the address an invitation was sent to', async () => {
+    const user = userEvent.setup();
+    renderJoin('/join?code=K7QX4MPA9WTD&email=alex%40acme.example');
+    const email = screen.getByLabelText('Work email');
+    expect(email).toHaveValue('alex@acme.example');
+    expect(email).toHaveAttribute('readonly');
+    await user.type(screen.getByLabelText('Choose a password'), PASSWORD);
+    await user.type(screen.getByLabelText('Confirm password'), PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => expect(mockJoin).toHaveBeenCalledWith(expect.objectContaining({ email: 'alex@acme.example' })));
+  });
+
+  it('explains when the key-pass was sent to another address', async () => {
+    mockJoin.mockResolvedValue({ error: new ApiError('EMAIL_MISMATCH', 'mismatch') });
+    const user = userEvent.setup();
+    renderJoin('/join?code=K7QX4MPA9WTD');
+    await fillAndSubmit(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sent to a different email address/);
+  });
 });
+

@@ -63,6 +63,50 @@ describe('KeypassManager', () => {
   });
 });
 
+describe('KeypassManager invitations by email', () => {
+  it('sends one invitation per address and says who was skipped', async () => {
+    mockKeypasses({ allowance: 50, used: 0, remaining: 50 });
+    mockedApi.post.mockResolvedValue({
+      invited: [{ email: 'alex@example.org', code: 'INV00001', expiresAt: '2026-12-01T00:00:00Z' }],
+      skipped: [{ email: 'sam@example.org', reason: 'account_exists' }],
+      emailSent: true,
+    });
+    render(<KeypassManager organisationId="org-1" />);
+    await screen.findByText('AVAIL1234');
+    await userEvent.type(screen.getByLabelText(/Email addresses/), 'alex@example.org, sam@example.org');
+    await userEvent.click(screen.getByRole('button', { name: /send invitations/i }));
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/keypasses/invite', { emails: ['alex@example.org', 'sam@example.org'], expiresInDays: 30 }));
+    expect(await screen.findByText(/Sent to alex@example.org/)).toBeInTheDocument();
+    expect(screen.getByText(/Not sent to sam@example.org: already has an account/)).toBeInTheDocument();
+  });
+
+  it('checks the addresses before sending', async () => {
+    mockKeypasses({ allowance: 50, used: 0, remaining: 50 });
+    render(<KeypassManager organisationId="org-1" />);
+    await screen.findByText('AVAIL1234');
+    await userEvent.type(screen.getByLabelText(/Email addresses/), 'alex@example.org not-an-email');
+    await userEvent.click(screen.getByRole('button', { name: /send invitations/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('not-an-email');
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  it('shows who a key-pass was sent to and can resend it', async () => {
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path.endsWith('/quota')) return { allowance: 50, used: 1, remaining: 49 };
+      return [{ code: 'INV00001', status: 'available', createdAt: '2026-09-01T00:00:00Z', expiresAt: '2026-12-01T00:00:00Z', invitedEmail: 'alex@example.org' }];
+    });
+    mockedApi.post.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<KeypassManager organisationId="org-1" />);
+    const row = (await screen.findByText('INV00001')).closest('tr')!;
+    expect(within(row).getByText('alex@example.org')).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Resend the invitation to alex@example.org' }));
+    expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/keypasses/INV00001/resend');
+    await user.click(within(row).getByRole('button', { name: /Copy join link/ }));
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/join?code=INV00001&email=alex%40example.org`);
+  });
+});
+
 describe('KeypassManager join links', () => {
   it('copies the join link for an available key-pass, and offers none for a redeemed one', async () => {
     const user = userEvent.setup();

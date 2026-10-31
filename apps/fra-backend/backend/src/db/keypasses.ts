@@ -7,14 +7,16 @@ export function rowToKeypass(row: DbKeypassRow): Keypass {
     createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString(),
     usedAt: row.used_at ? new Date(row.used_at).toISOString() : undefined,
     usedByUserId: row.used_by_user_id ?? undefined,
+    invitedEmail: row.invited_email ?? undefined,
+    invitedAt: row.invited_at ? new Date(row.invited_at).toISOString() : undefined,
   };
 }
 
 export async function dbInsertKeypass(kp: Keypass): Promise<void> {
   const pool = getDbPool();
   await pool.query(
-    'insert into public.keypasses (code, organisation_id, status, created_at, expires_at, used_at) values ($1,$2,$3,$4,$5,$6)',
-    [kp.code, kp.organisationId, kp.status, kp.createdAt, kp.expiresAt, kp.usedAt ?? null]
+    'insert into public.keypasses (code, organisation_id, status, created_at, expires_at, used_at, invited_email, invited_at) values ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [kp.code, kp.organisationId, kp.status, kp.createdAt, kp.expiresAt, kp.usedAt ?? null, kp.invitedEmail ?? null, kp.invitedAt ?? null]
   );
 }
 
@@ -24,13 +26,13 @@ export async function dbInsertKeypassBatch(keypasses: Keypass[]): Promise<void> 
   const values: unknown[] = [];
   const placeholders: string[] = [];
   for (let i = 0; i < keypasses.length; i++) {
-    const offset = i * 6;
-    placeholders.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6})`);
+    const offset = i * 8;
+    placeholders.push(`(${Array.from({ length: 8 }, (_, j) => `$${offset + j + 1}`).join(',')})`);
     const kp = keypasses[i];
-    values.push(kp.code, kp.organisationId, kp.status, kp.createdAt, kp.expiresAt, kp.usedAt ?? null);
+    values.push(kp.code, kp.organisationId, kp.status, kp.createdAt, kp.expiresAt, kp.usedAt ?? null, kp.invitedEmail ?? null, kp.invitedAt ?? null);
   }
   await pool.query(
-    `insert into public.keypasses (code, organisation_id, status, created_at, expires_at, used_at) values ${placeholders.join(',')}`,
+    `insert into public.keypasses (code, organisation_id, status, created_at, expires_at, used_at, invited_email, invited_at) values ${placeholders.join(',')}`,
     values
   );
 }
@@ -38,7 +40,7 @@ export async function dbInsertKeypassBatch(keypasses: Keypass[]): Promise<void> 
 export async function dbGetKeypassByCode(code: string): Promise<Keypass | null> {
   const pool = getDbPool();
   const res = await pool.query<DbKeypassRow>(
-    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id from public.keypasses where code = $1 limit 1',
+    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id, invited_email, invited_at from public.keypasses where code = $1 limit 1',
     [code]
   );
   const row = res.rows[0];
@@ -69,7 +71,7 @@ export async function dbClaimKeypass(code: string, usedAt: string, usedByUserId:
 export async function dbListKeypassesByOrganisation(orgId: string): Promise<Keypass[]> {
   const pool = getDbPool();
   const res = await pool.query<DbKeypassRow>(
-    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id from public.keypasses where organisation_id = $1 order by created_at desc',
+    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id, invited_email, invited_at from public.keypasses where organisation_id = $1 order by created_at desc',
     [orgId]
   );
   return res.rows.map(rowToKeypass);
@@ -78,7 +80,7 @@ export async function dbListKeypassesByOrganisation(orgId: string): Promise<Keyp
 export async function dbListKeypassesByUser(userId: string): Promise<Keypass[]> {
   const pool = getDbPool();
   const res = await pool.query<DbKeypassRow>(
-    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id from public.keypasses where used_by_user_id = $1 order by created_at desc',
+    'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id, invited_email, invited_at from public.keypasses where used_by_user_id = $1 order by created_at desc',
     [userId]
   );
   return res.rows.map(rowToKeypass);
@@ -98,4 +100,9 @@ export async function dbGetKeypassStatsByOrganisation(orgId: string): Promise<{ 
     total += count;
   }
   return { total, byStatus };
+}
+
+/** Records that a key-pass was (re)sent to its invited address. */
+export async function dbTouchKeypassInvite(code: string, at: string): Promise<void> {
+  await getDbPool().query('update public.keypasses set invited_at = $2 where code = $1', [code, at]);
 }

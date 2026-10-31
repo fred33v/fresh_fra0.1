@@ -7,6 +7,9 @@ import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { HealthCheckCard } from '@/components/HealthCheckCard';
 import { PackageOffer } from '@/components/PackageOffer';
 import { JoinSessionCard } from '@/components/JoinSessionCard';
+import { MyActions } from '@/components/MyActions';
+import { NextActions } from '@/components/NextActions';
+import { BudgetHolderCard } from '@/components/BudgetHolderCard';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -106,6 +109,10 @@ export default function Dashboard() {
         {/* Quarterly reassessment is an organisation task, for the people who run the account.
             The first assessment is prompted by the risk assessment card below, so the banner is for later ones. */}
         {(user.role === 'employer' || user.role === 'admin') && hasFinishedAssessment && <ReassessmentBanner />}
+
+        {/* Enterprise: the risk actions given to this person, and the confidential reporting link */}
+        {entitlements?.packageId === 'pkg_full' && <MyActions onlyIfAssigned={isManager} />}
+        {entitlements?.packageId === 'pkg_full' && <BudgetHolderCard />}
 
         {showOffer ? (
           <PackageOffer />
@@ -303,6 +310,13 @@ export default function Dashboard() {
             )}
           </motion.div>
         </div>
+        )}
+
+        {/* The person's own action plan, from the training */}
+        {hasTraining && !trainingLocked && (
+          <div className="mt-6">
+            <NextActions showEmployerNote={!isManager} />
+          </div>
         )}
 
         {/* Quick Actions */}

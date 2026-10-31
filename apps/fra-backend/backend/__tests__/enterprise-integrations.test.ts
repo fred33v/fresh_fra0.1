@@ -79,6 +79,86 @@ describe('Risk register', () => {
   });
 });
 
+describe('My actions (Enterprise employees)', () => {
+  /** An employer on Enterprise and one employee who joined with a key-pass */
+  async function team() {
+    const boss = await createPaidUser();
+    const codes = ((await (await send('POST', '/keypasses/generate', boss.accessToken, { quantity: 1, expiresInDays: 30 })).json()) as any).data.codes;
+    const email = `sam+${crypto.randomUUID()}@example.com`;
+    const joined = await app.request(`${API}/keypasses/use`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: codes[0], email, password: 'Employee-Pass-2026', name: 'Sam' }),
+    });
+    const body = (await joined.json()) as any;
+    return { boss, employee: { accessToken: body.data.accessToken as string, userId: body.data.user.userId as string } };
+  }
+
+  it('shows an employee only the risks they own, and the reporting link', async () => {
+    const { boss, employee } = await team();
+    const mine = ((await (await send('POST', '/risk-register', boss.accessToken, { ...risk, ownerUserId: employee.userId, actionPlan: 'Call back on bank changes', dueDate: '2030-01-01' })).json()) as any).data;
+    await send('POST', '/risk-register', boss.accessToken, { ...risk, title: 'Not theirs', ownerUserId: boss.userId });
+    await send('PUT', '/compliance/speak-up/intake', boss.accessToken, { enabled: true });
+
+    // The full register stays with the employer
+    expect((await get('/risk-register', employee.accessToken)).status).toBe(403);
+
+    const res = await get('/my-actions', employee.accessToken);
+    expect(res.status).toBe(200);
+    const data = ((await res.json()) as any).data;
+    expect(data.risks.map((r: any) => r.id)).toEqual([mine.id]);
+    expect(data.risks[0].actionPlan).toBe('Call back on bank changes');
+    expect(data.speakUpToken).toEqual(expect.any(String));
+  });
+
+  it('lets the owner report progress, and the employer approve or reopen it', async () => {
+    const { boss, employee } = await team();
+    const entry = ((await (await send('POST', '/risk-register', boss.accessToken, { ...risk, ownerUserId: employee.userId })).json()) as any).data;
+
+    const done = await send('POST', `/my-actions/${entry.id}/progress`, employee.accessToken, { status: 'done', note: 'Call-back check in place since 1 Nov' });
+    expect(done.status).toBe(200);
+    const saved = ((await done.json()) as any).data;
+    expect(saved.status).toBe('mitigated');
+    expect(saved.reviewPending).toBe(true);
+    expect(saved.ownerNote).toBe('Call-back check in place since 1 Nov');
+
+    const summary = ((await (await get('/risk-register/summary', boss.accessToken)).json()) as any).data;
+    expect(summary.awaitingReview).toBe(1);
+
+    const reopened = ((await (await send('POST', `/risk-register/${entry.id}/review`, boss.accessToken, { decision: 'reopen' })).json()) as any).data;
+    expect(reopened.status).toBe('in_progress');
+    expect(reopened.reviewPending).toBe(false);
+
+    await send('POST', `/my-actions/${entry.id}/progress`, employee.accessToken, { status: 'done' });
+    const approved = ((await (await send('POST', `/risk-register/${entry.id}/review`, boss.accessToken, { decision: 'approve' })).json()) as any).data;
+    expect(approved.status).toBe('mitigated');
+    expect(approved.reviewPending).toBe(false);
+    expect((await send('POST', `/risk-register/${entry.id}/review`, boss.accessToken, { decision: 'approve' })).status).toBe(409);
+  });
+
+  it('keeps an owner update waiting when the employer edits other fields', async () => {
+    const { boss, employee } = await team();
+    const entry = ((await (await send('POST', '/risk-register', boss.accessToken, { ...risk, ownerUserId: employee.userId })).json()) as any).data;
+    await send('POST', `/my-actions/${entry.id}/progress`, employee.accessToken, { status: 'done' });
+    // The edit form always sends the status it shows
+    const edited = ((await (await send('PATCH', `/risk-register/${entry.id}`, boss.accessToken, { title: 'Renamed', status: 'mitigated' })).json()) as any).data;
+    expect(edited.reviewPending).toBe(true);
+    const closed = ((await (await send('PATCH', `/risk-register/${entry.id}`, boss.accessToken, { status: 'closed' })).json()) as any).data;
+    expect(closed.reviewPending).toBe(false);
+  });
+
+  it('refuses updates to a risk someone else owns, and employees cannot review', async () => {
+    const { boss, employee } = await team();
+    const entry = ((await (await send('POST', '/risk-register', boss.accessToken, { ...risk, ownerUserId: boss.userId })).json()) as any).data;
+    expect((await send('POST', `/my-actions/${entry.id}/progress`, employee.accessToken, { status: 'done' })).status).toBe(404);
+    expect((await send('POST', `/risk-register/${entry.id}/review`, employee.accessToken, { decision: 'approve' })).status).toBe(403);
+  });
+
+  it('is part of Enterprise only', async () => {
+    const pro = await createPaidUser('pkg_training');
+    expect((await get('/my-actions', pro.accessToken)).status).toBe(403);
+  });
+});
+
 describe('API keys', () => {
   async function newKey() {
     const user = await createPaidUser();

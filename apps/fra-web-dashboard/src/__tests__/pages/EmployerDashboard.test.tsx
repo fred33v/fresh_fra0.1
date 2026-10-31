@@ -21,6 +21,10 @@ vi.mock('@/hooks/useEntitlements', () => ({
   useEntitlements: () => ({ entitlements: entitlementsState.current, isLoading: false }),
 }));
 
+vi.mock('@/components/enterprise/TeamTraining', () => ({
+  TeamTraining: () => <div data-testid="team-training" />,
+}));
+
 vi.mock('@/components/enterprise/KeypassManager', () => ({
   KeypassManager: () => <div data-testid="keypass-manager" />,
 }));
@@ -286,6 +290,18 @@ describe('EmployerDashboard', () => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
       expect(screen.getByText('Try Again')).toBeInTheDocument();
+    });
+
+    it('gives Professional the team training and key-passes, without the Enterprise pages', async () => {
+      entitlementsState.current = { packageId: 'pkg_training', packageName: 'Professional', expiresAt: null, features: { training: true, compliance: false } };
+      mockedApi.get.mockRejectedValueOnce(new ApiError('Upgrade needed', 'PACKAGE_REQUIRED'));
+
+      renderDashboard();
+
+      expect(await screen.findByRole('tab', { name: 'Team training' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: 'Key-passes' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Compliance/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Risk register/ })).not.toBeInTheDocument();
     });
 
     it('keeps key-passes available when analytics need Enterprise, with a direct upgrade', async () => {

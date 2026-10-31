@@ -70,6 +70,7 @@ export const PACKAGES: CataloguePackage[] = [
       'Unlimited employee key-passes',
       'Real-time monitoring dashboard',
       'Risk register and action tracking',
+      'Budget holder programme with signed commitments and conflict of interest declarations',
       'API access',
       'Priority support',
       'Compliance reports',
