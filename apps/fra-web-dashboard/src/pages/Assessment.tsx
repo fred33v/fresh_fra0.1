@@ -169,7 +169,7 @@ export default function Assessment() {
           </div>
 
           {/* Progress bar */}
-          <Progress value={progressPercent} className="h-2" />
+          <Progress value={progressPercent} className="h-2" aria-label={`Assessment progress: ${Math.round(progressPercent)}% complete`} />
         </motion.div>
 
         <div className="grid lg:grid-cols-4 gap-6">
@@ -181,7 +181,7 @@ export default function Assessment() {
           >
             <Card className="sticky top-4">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Modules</CardTitle>
+                <CardTitle level={2} className="text-sm">Modules</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {modules.map((module, idx) => {
@@ -190,6 +190,7 @@ export default function Assessment() {
                     <button
                       key={module.id}
                       onClick={() => jumpToModule(idx)}
+                      aria-current={currentModuleIndex === idx ? 'step' : undefined}
                       className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
                         currentModuleIndex === idx
                           ? 'bg-primary text-primary-foreground'
@@ -202,7 +203,7 @@ export default function Assessment() {
                         {moduleComplete && <CheckCircle2 className="h-4 w-4" />}
                         <div>
                           <div className="text-xs font-medium font-medium">{module.title}</div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className={`text-xs ${currentModuleIndex === idx ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                             {module.questions.length} questions
                           </div>
                         </div>

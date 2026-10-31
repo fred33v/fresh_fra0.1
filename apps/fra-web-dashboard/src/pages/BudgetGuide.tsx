@@ -150,7 +150,7 @@ export function BudgetGuidePage() {
   const totalBudget = mitigations.reduce((sum, m) => sum + (m.budget || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-8">
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <motion.div
@@ -180,7 +180,7 @@ export function BudgetGuidePage() {
         >
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Risk Score</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">Risk Score</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-indigo-600">{riskScore || 0}</div>
@@ -190,7 +190,7 @@ export function BudgetGuidePage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Risk Appetite</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">Risk Appetite</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-600">
@@ -209,7 +209,7 @@ export function BudgetGuidePage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Budget</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">Total Budget</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
@@ -221,7 +221,7 @@ export function BudgetGuidePage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Progress</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">Progress</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-purple-600">{Math.round(progress_pct)}%</div>
@@ -249,7 +249,7 @@ export function BudgetGuidePage() {
                 {/* Recommended */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Recommended Allocation</CardTitle>
+                    <CardTitle level={2}>Recommended Allocation</CardTitle>
                     <CardDescription>
                       Based on your risk score of {riskScore}
                     </CardDescription>
@@ -280,7 +280,7 @@ export function BudgetGuidePage() {
                 {/* Actual */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Your Current Allocation</CardTitle>
+                    <CardTitle level={2}>Your Current Allocation</CardTitle>
                     <CardDescription>
                       Based on {mitigations.length} planned strategies
                     </CardDescription>
@@ -312,7 +312,7 @@ export function BudgetGuidePage() {
               {/* Comparison */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Allocation Comparison</CardTitle>
+                  <CardTitle level={2}>Allocation Comparison</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -444,7 +444,7 @@ export function BudgetGuidePage() {
             <TabsContent value="timeline" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Implementation Roadmap</CardTitle>
+                  <CardTitle level={2}>Implementation Roadmap</CardTitle>
                   <CardDescription>
                     Timeline for rolling out your fraud prevention measures
                   </CardDescription>
@@ -602,6 +602,9 @@ export function BudgetGuidePage() {
           </DialogContent>
         </Dialog>
       </div>
-    </div>
+    </main>
   );
 }
+
+// App.tsx loads this page with React.lazy, which needs a default export
+export default BudgetGuidePage;

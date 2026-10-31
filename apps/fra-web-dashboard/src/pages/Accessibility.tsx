@@ -89,7 +89,7 @@ const sections: LegalSection[] = [
           a document language, but we have not yet tested them with a screen reader. If you cannot use one, ask us for another format
           (see section 3).
         </li>
-        <li>Signed-in pages once an organisation has entered its data, such as full registers, reports and team lists. We tested these pages without data.</li>
+        <li>Signed-in pages once an organisation has entered its data, such as full registers, reports and team lists. We tested these pages without data, except the fraud risk assessment and its results.</li>
       </ul>
       <h3 className="font-semibold">Content provided by others</h3>
       <p>
@@ -118,8 +118,9 @@ const sections: LegalSection[] = [
       </p>
       <p>
         We tested the home page, sign in, joining an organisation, the package pages, privacy notice, terms, certificate checking and
-        speak-up pages, and, when signed in, the dashboard, risk assessment, workshop, resources, action plan, profile, organisation
-        dashboard, risk register and compliance pages.
+        speak-up pages, and, when signed in, the dashboard, the fraud risk assessment (all 13 modules, answered with a keyboard only),
+        assessment results, budget guide, workshop, resources, action plan, profile, organisation dashboard, risk register and
+        compliance pages.
       </p>
     </>,
   },

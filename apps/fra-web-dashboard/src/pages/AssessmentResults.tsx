@@ -151,9 +151,10 @@ export default function AssessmentResults() {
 
   const getRiskColor = (rating: string) => {
     switch (rating.toLowerCase()) {
-      case 'low': return 'text-success';
-      case 'medium': return 'text-warning';
-      case 'high': return 'text-orange-500';
+      // Darker shades so the score and rating text reach 4.5:1 contrast (WCAG 1.4.3)
+      case 'low': return 'text-green-800';
+      case 'medium': return 'text-amber-800';
+      case 'high': return 'text-orange-800';
       case 'critical': return 'text-destructive';
       default: return 'text-primary';
     }
@@ -194,7 +195,7 @@ export default function AssessmentResults() {
         >
           <Card className={`border-2 ${getRiskBgColor(rating)}`}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <Shield className="h-6 w-6" />
                 Overall Risk Rating
               </CardTitle>
@@ -323,7 +324,7 @@ export default function AssessmentResults() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <TrendingUp className="h-5 w-5" />
                 Risk by Module
               </CardTitle>
@@ -365,7 +366,7 @@ export default function AssessmentResults() {
 
               {/* High-risk modules */}
               <div className="mt-6 space-y-2">
-                <h4 className="font-semibold text-sm">Areas requiring attention:</h4>
+                <h3 className="font-semibold text-sm">Areas requiring attention:</h3>
                 <div className="space-y-2">
                   {results.modules
                     .filter(m => m.score >= 60)
@@ -395,7 +396,7 @@ export default function AssessmentResults() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <AlertCircle className="h-5 w-5" />
                 Key Risk Factors
               </CardTitle>
@@ -436,7 +437,7 @@ export default function AssessmentResults() {
                           factor.impact === 'high'
                             ? 'border-destructive text-destructive'
                             : factor.impact === 'medium'
-                            ? 'border-warning text-warning'
+                            ? 'border-warning text-amber-800'
                             : 'border-info text-info'
                         }`}
                       >
