@@ -15,6 +15,7 @@ import {
   Headphones,
   FileText,
   Award,
+  Wallet,
 } from 'lucide-react';
 import {
   Accordion,
@@ -39,6 +40,7 @@ export default function PackageEnterprise() {
     { icon: LayoutDashboard, title: 'Real-Time Monitoring Dashboard', desc: 'Live view of assessments, risk levels and compliance status across your organisation — refreshes automatically every 30 seconds.' },
     { icon: Users, title: 'Unlimited Employee Key-Passes', desc: 'No cap on how many staff can complete assessments. Scale fraud awareness across every department.' },
     { icon: BarChart3, title: 'Risk Register & Action Tracking', desc: 'Inherent and residual risk scoring with priority bands, owner assignment, and progress monitoring.' },
+    { icon: Wallet, title: 'Budget Holder Programme', desc: 'Everyone who approves spending learns their legal duties, works through seven real fraud cases, applies your own approval limits, declares conflicts of interest and signs a commitment, renewed every year.' },
     { icon: Key, title: 'API Access', desc: 'Read-only API keys and signed webhooks connect fraud risk data to your GRC tools, SIEM platforms and internal dashboards. CSV export included.' },
     { icon: Headphones, title: 'Priority Support', desc: 'Dedicated assistance with onboarding, compliance queries, and ongoing platform support.' },
     { icon: FileText, title: 'Compliance Reports', desc: 'GovS-013 and ECCTA 2023 compliance reports ready for auditors, regulators, and board-level reporting.' },

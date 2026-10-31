@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 import { FALLBACK_PACKAGES } from '../src/types';
@@ -25,10 +25,16 @@ describe('Package definitions stay in sync', () => {
   it('the latest database seed matches the backend packages', () => {
     const migrationsDir = join(__dirname, '..', 'migrations');
     const seed = readFileSync(join(migrationsDir, '018_sync_package_features.sql'), 'utf8');
+    // Later migrations may update a package's features again: the last one wins
+    const latestFeatures = new Map<string, string>();
+    for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && f >= '018').sort()) {
+      const sql = readFileSync(join(migrationsDir, file), 'utf8');
+      for (const m of sql.matchAll(/features = '(\[[^']*\])'::jsonb\s+where id = '(\w+)'/gi)) latestFeatures.set(m[2], m[1]);
+    }
     for (const pkg of FALLBACK_PACKAGES) {
       expect(seed).toContain(`'${pkg.id}'`);
       expect(seed).toContain(`price_cents = ${pkg.priceCents}`);
-      expect(seed).toContain(`'${JSON.stringify(pkg.features)}'::jsonb`);
+      expect(latestFeatures.get(pkg.id)).toBe(JSON.stringify(pkg.features));
     }
   });
 });

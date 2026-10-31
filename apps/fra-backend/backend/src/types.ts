@@ -363,7 +363,7 @@ export const RISK_THRESHOLDS = {
 export const FALLBACK_PACKAGES: Package[] = [
   { id: 'pkg_basic', name: 'Starter', description: 'Fraud risk assessment with downloadable PDF report', priceCents: 79500, currency: 'gbp', keypassAllowance: 1, features: ['Single fraud risk assessment across 13 key areas', 'Downloadable PDF health check report', 'ECCTA 2023 compliance snapshot', '1 key-pass included'], isActive: true, sortOrder: 1 },
   { id: 'pkg_training', name: 'Professional', description: 'FRA health check + staff awareness training', priceCents: 179900, currency: 'gbp', keypassAllowance: 50, features: ['Everything in Starter', '50 employee key-passes', 'Staff awareness training with certificates', 'Quarterly reassessment', 'Email support'], isActive: true, sortOrder: 2 },
-  { id: 'pkg_full', name: 'Enterprise', description: 'Complete fraud risk management suite with live dashboard', priceCents: 499500, currency: 'gbp', keypassAllowance: -1, features: ['Everything in Professional', 'Unlimited employee key-passes', 'Real-time monitoring dashboard', 'Risk register and action tracking', 'API access', 'Priority support', 'Compliance reports'], isActive: true, sortOrder: 3 },
+  { id: 'pkg_full', name: 'Enterprise', description: 'Complete fraud risk management suite with live dashboard', priceCents: 499500, currency: 'gbp', keypassAllowance: -1, features: ['Everything in Professional', 'Unlimited employee key-passes', 'Real-time monitoring dashboard', 'Risk register and action tracking', 'Budget holder programme with signed commitments and conflict of interest declarations', 'API access', 'Priority support', 'Compliance reports'], isActive: true, sortOrder: 3 },
 ];
 
 // ── Pagination ─────────────────────────────────────────────────

@@ -24,6 +24,7 @@ const BudgetGuide = lazy(() => import("./pages/BudgetGuide"));
 const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
+const BudgetHolder = lazy(() => import("./pages/BudgetHolder"));
 const Facilitator = lazy(() => import("./pages/Facilitator"));
 const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
@@ -83,6 +84,7 @@ const App = () => (
                 <Route path="/tools/roadmap" element={<ProtectedRoute><ResourceChecklist kind="roadmap" /></ProtectedRoute>} />
                 <Route path="/certificate" element={<ProtectedRoute><PackageGate feature="certificates"><Certificate /></PackageGate></ProtectedRoute>} />
                 <Route path="/action-plan" element={<ProtectedRoute><PackageGate feature="training"><ActionPlan /></PackageGate></ProtectedRoute>} />
+                <Route path="/budget-holder" element={<ProtectedRoute><PackageGate feature="compliance"><BudgetHolder /></PackageGate></ProtectedRoute>} />
                 <Route path="/package/starter" element={<PackageStarter />} />
                 <Route path="/package/professional" element={<PackageProfessional />} />
                 <Route path="/package/enterprise" element={<PackageEnterprise />} />

@@ -5,14 +5,16 @@
 // ============================================================
 
 import { Hono } from 'hono';
-import { hasDatabase, isManagerRole, jsonError, requireAuth } from '../helpers.js';
-import { requirePackage } from '../entitlements.js';
+import { hasDatabase, hasPackageEntitlement, isManagerRole, jsonError, requireAuth } from '../helpers.js';
+import { listOrgPurchases, requirePackage } from '../entitlements.js';
 import { keypassesByCode, usersByEmail } from '../stores.js';
 import { dbListKeypassesByOrganisation, dbListUsersByOrganisation } from '../db/index.js';
 import { getDbPool } from '../db.js';
 import { actionPlans, certificates, workshopProgress } from '../workshop-store.js';
 import { WORKSHOP_SECTION_IDS } from '../workshop-quiz.js';
 import { csvResponse, wantsCsv } from '../csv.js';
+import { listMembers } from '../budget-holder-store.js';
+import { memberStatus } from '../budget-holder-rules.js';
 
 type Progress = { user_id: string; completed_sections: number[]; quiz_scores: Record<string, number>; completed_at: string | null; updated_at: string };
 type Plan = { user_id: string; action_items: unknown; generated_at: string };
@@ -70,6 +72,9 @@ teamTraining.get('/team/training', async (c) => {
     : [...usersByEmail.values()].filter((u) => u.organisationId === auth.organisationId))
     .filter((u) => u.id !== auth.userId);
   const { progress, plans, certs } = await loadTraining(users.map((u) => u.id));
+  // Enterprise: the budget holder programme, next to the training
+  const enterprise = hasPackageEntitlement(await listOrgPurchases(auth.organisationId), 'pkg_full');
+  const budgetHolders = enterprise ? new Map((await listMembers(auth.organisationId)).map((m) => [m.userId, m])) : null;
   const totalSections = WORKSHOP_SECTION_IDS.length;
 
   const people = users.map((u) => {
@@ -96,6 +101,9 @@ teamTraining.get('/team/training', async (c) => {
       },
       certificate: cert ? { number: cert.certificate_number, issuedAt: iso(cert.issued_at) } : null,
       actionPlan: plan ? counts : null,
+      budgetHolder: budgetHolders
+        ? { required: !!budgetHolders.get(u.id)?.required, status: memberStatus(budgetHolders.get(u.id) ?? null) }
+        : null,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -115,6 +123,7 @@ teamTraining.get('/team/training', async (c) => {
       quizAverage: p.training.quizAverage, completedAt: p.training.completedAt,
       certificateNumber: p.certificate?.number ?? '', certificateIssuedAt: p.certificate?.issuedAt ?? '',
       actionsDone: p.actionPlan ? `${p.actionPlan.done}/${p.actionPlan.total}` : '',
+      ...(p.budgetHolder ? { budgetHolderRequired: p.budgetHolder.required, budgetHolderProgramme: p.budgetHolder.status } : {}),
     })));
   }
 

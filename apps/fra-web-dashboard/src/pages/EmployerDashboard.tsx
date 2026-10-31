@@ -7,11 +7,12 @@ import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('EmployerDashboard');
 const LIVE_REFRESH_MS = 30_000;
-const DASHBOARD_TABS = ['overview', 'employees', 'training', 'keypasses'];
+const DASHBOARD_TABS = ['overview', 'employees', 'training', 'budget-holders', 'keypasses'];
 const EMPLOYEE_PAGE_SIZE = 200;
 import { Layout } from '@/components/layout/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TeamTraining } from '@/components/enterprise/TeamTraining';
+import { BudgetHolders } from '@/components/enterprise/BudgetHolders';
 import { KeypassManager } from '@/components/enterprise/KeypassManager';
 import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
 import { checkoutPath, getPackage } from '@/data/packages';
@@ -425,6 +426,7 @@ export default function EmployerDashboard() {
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="employees">Employees</TabsTrigger>
                   <TabsTrigger value="training">Team training</TabsTrigger>
+                  {isEnterprise && <TabsTrigger value="budget-holders">Budget holders</TabsTrigger>}
                   <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
                 </TabsList>
               )}
@@ -442,6 +444,10 @@ export default function EmployerDashboard() {
 
             <TabsContent value="training">
               {hasTeamTraining && <TeamTraining onInvite={() => setTab('keypasses')} />}
+            </TabsContent>
+
+            <TabsContent value="budget-holders">
+              {isEnterprise && <BudgetHolders />}
             </TabsContent>
 
             <TabsContent value="keypasses">

@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Award, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BUDGET_HOLDER_STATUS_LABEL, type BudgetHolderStatus } from '@/lib/budget-holder';
 
 const logger = createLogger('TeamTraining');
 
@@ -27,6 +28,8 @@ export interface TeamMember {
   };
   certificate: { number: string; issuedAt: string } | null;
   actionPlan: { done: number; total: number } | null;
+  /** Enterprise only: the budget holder programme */
+  budgetHolder?: { required: boolean; status: BudgetHolderStatus } | null;
 }
 
 export interface TeamTrainingData {
@@ -71,6 +74,7 @@ export function TeamTraining({ onInvite }: { onInvite?: () => void }) {
   if (!data) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" aria-label="Loading your team" /></div>;
 
   const { summary } = data;
+  const showBudgetHolder = data.people.some((p) => p.budgetHolder);
   return (
     <div className="space-y-6">
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -113,6 +117,7 @@ export function TeamTraining({ onInvite }: { onInvite?: () => void }) {
                     <TableHead>Quiz average</TableHead>
                     <TableHead>Certificate</TableHead>
                     <TableHead>Action plan</TableHead>
+                    {showBudgetHolder && <TableHead>Budget holder</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -147,6 +152,13 @@ export function TeamTraining({ onInvite }: { onInvite?: () => void }) {
                       <TableCell className="tabular-nums">
                         {p.actionPlan && p.actionPlan.total > 0 ? `${p.actionPlan.done} of ${p.actionPlan.total} done` : <span className="text-muted-foreground">Not started</span>}
                       </TableCell>
+                      {showBudgetHolder && (
+                        <TableCell className="text-sm">
+                          {p.budgetHolder && (p.budgetHolder.required || p.budgetHolder.status !== 'not_started')
+                            ? <>{BUDGET_HOLDER_STATUS_LABEL[p.budgetHolder.status]}{p.budgetHolder.required && <p className="text-xs text-muted-foreground">Required</p>}</>
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

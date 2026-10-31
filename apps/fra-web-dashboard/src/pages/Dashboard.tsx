@@ -9,6 +9,7 @@ import { PackageOffer } from '@/components/PackageOffer';
 import { JoinSessionCard } from '@/components/JoinSessionCard';
 import { MyActions } from '@/components/MyActions';
 import { NextActions } from '@/components/NextActions';
+import { BudgetHolderCard } from '@/components/BudgetHolderCard';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -111,6 +112,7 @@ export default function Dashboard() {
 
         {/* Enterprise: the risk actions given to this person, and the confidential reporting link */}
         {entitlements?.packageId === 'pkg_full' && <MyActions onlyIfAssigned={isManager} />}
+        {entitlements?.packageId === 'pkg_full' && <BudgetHolderCard />}
 
         {showOffer ? (
           <PackageOffer />
