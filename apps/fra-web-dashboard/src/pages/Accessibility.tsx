@@ -21,7 +21,6 @@ const sections: LegalSection[] = [
       <p>We want as many people as possible to be able to use this website. For example, you should be able to:</p>
       <ul>
         <li>change colours, contrast levels and fonts using your browser or device settings</li>
-        <li>zoom in up to 400% without the text spilling off the screen</li>
         <li>move through the website using just a keyboard, with a link at the top of each page to skip straight to the content</li>
         <li>use the website with speech recognition software</li>
         <li>listen to the website using a screen reader, such as NVDA, JAWS or VoiceOver</li>
@@ -115,7 +114,7 @@ const sections: LegalSection[] = [
       <p>This statement was prepared on {ACCESSIBILITY.preparedOn}. It was last reviewed on {ACCESSIBILITY.lastUpdated}.</p>
       <p>
         This website was last tested on {ACCESSIBILITY.lastTested}. The test was carried out by our own team, against WCAG 2.2 AA, using
-        automated checks (axe-core) and keyboard-only navigation in a Chromium browser, at desktop and mobile screen sizes.
+        automated checks (axe-core) and keyboard-only navigation in a Chromium browser on a desktop screen.
       </p>
       <p>
         We tested the home page, sign in, joining an organisation, the package pages, privacy notice, terms, certificate checking and
@@ -134,7 +133,6 @@ export default function Accessibility() {
       draftNotice={false}
       intro={<p>
         This accessibility statement applies to FRAUD-RISK.CO.UK, the fraud risk assessment and training service at fraud-risk.co.uk.
-        It does not cover our mobile apps, which will have their own statement.
       </p>}
       sections={sections}
     />

@@ -53,7 +53,7 @@ export function PackageGate({ feature, children }: PackageGateProps) {
                 : 'Your organisation does not have an active package yet.'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
+          <CardContent className="flex gap-3">
             <Button asChild>
               <Link to={required.path}>See the {required.name} package</Link>
             </Button>
