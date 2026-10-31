@@ -28,6 +28,7 @@ import budgetHolderRoutes from './routes/budget-holder.js';
 import webhookEndpointRoutes from './routes/webhook-endpoints.js';
 import organisationRoutes from './routes/organisations.js';
 import speakUpRoutes from './routes/speak-up.js';
+import certificatesRoutes from './routes/certificates.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 
@@ -130,6 +131,7 @@ api.route('/', teamTrainingRoutes);
 api.route('/', budgetHolderRoutes);
 api.route('/', webhookEndpointRoutes);
 api.route('/', organisationRoutes);
+api.route('/', certificatesRoutes);
 api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);

@@ -12,6 +12,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/resources\b/, 'Resources'],
   [/^\/tools\/self-assessment\b/, 'Self-assessment checklist'],
   [/^\/tools\/roadmap\b/, '90-day roadmap'],
+  [/^\/certificate\/verify\b/, 'Verify a certificate'],
   [/^\/certificate\b/, 'Your certificate'],
   [/^\/action-plan\b/, 'Your action plan'],
   [/^\/budget-holder\b/, 'Budget holder programme'],

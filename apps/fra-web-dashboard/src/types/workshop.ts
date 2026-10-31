@@ -86,7 +86,33 @@ export interface Certificate {
   user_id: string;
   session_id: string | null;
   certificate_number: string;
+  /** Quiz score in percent at the time the certificate was issued */
+  quiz_score?: number | null;
   issued_at: string;
+}
+
+/** What the public verification page shows for a certificate number */
+export interface VerifiedCertificate {
+  valid: true;
+  kind: 'training' | 'assessment';
+  certificateNumber: string;
+  issuedAt: string;
+  holderName: string;
+  organisationName: string;
+  title: string;
+  quizScore: number | null;
+  areasAssessed: number | null;
+  verifyUrl: string;
+}
+
+/** The certificate of a submitted risk assessment */
+export interface AssessmentCertificate {
+  kind: 'assessment';
+  certificateNumber: string;
+  issuedAt: string;
+  assessmentId: string;
+  title: string;
+  verifyUrl: string;
 }
 
 export interface WorkshopFeedback {

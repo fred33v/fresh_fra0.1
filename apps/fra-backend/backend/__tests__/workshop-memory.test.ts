@@ -32,14 +32,28 @@ describe('Workshop without a database', () => {
     expect(((await early.json()) as any).error.code).toBe('NOT_COMPLETED');
     expect((await send('POST', '/workshop/certificates', accessToken)).status).toBe(400);
 
-    await send('PATCH', `/workshop/progress/${started.id}`, accessToken, {
+    // Every question answered, but section 2 is still wrong: 3 of 4 is 75%, under the 80% pass mark
+    const failed = await send('PATCH', `/workshop/progress/${started.id}`, accessToken, {
       completedSections: [0, 1, 2, 3, 4, 5, 6], quizAnswers: { 3: 1, 4: 2 }, completedAt: new Date().toISOString(),
     });
+    expect(failed.status).toBe(400);
+    expect(await failed.json()).toMatchObject({
+      error: { code: 'QUIZ_NOT_PASSED' }, data: { percent: 75, passMark: 80, wrongSections: [2] },
+    });
+    expect((await json(await get('/workshop/progress', accessToken))).completed_at).toBeNull();
+    expect((await send('POST', '/workshop/certificates', accessToken)).status).toBe(400);
+
+    // A refused request saves nothing; answering the wrong question again then passes
+    const retried = await send('PATCH', `/workshop/progress/${started.id}`, accessToken, {
+      completedSections: [0, 1, 2, 3, 4, 5, 6], quizAnswers: { 2: 2, 3: 1, 4: 2 }, completedAt: new Date().toISOString(),
+    });
+    expect(retried.status).toBe(200);
 
     const cert = await send('POST', '/workshop/certificates', accessToken);
     expect(cert.status).toBe(201);
     const issued = (await cert.json() as any).data;
-    expect(issued.certificate_number).toMatch(/^FRA-[0-9A-Z]+-[0-9A-F]{6}$/);
+    expect(issued.certificate_number).toMatch(/^FRA-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/);
+    expect(issued.quiz_score).toBe(100);
     // Asking again returns the same certificate
     expect((await json(await send('POST', '/workshop/certificates', accessToken))).id).toBe(issued.id);
     expect((await json(await get('/workshop/certificates', accessToken))).id).toBe(issued.id);

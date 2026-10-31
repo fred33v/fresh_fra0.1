@@ -106,9 +106,16 @@ export default function QuizScreen() {
         </View>
       )}
 
-      {/* Continue button */}
+      {/* Continue button; a wrong answer can be tried again (the certificate needs 80% right) */}
       {isRevealed && (
         <View style={styles.continueSection}>
+          {!isCorrect && (
+            <ActionButton
+              label="Try again"
+              variant="outline"
+              onPress={() => { setSelectedAnswer(null); setIsRevealed(false); }}
+            />
+          )}
           <ActionButton
             label="Continue"
             onPress={handleContinue}
@@ -176,6 +183,7 @@ const styles = StyleSheet.create({
   },
   continueSection: {
     marginTop: spacing.sm,
+    gap: spacing.sm,
   },
   errorContainer: {
     flex: 1,

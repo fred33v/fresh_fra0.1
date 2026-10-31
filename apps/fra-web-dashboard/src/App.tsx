@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Join = lazy(() => import("./pages/Join"));
+const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
 const ResourceChecklist = lazy(() => import("./pages/ResourceChecklist"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Workshop = lazy(() => import("./pages/Workshop"));
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/resources" element={<ProtectedRoute><Resources /></ProtectedRoute>} />
                 <Route path="/tools/self-assessment" element={<ProtectedRoute><ResourceChecklist kind="checklist" /></ProtectedRoute>} />
                 <Route path="/tools/roadmap" element={<ProtectedRoute><ResourceChecklist kind="roadmap" /></ProtectedRoute>} />
+                <Route path="/certificate/verify" element={<CertificateVerify />} />
                 <Route path="/certificate" element={<ProtectedRoute><PackageGate feature="certificates"><Certificate /></PackageGate></ProtectedRoute>} />
                 <Route path="/action-plan" element={<ProtectedRoute><PackageGate feature="training"><ActionPlan /></PackageGate></ProtectedRoute>} />
                 <Route path="/budget-holder" element={<ProtectedRoute><PackageGate feature="compliance"><BudgetHolder /></PackageGate></ProtectedRoute>} />

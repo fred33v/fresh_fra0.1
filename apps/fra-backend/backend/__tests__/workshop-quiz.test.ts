@@ -4,7 +4,7 @@ import { describe, expect, it } from '@jest/globals';
 import { app, authHeaders, createPaidUser } from './helpers';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { QUIZ_ANSWER_KEY, WORKSHOP_SECTION_IDS, mergeQuizScores, missingForCompletion } from '../src/workshop-quiz';
+import { QUIZ_ANSWER_KEY, WORKSHOP_SECTION_IDS, mergeQuizScores, missingForCompletion, quizResult } from '../src/workshop-quiz';
 
 // The workshop content lives in packages/shared, which the backend does not depend on,
 // so it is read as text here rather than imported
@@ -32,6 +32,14 @@ describe('workshop completion rules', () => {
   it('scores answers on the server and rejects sections without a quiz', () => {
     expect(mergeQuizScores({ 1: 0 }, { 1: 1, 2: 0 })).toEqual({ scores: { 1: 100, 2: 0 }, invalid: [] });
     expect(mergeQuizScores({}, { 0: 1 }).invalid).toEqual(['0']);
+  });
+
+  it('needs 80% of the quiz right, which with four questions means all four', () => {
+    expect(quizResult({ 1: 100, 2: 100, 3: 100, 4: 100 })).toEqual({ percent: 100, passed: true, wrong: [] });
+    expect(quizResult({ 1: 100, 2: 0, 3: 100, 4: 100 })).toEqual({ percent: 75, passed: false, wrong: [2] });
+    // An unanswered question counts as wrong
+    expect(quizResult({ 1: 100 })).toEqual({ percent: 25, passed: false, wrong: [2, 3, 4] });
+    expect(quizResult(null).passed).toBe(false);
   });
 
   it('lists what is still missing', () => {
