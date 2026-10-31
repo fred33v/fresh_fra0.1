@@ -14,3 +14,9 @@ export function scoreRisk(impact: number, likelihood: number, control: ControlEf
   const priority: Priority = residualScore >= 15 ? 'HIGH' : residualScore >= 8 ? 'MEDIUM' : 'LOW';
   return { inherentScore, residualScore, priority };
 }
+
+export const RISK_AREA_LABELS: Record<string, string> = {
+  procurement: 'Procurement', cash_banking: 'Cash and banking', payroll_hr: 'Payroll and HR', revenue: 'Revenue',
+  it_systems: 'IT systems', expenses: 'Expenses', assets: 'Assets', governance: 'Governance', other: 'Other',
+};
+export const riskAreaLabel = (area: string) => RISK_AREA_LABELS[area] ?? area.replace(/_/g, ' ');

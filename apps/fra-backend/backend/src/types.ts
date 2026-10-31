@@ -97,6 +97,11 @@ export type RiskRegisterEntry = {
   actionPlan?: string;
   dueDate?: string;
   status: RiskStatus;
+  /** The owner's latest progress note, written from their own dashboard */
+  ownerNote?: string;
+  ownerUpdatedAt?: string;
+  /** The owner marked the action done; the employer has not confirmed it yet */
+  reviewPending?: boolean;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;

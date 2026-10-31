@@ -7,6 +7,7 @@ import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { HealthCheckCard } from '@/components/HealthCheckCard';
 import { PackageOffer } from '@/components/PackageOffer';
 import { JoinSessionCard } from '@/components/JoinSessionCard';
+import { MyActions } from '@/components/MyActions';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -106,6 +107,9 @@ export default function Dashboard() {
         {/* Quarterly reassessment is an organisation task, for the people who run the account.
             The first assessment is prompted by the risk assessment card below, so the banner is for later ones. */}
         {(user.role === 'employer' || user.role === 'admin') && hasFinishedAssessment && <ReassessmentBanner />}
+
+        {/* Enterprise: the risk actions given to this person, and the confidential reporting link */}
+        {entitlements?.packageId === 'pkg_full' && <MyActions onlyIfAssigned={isManager} />}
 
         {showOffer ? (
           <PackageOffer />
