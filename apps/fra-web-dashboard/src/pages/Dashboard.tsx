@@ -8,6 +8,7 @@ import { HealthCheckCard } from '@/components/HealthCheckCard';
 import { PackageOffer } from '@/components/PackageOffer';
 import { JoinSessionCard } from '@/components/JoinSessionCard';
 import { MyActions } from '@/components/MyActions';
+import { NextActions } from '@/components/NextActions';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -307,6 +308,13 @@ export default function Dashboard() {
             )}
           </motion.div>
         </div>
+        )}
+
+        {/* The person's own action plan, from the training */}
+        {hasTraining && !trainingLocked && (
+          <div className="mt-6">
+            <NextActions showEmployerNote={!isManager} />
+          </div>
         )}
 
         {/* Quick Actions */}

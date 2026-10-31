@@ -184,6 +184,9 @@ export type Keypass = {
   expiresAt: string;
   usedAt?: string;
   usedByUserId?: string;
+  /** Set when the key-pass was emailed to one person: it then only works for that address */
+  invitedEmail?: string;
+  invitedAt?: string;
 };
 
 export type RateLimitConfig = {
@@ -225,6 +228,8 @@ export type DbKeypassRow = {
   expires_at: string;
   used_at: string | null;
   used_by_user_id: string | null;
+  invited_email?: string | null;
+  invited_at?: string | null;
 };
 
 export type DbEmployeeDashboardRow = {
@@ -461,6 +466,11 @@ export const keypassBulkSchema = z.object({
 });
 
 // Employees choose a password when they join so they can sign back in later; a key-pass works once
+export const keypassInviteSchema = z.object({
+  emails: z.array(z.string().trim().toLowerCase().email()).min(1).max(100),
+  expiresInDays: z.number().int().min(1).max(365).default(30),
+});
+
 export const keypassUseSchema = z.object({
   code: keypassCodeSchema,
   email: z.string().email(),

@@ -7,10 +7,11 @@ import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 const logger = createLogger('EmployerDashboard');
 const LIVE_REFRESH_MS = 30_000;
-const DASHBOARD_TABS = ['overview', 'employees', 'keypasses'];
+const DASHBOARD_TABS = ['overview', 'employees', 'training', 'keypasses'];
 const EMPLOYEE_PAGE_SIZE = 200;
 import { Layout } from '@/components/layout/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TeamTraining } from '@/components/enterprise/TeamTraining';
 import { KeypassManager } from '@/components/enterprise/KeypassManager';
 import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
 import { checkoutPath, getPackage } from '@/data/packages';
@@ -135,6 +136,11 @@ export default function EmployerDashboard() {
   const { entitlements } = useEntitlements();
 
   const isEmployerOrAdmin = user?.role === 'employer' || user?.role === 'admin';
+  // Professional and up: the team's training. Enterprise: also compliance, the register and integrations.
+  const hasTeamTraining = !!entitlements?.features?.training;
+  const isEnterprise = !!entitlements?.features?.compliance;
+  // Without Enterprise analytics the page opens on the team's training, or the key-passes before Professional
+  const lockedTab = hasTeamTraining ? (tab === 'keypasses' ? 'keypasses' : 'training') : 'keypasses';
 
   // silent = background refresh: no spinner, and a failed poll keeps the last good data on screen
   const fetchData = async (silent = false) => {
@@ -311,6 +317,7 @@ export default function EmployerDashboard() {
             <p className="text-muted-foreground">Fraud risk, compliance and staff coverage across your organisation</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isEnterprise && (<>
             <Button variant="outline" size="sm" onClick={() => navigate('/compliance')}>
               <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
               Compliance
@@ -322,6 +329,7 @@ export default function EmployerDashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate('/integrations')}>
               Integrations
             </Button>
+            </>)}
             <Button variant="outline" size="sm" onClick={() => fetchData()} disabled={isLoading}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
@@ -362,7 +370,7 @@ export default function EmployerDashboard() {
             </Card>
           </div>
         ) : !error && (
-          <Tabs value={analyticsLocked ? 'keypasses' : tab} onValueChange={setTab}>
+          <Tabs value={analyticsLocked ? lockedTab : tab} onValueChange={setTab}>
             <div className="space-y-4 mb-6">
               <SubscriptionCard entitlements={entitlements} />
               {tab !== 'overview' && highRiskEmployees.length > 0 && (
@@ -392,7 +400,9 @@ export default function EmployerDashboard() {
                     {entitlements?.packageName ? (
                       <>
                         <p className="text-sm text-muted-foreground">
-                          Employee analytics and the live overview are part of the Enterprise package. You can issue key-passes below.
+                          {hasTeamTraining
+                            ? "Employee risk analytics, the risk register and the live overview are part of Enterprise. Your team's training and key-passes are below."
+                            : 'Employee analytics and the live overview are part of the Enterprise package. You can issue key-passes below.'}
                         </p>
                         <Button size="sm" onClick={() => navigate(checkoutPath(ENTERPRISE))}>
                           Upgrade to Enterprise
@@ -414,6 +424,13 @@ export default function EmployerDashboard() {
                 <TabsList>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="employees">Employees</TabsTrigger>
+                  <TabsTrigger value="training">Team training</TabsTrigger>
+                  <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
+                </TabsList>
+              )}
+              {analyticsLocked && hasTeamTraining && (
+                <TabsList>
+                  <TabsTrigger value="training">Team training</TabsTrigger>
                   <TabsTrigger value="keypasses">Key-passes</TabsTrigger>
                 </TabsList>
               )}
@@ -421,6 +438,10 @@ export default function EmployerDashboard() {
 
             <TabsContent value="overview">
               <EnterpriseOverview employees={employees} refreshSignal={refreshSignal} onShowEmployees={showEmployees} />
+            </TabsContent>
+
+            <TabsContent value="training">
+              {hasTeamTraining && <TeamTraining onInvite={() => setTab('keypasses')} />}
             </TabsContent>
 
             <TabsContent value="keypasses">

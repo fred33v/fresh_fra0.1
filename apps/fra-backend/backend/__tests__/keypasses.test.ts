@@ -4,6 +4,7 @@ import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest 
 import { app, createAuthenticatedUser, authHeaders, seedPurchase } from './helpers';
 import { purchasesById } from '../src/stores';
 import { RATE_LIMITS } from '../src/types';
+import { setEmailTransport, type Email } from '../src/email';
 
 async function signup() {
   const { accessToken, email, organisationId, userId } = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
@@ -355,30 +356,55 @@ describe('Keypasses endpoints', () => {
   // ── Employees sign back in after joining ───────────────────────
 
   describe('employee sign-in after redeeming', () => {
-    it('lets the employee sign in with the password they chose', async () => {
-      const { accessToken } = await signup();
-      const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
-        method: 'POST',
-        headers: authHeaders(accessToken),
-        body: JSON.stringify({ quantity: 1 }),
-      });
-      const [code] = ((await allocRes.json()) as any).data.codes;
-      const email = `returning-${Date.now()}@example.com`;
+    it('asks an employee who joined with a shared code to confirm their email before signing in again', async () => {
+      const sent: Email[] = [];
+      setEmailTransport({ sendMail: async (m: Email) => { sent.push(m); } });
+      try {
+        const { accessToken } = await signup();
+        const allocRes = await app.request('http://localhost/api/v1/keypasses/allocate', {
+          method: 'POST',
+          headers: authHeaders(accessToken),
+          body: JSON.stringify({ quantity: 1 }),
+        });
+        const [code] = ((await allocRes.json()) as any).data.codes;
+        const email = `returning-${Date.now()}@example.com`;
 
-      const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, email, password: 'Employee-Pass-2026' }),
-      });
-      expect(useRes.status).toBe(200);
+        const useRes = await app.request('http://localhost/api/v1/keypasses/use', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, email, password: 'Employee-Pass-2026' }),
+        });
+        expect(useRes.status).toBe(200);
+        const used = ((await useRes.json()) as any).data;
+        // They can start straight away
+        expect(used.accessToken).toBeTruthy();
+        expect(used.emailConfirmationRequired).toBe(true);
 
-      const loginRes = await app.request('http://localhost/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: 'Employee-Pass-2026' }),
-      });
-      expect(loginRes.status).toBe(200);
-      expect(((await loginRes.json()) as any).data.user.role).toBe('employee');
+        const login = () => app.request('http://localhost/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'Employee-Pass-2026' }),
+        });
+        const blocked = await login();
+        expect(blocked.status).toBe(403);
+        expect(((await blocked.json()) as any).error.code).toBe('EMAIL_NOT_VERIFIED');
+
+        await new Promise((r) => setTimeout(r, 20));
+        const link = sent.filter((m) => m.to === email).map((m) => /mode=verify&token=([0-9a-f-]+)/.exec(m.text)?.[1]).find(Boolean);
+        expect(link).toBeTruthy();
+        const verify = await app.request('http://localhost/api/v1/auth/verify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: link }),
+        });
+        expect(verify.status).toBe(200);
+
+        const loginRes = await login();
+        expect(loginRes.status).toBe(200);
+        expect(((await loginRes.json()) as any).data.user.role).toBe('employee');
+      } finally {
+        setEmailTransport(undefined);
+      }
     });
 
     it('requires an email and a strong password', async () => {
@@ -544,6 +570,97 @@ describe('Keypasses endpoints', () => {
 
     it('allows about 20 redemption attempts a minute so shared offices are not locked out', () => {
       expect(RATE_LIMITS.KEYPASS_MAX).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  // ── Invitations by email ───────────────────────────────────────
+
+  describe('POST /keypasses/invite', () => {
+    const sent: Email[] = [];
+    beforeEach(() => { sent.length = 0; setEmailTransport({ sendMail: async (m: Email) => { sent.push(m); } }); });
+    afterEach(() => setEmailTransport(undefined));
+    const invite = (token: string, body: unknown) => app.request('http://localhost/api/v1/keypasses/invite', {
+      method: 'POST', headers: authHeaders(token), body: JSON.stringify(body),
+    });
+    const use = (body: unknown) => app.request('http://localhost/api/v1/keypasses/use', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const flush = () => new Promise((r) => setTimeout(r, 20));
+
+    it('emails each person their own join link, and skips repeats and existing accounts', async () => {
+      const { accessToken, email: employerEmail } = await signup();
+      const a = `alex-${crypto.randomUUID()}@example.com`;
+      const b = `bea-${crypto.randomUUID()}@example.com`;
+      const res = await invite(accessToken, { emails: [a, ` ${b.toUpperCase()} `, a, employerEmail] });
+      expect(res.status).toBe(200);
+      const data = ((await res.json()) as any).data;
+      expect(data.invited.map((i: any) => i.email)).toEqual([a, b]);
+      expect(data.skipped).toEqual([{ email: a, reason: 'duplicate' }, { email: employerEmail.toLowerCase(), reason: 'account_exists' }]);
+
+      await flush();
+      const mail = sent.find((m) => m.to === a)!;
+      expect(mail.text).toContain(`/join?code=${data.invited[0].code}&email=${encodeURIComponent(a)}`);
+      expect(mail.subject).toContain('KP Org');
+
+      // A second invitation to someone who has not joined yet is not a new code
+      const again = ((await (await invite(accessToken, { emails: [a] })).json()) as any).data;
+      expect(again.invited).toEqual([]);
+      expect(again.skipped).toEqual([{ email: a, reason: 'already_invited' }]);
+    });
+
+    it('only lets the invited address join, and that address counts as confirmed', async () => {
+      const { accessToken } = await signup();
+      const a = `alex-${crypto.randomUUID()}@example.com`;
+      const { invited } = ((await (await invite(accessToken, { emails: [a] })).json()) as any).data;
+      const code = invited[0].code;
+
+      const validate = ((await (await app.request('http://localhost/api/v1/keypasses/validate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+      })).json()) as any).data;
+      expect(validate.forInvitedEmail).toBe(true);
+      expect(JSON.stringify(validate)).not.toContain(a);
+
+      const wrong = await use({ code, email: `someone-else-${crypto.randomUUID()}@example.com`, password: 'Employee-Pass-2026' });
+      expect(wrong.status).toBe(403);
+      expect(((await wrong.json()) as any).error.code).toBe('EMAIL_MISMATCH');
+
+      const ok = await use({ code, email: a.toUpperCase(), password: 'Employee-Pass-2026' });
+      expect(ok.status).toBe(200);
+      expect(((await ok.json()) as any).data.emailConfirmationRequired).toBe(false);
+
+      const login = await app.request('http://localhost/api/v1/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: a, password: 'Employee-Pass-2026' }),
+      });
+      expect(login.status).toBe(200);
+    });
+
+    it('resends an invitation that has not been used, but not a used one', async () => {
+      const { accessToken } = await signup();
+      const a = `alex-${crypto.randomUUID()}@example.com`;
+      const { invited } = ((await (await invite(accessToken, { emails: [a] })).json()) as any).data;
+      const code = invited[0].code;
+      const resend = () => app.request(`http://localhost/api/v1/keypasses/${code}/resend`, { method: 'POST', headers: authHeaders(accessToken) });
+
+      expect((await resend()).status).toBe(200);
+      await flush();
+      expect(sent.filter((m) => m.to === a)).toHaveLength(2);
+
+      await use({ code, email: a, password: 'Employee-Pass-2026' });
+      expect((await resend()).status).toBe(409);
+    });
+
+    it('is for employers, counts against the allowance and checks the addresses', async () => {
+      const { accessToken } = await signup();
+      expect((await invite(accessToken, { emails: ['not-an-email'] })).status).toBe(400);
+      expect((await invite(accessToken, { emails: [] })).status).toBe(400);
+
+      const other = await signup();
+      const { invited } = ((await (await invite(other.accessToken, { emails: [`x-${crypto.randomUUID()}@example.com`] })).json()) as any).data;
+      // Another organisation cannot resend it
+      expect((await app.request(`http://localhost/api/v1/keypasses/${invited[0].code}/resend`, { method: 'POST', headers: authHeaders(accessToken) })).status).toBe(404);
+
+      const joined = ((await (await use({ code: invited[0].code, email: invited[0].email, password: 'Employee-Pass-2026' })).json()) as any).data;
+      expect((await invite(joined.accessToken, { emails: [`y-${crypto.randomUUID()}@example.com`] })).status).toBe(403);
     });
   });
 });

@@ -118,7 +118,7 @@ async function clearFailedLogins(email: string, ip: string): Promise<void> {
 // ── Email confirmation ─────────────────────────────────────────
 
 /** Issues a confirmation link and emails it. Returns the token (shown to developers outside production). */
-async function sendVerificationLink(user: User): Promise<string | undefined> {
+export async function sendVerificationLink(user: User): Promise<string | undefined> {
   const token = crypto.randomUUID();
   try {
     await setEmailVerificationToken(token, user.id);
