@@ -14,6 +14,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/tools\/roadmap\b/, '90-day roadmap'],
   [/^\/certificate\b/, 'Your certificate'],
   [/^\/action-plan\b/, 'Your action plan'],
+  [/^\/budget-holder\b/, 'Budget holder programme'],
   [/^\/package\/starter\b/, 'Starter package'],
   [/^\/package\/professional\b/, 'Professional package'],
   [/^\/package\/enterprise\b/, 'Enterprise package'],

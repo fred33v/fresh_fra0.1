@@ -97,6 +97,11 @@ export type RiskRegisterEntry = {
   actionPlan?: string;
   dueDate?: string;
   status: RiskStatus;
+  /** The owner's latest progress note, written from their own dashboard */
+  ownerNote?: string;
+  ownerUpdatedAt?: string;
+  /** The owner marked the action done; the employer has not confirmed it yet */
+  reviewPending?: boolean;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -179,6 +184,9 @@ export type Keypass = {
   expiresAt: string;
   usedAt?: string;
   usedByUserId?: string;
+  /** Set when the key-pass was emailed to one person: it then only works for that address */
+  invitedEmail?: string;
+  invitedAt?: string;
 };
 
 export type RateLimitConfig = {
@@ -220,6 +228,8 @@ export type DbKeypassRow = {
   expires_at: string;
   used_at: string | null;
   used_by_user_id: string | null;
+  invited_email?: string | null;
+  invited_at?: string | null;
 };
 
 export type DbEmployeeDashboardRow = {
@@ -353,7 +363,7 @@ export const RISK_THRESHOLDS = {
 export const FALLBACK_PACKAGES: Package[] = [
   { id: 'pkg_basic', name: 'Starter', description: 'Fraud risk assessment with downloadable PDF report', priceCents: 79500, currency: 'gbp', keypassAllowance: 1, features: ['Single fraud risk assessment across 13 key areas', 'Downloadable PDF health check report', 'ECCTA 2023 compliance snapshot', '1 key-pass included'], isActive: true, sortOrder: 1 },
   { id: 'pkg_training', name: 'Professional', description: 'FRA health check + staff awareness training', priceCents: 179900, currency: 'gbp', keypassAllowance: 50, features: ['Everything in Starter', '50 employee key-passes', 'Staff awareness training with certificates', 'Quarterly reassessment', 'Email support'], isActive: true, sortOrder: 2 },
-  { id: 'pkg_full', name: 'Enterprise', description: 'Complete fraud risk management suite with live dashboard', priceCents: 499500, currency: 'gbp', keypassAllowance: -1, features: ['Everything in Professional', 'Unlimited employee key-passes', 'Real-time monitoring dashboard', 'Risk register and action tracking', 'API access', 'Priority support', 'Compliance reports'], isActive: true, sortOrder: 3 },
+  { id: 'pkg_full', name: 'Enterprise', description: 'Complete fraud risk management suite with live dashboard', priceCents: 499500, currency: 'gbp', keypassAllowance: -1, features: ['Everything in Professional', 'Unlimited employee key-passes', 'Real-time monitoring dashboard', 'Risk register and action tracking', 'Budget holder programme with signed commitments and conflict of interest declarations', 'API access', 'Priority support', 'Compliance reports'], isActive: true, sortOrder: 3 },
 ];
 
 // ── Pagination ─────────────────────────────────────────────────
@@ -456,6 +466,11 @@ export const keypassBulkSchema = z.object({
 });
 
 // Employees choose a password when they join so they can sign back in later; a key-pass works once
+export const keypassInviteSchema = z.object({
+  emails: z.array(z.string().trim().toLowerCase().email()).min(1).max(100),
+  expiresInDays: z.number().int().min(1).max(365).default(30),
+});
+
 export const keypassUseSchema = z.object({
   code: keypassCodeSchema,
   email: z.string().email(),

@@ -140,3 +140,21 @@ export function passwordChangedEmail(to: string, name: string): Email {
     html: layout('Your password was changed', lines, { label: 'Sign in', url: `${webAppUrl()}/auth` }),
   };
 }
+
+/** An employer's invitation: the employee's own key-pass, which only works with this address. */
+export function keypassInviteEmail(to: string, organisationName: string, code: string, expiresAt: string): Email {
+  const url = `${webAppUrl()}/join?code=${encodeURIComponent(code)}&email=${encodeURIComponent(to)}`;
+  const until = new Date(expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const lines = [
+    'Hello,',
+    `${organisationName} has invited you to its fraud risk awareness training on FRAUD-RISK.CO.UK. Use the link below to create your account. It works once, only with this email address, until ${until}.`,
+    `Your key-pass is ${code}. You will not need it if you use the link.`,
+    `If you were not expecting this, you can ignore this email or tell ${organisationName}.`,
+  ];
+  return {
+    to,
+    subject: `${organisationName} invites you to fraud awareness training`,
+    text: `${lines[0]}\n\n${lines[1]}\n\n${url}\n\n${lines[2]}\n\n${lines[3]}\n`,
+    html: layout('Your invitation to the training', lines, { label: 'Create my account', url }),
+  };
+}

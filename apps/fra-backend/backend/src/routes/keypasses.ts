@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import { getActiveWindows, getEntitlementWindows, hasDatabase, jsonError, requireAuth } from '../helpers.js';
-import { keypassGenerateSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
+import { keypassGenerateSchema, keypassInviteSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
 import type { User, Keypass } from '../types.js';
 import { usersByEmail, organisationsById, keypassesByCode } from '../stores.js';
 import { getClientIp, rateLimit } from '../middleware.js';
@@ -10,9 +10,11 @@ import {
   dbGetUserByEmail, dbInsertUser,
   dbInsertKeypassBatch, dbGetKeypassByCode, dbUpdateKeypassStatus, dbClaimKeypass, dbListKeypassesByOrganisation, dbGetKeypassStatsByOrganisation,
   dbGetOrganisationById,
-  dbUpsertRefreshToken,
+  dbUpsertRefreshToken, dbTouchKeypassInvite,
   auditLog,
 } from '../db/index.js';
+import { emailConfigured, keypassInviteEmail, sendEmailInBackground } from '../email.js';
+import { sendVerificationLink } from './auth.js';
 import type { KeypassStatus } from '../types.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { getActiveKeypassAllowance, listOrgPurchases } from '../entitlements.js';
@@ -76,7 +78,7 @@ async function packageCoversAnotherJoin(orgId: string): Promise<boolean> {
 // ── Keypass creation helper ──────────────────────────────────────
 
 async function createKeypasses(
-  orgId: string, quantity: number, expiresInDays: number, packageEnd: Date | null,
+  orgId: string, quantity: number, expiresInDays: number, packageEnd: Date | null, invitedEmails?: string[],
 ): Promise<{ codes: string[]; expiresAt: string }> {
   const now = Date.now();
   // A code never outlives the package that paid for it
@@ -94,7 +96,11 @@ async function createKeypasses(
       while (keypassesByCode.has(code)) code = generateKeypassCode();
     }
 
-    keypasses.push({ code, organisationId: orgId, status: 'available', createdAt, expiresAt });
+    const invitedEmail = invitedEmails?.[i];
+    keypasses.push({
+      code, organisationId: orgId, status: 'available', createdAt, expiresAt,
+      ...(invitedEmail ? { invitedEmail, invitedAt: createdAt } : {}),
+    });
   }
 
   if (hasDatabase()) {
@@ -151,6 +157,99 @@ keypasses.post('/keypasses/generate', (c) => issueKeypasses(c, 'generate'));
 // Same behaviour under the name the mobile app calls
 keypasses.post('/keypasses/allocate', (c) => issueKeypasses(c, 'allocate'));
 
+async function organisationName(orgId: string): Promise<string> {
+  const org = hasDatabase() ? await dbGetOrganisationById(orgId) : organisationsById.get(orgId);
+  return org?.name ?? 'Your organisation';
+}
+
+// The employer types their staff's addresses: each person gets their own key-pass by email,
+// usable only with that address, so the account that joins is known to be theirs.
+keypasses.post('/keypasses/invite', async (c) => {
+  const limited = await rateLimit('keypass:invite', { windowMs: RATE_LIMITS.KEYPASS_GENERATE_WINDOW_MS, max: RATE_LIMITS.KEYPASS_GENERATE_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  if (auth.role !== 'employer' && auth.role !== 'admin') {
+    return jsonError(c, 403, 'FORBIDDEN', 'Requires employer or admin role');
+  }
+
+  const parsed = keypassInviteSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Enter valid email addresses, at most 100 at a time');
+
+  const skipped: Array<{ email: string; reason: 'account_exists' | 'already_invited' | 'duplicate' }> = [];
+  const existingCodes = hasDatabase()
+    ? await dbListKeypassesByOrganisation(auth.organisationId)
+    : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === auth.organisationId);
+  const pendingInvites = new Set(existingCodes.filter((k) => k.status === 'available' && k.invitedEmail).map((k) => k.invitedEmail));
+  const seen = new Set<string>();
+  const toInvite: string[] = [];
+  for (const email of parsed.data.emails) {
+    if (seen.has(email)) { skipped.push({ email, reason: 'duplicate' }); continue; }
+    seen.add(email);
+    if (pendingInvites.has(email)) { skipped.push({ email, reason: 'already_invited' }); continue; }
+    const user = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
+    if (user) { skipped.push({ email, reason: 'account_exists' }); continue; }
+    toInvite.push(email);
+  }
+
+  if (toInvite.length === 0) return c.json({ success: true, data: { invited: [], skipped, emailSent: emailConfigured() } });
+
+  const quota = await getOrgKeypassQuota(auth.organisationId);
+  if (quota.allowance === 0) return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
+  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
+  if (toInvite.length > remaining) {
+    return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${toInvite.length}`);
+  }
+
+  const packageEnd = (await getPackageEnd(auth.organisationId)) ?? null;
+  const { codes, expiresAt } = await createKeypasses(auth.organisationId, toInvite.length, parsed.data.expiresInDays, packageEnd, toInvite);
+  const orgName = await organisationName(auth.organisationId);
+  const invited = toInvite.map((email, i) => ({ email, code: codes[i], expiresAt }));
+  for (const inv of invited) {
+    sendEmailInBackground(keypassInviteEmail(inv.email, orgName, inv.code, expiresAt), { organisationId: auth.organisationId, kind: 'keypass_invite' });
+  }
+
+  await auditLog({
+    eventType: 'keypass.invite', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'keypass',
+    details: { invited: invited.length, skipped: skipped.length }, ipAddress: getClientIp(c),
+    userAgent: c.req.header('user-agent'),
+  });
+
+  return c.json({ success: true, data: { invited, skipped, emailSent: emailConfigured() } });
+});
+
+keypasses.post('/keypasses/:code/resend', async (c) => {
+  const limited = await rateLimit('keypass:invite', { windowMs: RATE_LIMITS.KEYPASS_GENERATE_WINDOW_MS, max: RATE_LIMITS.KEYPASS_GENERATE_MAX })(c);
+  if (limited instanceof Response) return limited;
+
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  if (auth.role !== 'employer' && auth.role !== 'admin') {
+    return jsonError(c, 403, 'FORBIDDEN', 'Requires employer or admin role');
+  }
+
+  const code = c.req.param('code').toUpperCase();
+  const kp = hasDatabase() ? await dbGetKeypassByCode(code) : keypassesByCode.get(code);
+  if (!kp || kp.organisationId !== auth.organisationId || !kp.invitedEmail) return jsonError(c, 404, 'NOT_FOUND', 'Invitation not found');
+  if (kp.status !== 'available' || new Date(kp.expiresAt).getTime() < Date.now()) {
+    return jsonError(c, 409, 'NOT_AVAILABLE', 'This key-pass can no longer be used. Send a new invitation.');
+  }
+
+  const now = new Date().toISOString();
+  if (hasDatabase()) await dbTouchKeypassInvite(code, now);
+  else kp.invitedAt = now;
+  sendEmailInBackground(keypassInviteEmail(kp.invitedEmail, await organisationName(auth.organisationId), code, kp.expiresAt), { organisationId: auth.organisationId, kind: 'keypass_invite' });
+
+  await auditLog({
+    eventType: 'keypass.invite_resent', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'keypass', resourceId: code, ipAddress: getClientIp(c),
+    userAgent: c.req.header('user-agent'),
+  });
+  return c.json({ success: true, data: { code, invitedEmail: kp.invitedEmail, invitedAt: now, emailSent: emailConfigured() } });
+});
+
 keypasses.post('/keypasses/use', async (c) => {
   const limited = await rateLimit('keypass:use', { windowMs: RATE_LIMITS.KEYPASS_WINDOW_MS, max: RATE_LIMITS.KEYPASS_MAX })(c);
   if (limited instanceof Response) return limited;
@@ -197,6 +296,17 @@ keypasses.post('/keypasses/use', async (c) => {
   const email = parsed.data.email.toLowerCase();
   const name = parsed.data.name ?? email.split('@')[0];
 
+  // An emailed key-pass belongs to the person it was sent to
+  if (kp.invitedEmail && kp.invitedEmail !== email) {
+    await auditLog({
+      eventType: 'keypass.use_rejected', actorEmail: email,
+      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+      details: { reason: 'email_mismatch' }, ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    });
+    return jsonError(c, 403, 'EMAIL_MISMATCH', 'This key-pass was sent to a different email address. Use the address the invitation was sent to.');
+  }
+
   // A keypass only ever creates a new employee account. Issuing tokens for an existing
   // account here would let anyone holding a keypass sign in as any user by email.
   const existing = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
@@ -230,6 +340,9 @@ keypasses.post('/keypasses/use', async (c) => {
     role: 'employee',
     organisationId: kp.organisationId,
     createdAt: now,
+    // The invitation link reached this inbox, which proves the address. A key-pass passed on
+    // any other way proves nothing about it, so the address is confirmed like any sign-up.
+    emailVerifiedAt: kp.invitedEmail ? now : null,
   };
   if (hasDatabase()) {
     await dbInsertUser(user);
@@ -248,6 +361,9 @@ keypasses.post('/keypasses/use', async (c) => {
   if (hasDatabase()) {
     await dbUpsertRefreshToken(refreshToken, user.id);
   }
+  // They can start now; they confirm the address before they next sign in
+  const emailConfirmationRequired = !kp.invitedEmail;
+  if (emailConfirmationRequired) void sendVerificationLink(user);
 
   let orgName = 'Organisation';
   if (hasDatabase()) {
@@ -276,6 +392,7 @@ keypasses.post('/keypasses/use', async (c) => {
       accessToken,
       refreshToken,
       keypass: { code: kp.code, usedAt: now },
+      emailConfirmationRequired,
     },
   });
 });
@@ -416,6 +533,8 @@ keypasses.post('/keypasses/validate', async (c) => {
     data: {
       valid: true,
       expiresAt: kp.expiresAt,
+      // Whether the code only works with the address it was emailed to (never which address)
+      forInvitedEmail: !!kp.invitedEmail,
       ...(inGracePeriod ? { warning: 'Keypass is in grace period and will expire soon' } : {}),
     },
   });

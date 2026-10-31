@@ -18,6 +18,8 @@ import { toCsv } from './csv.js';
 import { createZip, type ZipEntry } from './zip.js';
 import { renderHtmlToPdf } from './pdf-generator.js';
 import { createLogger } from './logger.js';
+import { listMembers, type BudgetHolderMember } from './budget-holder-store.js';
+import { memberStatus, renewalDueAt } from './budget-holder-rules.js';
 
 const logger = createLogger('evidence-pack');
 
@@ -35,7 +37,19 @@ function recordRows(data: OrgComplianceData, kind: CounterFraudKind): Rows {
     .map((r) => ({ id: r.id, ...(r.data as Record<string, unknown>), createdAt: r.createdAt, updatedAt: r.updatedAt }));
 }
 
-function evidenceItems(data: OrgComplianceData, requirements: Requirement[], auditRows: Rows): EvidenceItem[] {
+/** Budget holders: who must complete the programme, their score, signed commitment and conflict declaration. */
+function budgetHolderRows(data: OrgComplianceData, members: BudgetHolderMember[]): Rows {
+  return members.filter((m) => m.required || m.completedParts.length > 0 || m.previousCompletedAt).map((m) => {
+    const u = data.users.find((x) => x.id === m.userId);
+    return {
+      name: u?.name ?? '', email: u?.email ?? '', required: m.required, status: memberStatus(m), scenarioScore: m.scenarioScore ?? '',
+      signedBy: m.pledgeName ?? '', signedAt: m.pledgedAt ?? '', conflictDeclared: m.conflictDeclared ?? '', conflictDetails: m.conflictDetails ?? '',
+      completedAt: m.completedAt ?? '', renewalDueAt: m.completedAt ? renewalDueAt(m.completedAt) : '', previousCompletedAt: m.previousCompletedAt ?? '',
+    };
+  });
+}
+
+function evidenceItems(data: OrgComplianceData, requirements: Requirement[], auditRows: Rows, budgetHolders: Rows = []): EvidenceItem[] {
   const names = new Map(data.users.map((u) => [u.id, u.name]));
   return [
     {
@@ -74,6 +88,10 @@ function evidenceItems(data: OrgComplianceData, requirements: Requirement[], aud
           const t = data.training.find((x) => x.userId === u.id);
           return { name: u.name, email: u.email, department: u.department ?? '', completedAt: t?.completedAt ?? '', certificateNumber: t?.certificateNumber ?? '' };
         }),
+      }, {
+        path: 'budget-holders.csv',
+        rows: budgetHolders,
+        columns: ['name', 'email', 'required', 'status', 'scenarioScore', 'signedBy', 'signedAt', 'conflictDeclared', 'conflictDetails', 'completedAt', 'renewalDueAt', 'previousCompletedAt'],
       }],
     },
     {
@@ -155,10 +173,11 @@ export type EvidencePack = { filename: string; zip: Buffer; files: string[]; pdf
 /** Builds the pack. The PDF summary is best effort: if rendering fails, the HTML summary still goes in. */
 export async function buildEvidencePack(orgId: string, generatedBy: string, options: { includePdf?: boolean; now?: Date } = {}): Promise<EvidencePack> {
   const now = options.now ?? new Date();
-  const [data, auditRows, org] = await Promise.all([
+  const [data, auditRows, org, members] = await Promise.all([
     loadComplianceData(orgId),
     auditRowsFor(orgId),
     hasDatabase() ? dbGetOrganisationById(orgId) : Promise.resolve(organisationsById.get(orgId) ?? null),
+    listMembers(orgId),
   ]);
   const metrics = computeMetrics(data, now.getTime());
   const eccta = evaluateEccta(data, metrics, now.getTime());
@@ -169,7 +188,7 @@ export async function buildEvidencePack(orgId: string, generatedBy: string, opti
   ] as unknown as Requirement[];
 
   const organisation = org?.name ?? 'Organisation';
-  const items = evidenceItems(data, requirements, auditRows);
+  const items = evidenceItems(data, requirements, auditRows, budgetHolderRows(data, members));
   const html = summaryHtml({ organisation, generatedAt: now, generatedBy, eccta, govsScore: govs.score, items });
 
   const entries: ZipEntry[] = [{ name: '00-summary.html', data: html }];

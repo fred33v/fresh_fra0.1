@@ -19,8 +19,9 @@ import {
 } from '../types.js';
 import { getClientIp } from '../middleware.js';
 import {
-  auditLog, dbDeleteRisk, dbGetRisk, dbGetUserById, dbInsertRisk, dbListRisks, dbUpdateRisk,
+  auditLog, dbDeleteRisk, dbGetRisk, dbGetUserById, dbInsertRisk, dbListRisks, dbListRisksByOwner, dbUpdateRisk,
 } from '../db/index.js';
+import { getIntakeByOrg } from '../speak-up-store.js';
 import { csvResponse, wantsCsv } from '../csv.js';
 import { emitOrgEvent } from '../webhooks-out.js';
 
@@ -59,6 +60,14 @@ const createSchema = z.object({
 
 const patchSchema = createSchema.partial();
 
+const progressSchema = z.object({
+  // What the owner can say about their own action; 'done' still needs the employer's review
+  status: z.enum(['open', 'in_progress', 'done']),
+  note: z.string().trim().max(1000).optional(),
+});
+
+const reviewSchema = z.object({ decision: z.enum(['approve', 'reopen']) });
+
 const riskRegister = new Hono();
 
 async function requireRiskAccess(c: Context): Promise<AuthContext | Response> {
@@ -67,6 +76,19 @@ async function requireRiskAccess(c: Context): Promise<AuthContext | Response> {
   if (!isManagerRole(auth.role)) return jsonError(c, 403, 'FORBIDDEN', 'Risk register requires employer or admin role');
   const denied = await requirePackage(c, auth, 'pkg_full');
   return denied ?? auth;
+}
+
+/** Any signed-in member of an Enterprise organisation: for the actions they own. */
+async function requireEnterpriseMember(c: Context): Promise<AuthContext | Response> {
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  const denied = await requirePackage(c, auth, 'pkg_full');
+  return denied ?? auth;
+}
+
+async function saveRisk(entry: RiskRegisterEntry): Promise<void> {
+  if (hasDatabase()) await dbUpdateRisk(entry);
+  else riskRegisterById.set(entry.id, entry);
 }
 
 async function ownerInOrg(userId: string, orgId: string): Promise<boolean> {
@@ -100,8 +122,108 @@ function notifyRiskChange(entry: RiskRegisterEntry, event: 'risk.created' | 'ris
 const CSV_COLUMNS = [
   'id', 'title', 'riskArea', 'impact', 'likelihood', 'inherentScore', 'controlEffectiveness',
   'residualScore', 'priority', 'status', 'ownerUserId', 'dueDate', 'actionPlan', 'controls',
-  'description', 'createdAt', 'updatedAt',
+  'description', 'ownerNote', 'ownerUpdatedAt', 'reviewPending', 'createdAt', 'updatedAt',
 ];
+
+// ── The actions a member owns (Enterprise employees and managers alike) ──
+
+riskRegister.get('/my-actions', async (c) => {
+  const auth = await requireEnterpriseMember(c);
+  if (auth instanceof Response) return auth;
+
+  const risks = (hasDatabase()
+    ? await dbListRisksByOwner(auth.userId, auth.organisationId)
+    : Array.from(riskRegisterById.values())
+      .filter((r) => r.organisationId === auth.organisationId && r.ownerUserId === auth.userId)
+      .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || b.residualScore - a.residualScore))
+    .filter((r) => r.status !== 'closed');
+
+  // Staff need the organisation's reporting route, not only the employer who set it up
+  const intake = await getIntakeByOrg(auth.organisationId);
+
+  return c.json({
+    success: true,
+    data: {
+      risks: risks.map((r) => ({
+        id: r.id, title: r.title, riskArea: r.riskArea, description: r.description, priority: r.priority,
+        actionPlan: r.actionPlan, dueDate: r.dueDate, status: r.status, ownerNote: r.ownerNote,
+        ownerUpdatedAt: r.ownerUpdatedAt, reviewPending: !!r.reviewPending,
+      })),
+      speakUpToken: intake?.enabled ? intake.token : null,
+    },
+  });
+});
+
+riskRegister.post('/my-actions/:id/progress', async (c) => {
+  const auth = await requireEnterpriseMember(c);
+  if (auth instanceof Response) return auth;
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+
+  const parsed = progressSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid progress update');
+
+  const existing = await getRisk(id, auth.organisationId);
+  // Someone else's risk looks the same as a missing one
+  if (!existing || existing.ownerUserId !== auth.userId) return jsonError(c, 404, 'NOT_FOUND', 'Action not found');
+  if (existing.status === 'closed' || existing.status === 'accepted') {
+    return jsonError(c, 409, 'ACTION_CLOSED', 'This action has been closed by your organisation');
+  }
+
+  const now = new Date().toISOString();
+  const { status, note } = parsed.data;
+  const updated: RiskRegisterEntry = {
+    ...existing,
+    status: status === 'done' ? 'mitigated' : status,
+    reviewPending: status === 'done',
+    ownerNote: note === undefined ? existing.ownerNote : (note || undefined),
+    ownerUpdatedAt: now,
+    updatedAt: now,
+  };
+  await saveRisk(updated);
+
+  await auditLog({
+    eventType: 'risk_register.owner_update', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'risk_register', resourceId: id,
+    details: { status, note: updated.ownerNote ?? null }, ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+  notifyRiskChange(updated, 'risk.updated', existing.priority);
+
+  return c.json({ success: true, data: updated });
+});
+
+// The employer confirms an action its owner marked done, or sends it back
+riskRegister.post('/risk-register/:id/review', async (c) => {
+  const auth = await requireRiskAccess(c);
+  if (auth instanceof Response) return auth;
+  const id = requireUUIDParam(c, 'id');
+  if (id instanceof Response) return id;
+
+  const parsed = reviewSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid review');
+
+  const existing = await getRisk(id, auth.organisationId);
+  if (!existing) return jsonError(c, 404, 'NOT_FOUND', 'Risk not found');
+  if (!existing.reviewPending) return jsonError(c, 409, 'NOTHING_TO_REVIEW', 'This risk has no update waiting for review');
+
+  const updated: RiskRegisterEntry = {
+    ...existing,
+    status: parsed.data.decision === 'approve' ? 'mitigated' : 'in_progress',
+    reviewPending: false,
+    updatedAt: new Date().toISOString(),
+  };
+  await saveRisk(updated);
+
+  await auditLog({
+    eventType: `risk_register.owner_update_${parsed.data.decision === 'approve' ? 'approved' : 'reopened'}`,
+    actorId: auth.userId, actorEmail: auth.email, organisationId: auth.organisationId,
+    resourceType: 'risk_register', resourceId: id, details: { ownerUserId: existing.ownerUserId ?? null },
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+  notifyRiskChange(updated, 'risk.updated', existing.priority);
+
+  return c.json({ success: true, data: updated });
+});
 
 riskRegister.get('/risk-register', async (c) => {
   const auth = await requireRiskAccess(c);
@@ -137,6 +259,7 @@ riskRegister.get('/risk-register/summary', async (c) => {
       byStatus: risks.reduce<Record<string, number>>((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {}),
       overdue: risks.filter((r) => r.dueDate && r.dueDate < today && !['mitigated', 'accepted'].includes(r.status)).length,
       unowned: risks.filter((r) => !r.ownerUserId).length,
+      awaitingReview: risks.filter((r) => r.reviewPending).length,
       heatMap, // heatMap[impact-1][likelihood-1]
     },
   });
@@ -224,6 +347,9 @@ riskRegister.patch('/risk-register/:id', async (c) => {
     dueDate: d.dueDate === null ? undefined : (d.dueDate ?? existing.dueDate),
     updatedAt: new Date().toISOString(),
   } as RiskRegisterEntry;
+  // An employer who changes the status themselves has dealt with the owner's update.
+  // The edit form always sends the status, so an unchanged one leaves the update waiting.
+  if (d.status !== undefined && d.status !== existing.status) merged.reviewPending = false;
   Object.assign(merged, scoreRisk(merged.impact, merged.likelihood, merged.controlEffectiveness));
 
   if (hasDatabase()) await dbUpdateRisk(merged);
