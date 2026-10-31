@@ -1,3 +1,4 @@
+import type { AssessmentResultSnapshot } from './assessment-result.js';
 import type { Context } from 'hono';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
@@ -33,6 +34,8 @@ export type Assessment = {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
+  /** Saved when the assessment is submitted (see assessment-result.ts) */
+  result?: AssessmentResultSnapshot;
 };
 
 export type Organisation = {
@@ -206,6 +209,7 @@ export type DbAssessmentRow = {
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
+  result?: AssessmentResultSnapshot | null;
 };
 
 export type DbUserRow = {

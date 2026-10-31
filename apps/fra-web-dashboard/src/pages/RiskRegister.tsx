@@ -16,6 +16,7 @@ import { AlertTriangle, Check, Download, Pencil, Plus, RotateCcw, Trash2 } from 
 import { toast } from 'sonner';
 import { RISK_AREA_LABELS, riskAreaLabel, scoreRisk, type ControlEffectiveness, type Priority } from '@/lib/risk-scoring';
 import { RiskHeatMap } from '@/components/enterprise/RiskHeatMap';
+import { ImportFromAssessment } from '@/components/enterprise/ImportFromAssessment';
 import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('RiskRegister');
@@ -259,6 +260,7 @@ export default function RiskRegister() {
           </div>
         ) : (
           <>
+            <ImportFromAssessment onImported={load} />
             {summary && (
               <div className="grid gap-4 lg:grid-cols-[1fr_auto] mb-8">
                 <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 content-start">

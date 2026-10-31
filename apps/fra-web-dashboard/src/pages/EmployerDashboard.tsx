@@ -20,6 +20,7 @@ import { checkoutPath, getPackage } from '@/data/packages';
 const ENTERPRISE = getPackage('Enterprise')!;
 import { EnterpriseOverview } from '@/components/enterprise/EnterpriseOverview';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -135,6 +136,9 @@ export default function EmployerDashboard() {
   });
   const [refreshSignal, setRefreshSignal] = useState(0);
   const { entitlements } = useEntitlements();
+  const orgAssessments = useOrgAssessments(!!entitlements?.features?.assessment);
+  // Every package starts with the organisation's fraud risk assessment
+  const assessmentToDo = !!entitlements?.features?.assessment && !orgAssessments.isLoading && !orgAssessments.hasFinishedAssessment;
 
   const isEmployerOrAdmin = user?.role === 'employer' || user?.role === 'admin';
   // Professional and up: the team's training. Enterprise: also compliance, the register and integrations.
@@ -374,6 +378,21 @@ export default function EmployerDashboard() {
           <Tabs value={analyticsLocked ? lockedTab : tab} onValueChange={setTab}>
             <div className="space-y-4 mb-6">
               <SubscriptionCard entitlements={entitlements} />
+              {assessmentToDo && (
+                <Card className="border-primary/40 bg-primary/5">
+                  <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium">Step 1: complete your organisation's fraud risk assessment</p>
+                      <p className="text-sm text-muted-foreground">
+                        {isEnterprise
+                          ? 'Its score is saved, and the risks it finds start your risk register and action plans.'
+                          : 'Its score is saved and stays with you if you move up to another package. It also shapes your action plan.'}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => navigate('/assessment')}>Start the assessment</Button>
+                  </CardContent>
+                </Card>
+              )}
               {tab !== 'overview' && highRiskEmployees.length > 0 && (
                 <Card className="border-destructive/40 bg-destructive/5" role="alert">
                   <CardContent className="pt-6 flex flex-wrap items-start justify-between gap-4">

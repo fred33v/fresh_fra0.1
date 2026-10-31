@@ -149,7 +149,17 @@ function setupProgress() {
   } as ReturnType<typeof useWorkshopProgress>);
 }
 
-function setupAssessment(finished: boolean, loading = false) {
+const ASSESSMENT_RESULT = {
+  assessmentId: 'a1', overallScore: 72, riskLevel: 'High' as const,
+  modules: [
+    { id: 'procurement', title: 'Procurement', score: 95, level: 'High' as const, impactFactors: ['Recent procurement fraud incidents'] },
+    { id: 'payroll', title: 'Payroll', score: 50, level: 'Medium' as const, impactFactors: [] },
+    { id: 'cash', title: 'Cash', score: 20, level: 'Low' as const, impactFactors: [] },
+  ],
+  topRisks: [],
+};
+
+function setupAssessment(finished: boolean, loading = false, result: typeof ASSESSMENT_RESULT | null = null) {
   mockedUseEntitlements.mockReturnValue({
     isLoading: false,
     entitlements: { features: { assessment: true } },
@@ -158,6 +168,7 @@ function setupAssessment(finished: boolean, loading = false) {
     assessments: [],
     isLoading: loading,
     hasFinishedAssessment: finished,
+    latestResult: () => result,
   } as ReturnType<typeof useOrgAssessments>);
 }
 
@@ -392,6 +403,33 @@ describe('ActionPlan', () => {
       const sent = (mockedApi.post.mock.calls[0][1] as { actionItems: { title: string }[] }).actionItems;
       expect(sent.map((i) => i.title)).not.toContain(ASSESSMENT_ITEM);
       expect(sent).toHaveLength(makeActionItems().length - 1);
+    });
+
+    it('starts a new plan with the high and medium risks the assessment found, highest first', async () => {
+      setupAssessment(true, false, ASSESSMENT_RESULT);
+      mockedApi.get.mockResolvedValue(null);
+      mockedApi.post.mockResolvedValue(makeActionPlan());
+      renderActionPlan();
+
+      await waitFor(() => expect(mockedApi.post).toHaveBeenCalled());
+      const sent = (mockedApi.post.mock.calls[0][1] as { actionItems: { id: string; title: string; timeframe: string; description: string }[] }).actionItems;
+      expect(sent.slice(0, 2).map((i) => i.id)).toEqual(['assessment-procurement', 'assessment-payroll']);
+      expect(sent[0]).toMatchObject({ timeframe: 'Immediate', description: 'What the assessment found: Recent procurement fraud incidents.' });
+      expect(sent[1].timeframe).toBe('30 Days');
+      expect(sent.some((i) => i.id === 'assessment-cash')).toBe(false);
+    });
+
+    it('offers to add them to a plan made before the assessment', async () => {
+      setupAssessment(true, false, ASSESSMENT_RESULT);
+      mockedApi.patch.mockResolvedValue({});
+      renderActionPlan();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Add them to my plan' }));
+      await waitFor(() => expect(mockedApi.patch).toHaveBeenCalled());
+      const sent = (mockedApi.patch.mock.calls[0][1] as { actionItems: { id: string }[] }).actionItems;
+      expect(sent.slice(0, 2).map((i) => i.id)).toEqual(['assessment-procurement', 'assessment-payroll']);
+      expect(await screen.findByText(/Reduce the procurement fraud risk/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add them to my plan' })).not.toBeInTheDocument();
     });
 
     it('waits to know whether the assessment is done before creating a plan', async () => {

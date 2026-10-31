@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 import type { Assessment } from './types.js';
 import { createLogger } from './logger.js';
-import { buildAssessmentResults } from './assessment-modules.js';
+import { resultsOf } from './assessment-result.js';
 
 const logger = createLogger('pdf-generator');
 
@@ -96,8 +96,8 @@ function createReportHTML(options: PDFGenerationOptions): string {
   const { assessment, riskSummary, organizationName, title, enhancedData } = options;
   const answerCount = Object.keys(assessment.answers ?? {}).length;
 
-  // Same scoring as the results page, so the report and the screen always agree
-  const { overallScore: riskScore, riskLevel } = buildAssessmentResults(assessment.id, assessment.answers ?? {});
+  // The result saved at submission, as on the results page, so the report and the screen always agree
+  const { overallScore: riskScore, riskLevel } = resultsOf({ ...assessment, answers: assessment.answers ?? {} });
 
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
