@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '@/lib/api';
+import { Link } from 'react-router-dom';
+import { api, ApiError } from '@/lib/api';
+import { PACKAGE_CHOOSER_PATH } from '@/data/packages';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +25,17 @@ export interface Keypass {
   usedByUserId?: string;
 }
 
-interface Quota { allowance: number; unlimited?: boolean; used: number; remaining: number | null }
+interface Quota {
+  allowance: number;
+  unlimited?: boolean;
+  used: number;
+  remaining: number | null;
+  /** Codes cannot be valid past this date; null when the package has no end date */
+  packageEndsAt?: string | null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const VALIDITY_DAYS = ['7', '14', '30', '60', '90', '180', '365'];
 
 const STATUS_LABEL: Record<Keypass['status'], string> = {
   available: 'Available', used: 'Redeemed', revoked: 'Revoked', expired: 'Expired',
@@ -45,7 +57,7 @@ function joinLink(code: string): string {
 }
 
 function downloadCodes(codes: string[], expiresAt: string) {
-  const csv = ['Key-pass,Expires', ...codes.map((c) => `${c},${expiresAt.slice(0, 10)}`)].join('\n');
+  const csv = ['Key-pass,Expires,Join link', ...codes.map((c) => `${c},${expiresAt.slice(0, 10)},${joinLink(c)}`)].join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   const a = document.createElement('a');
   a.href = url;
@@ -97,6 +109,19 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
 
   const visible = statusFilter === 'all' ? keypasses : keypasses.filter((k) => k.status === statusFilter);
 
+  // A code never outlives the package, so only offer validity periods that fit before it ends
+  const packageEndsAt = quota?.packageEndsAt ? new Date(quota.packageEndsAt) : null;
+  const daysToPackageEnd = packageEndsAt ? Math.floor((packageEndsAt.getTime() - Date.now()) / DAY_MS) : null;
+  const validityOptions = useMemo(() => {
+    if (daysToPackageEnd === null) return VALIDITY_DAYS;
+    const fitting = VALIDITY_DAYS.filter((d) => Number(d) <= daysToPackageEnd);
+    return fitting.length > 0 ? fitting : [VALIDITY_DAYS[0]];
+  }, [daysToPackageEnd]);
+  useEffect(() => {
+    if (!validityOptions.includes(expiresInDays)) setExpiresInDays(validityOptions[validityOptions.length - 1]);
+  }, [validityOptions, expiresInDays]);
+  const noPackage = quota !== null && quota.allowance === 0;
+
   const generate = async () => {
     const n = Number(quantity);
     const days = Number(expiresInDays);
@@ -115,7 +140,9 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
       toast.success(`${result.codes.length} key-pass${result.codes.length === 1 ? '' : 'es'} created`);
       await load();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create key-passes');
+      setFormError(err instanceof ApiError && err.code === 'NO_PACKAGE'
+        ? 'Your organisation does not have an active package. Choose a package to invite your team.'
+        : err instanceof Error ? err.message : 'Failed to create key-passes');
     } finally {
       setIsGenerating(false);
     }
@@ -161,10 +188,21 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg"><KeyRound className="h-5 w-5" aria-hidden="true" /> Issue key-passes</CardTitle>
           <CardDescription>
-            Give one key-pass to each employee. They use it once to join your organisation and start their assessment, on the join page ({`${window.location.origin}/join`}) or in the Stop FRA app.
+            Give one key-pass to each employee. They use it once on the join page ({`${window.location.origin}/join`}) to create their account in your organisation. Copy each employee&apos;s join link, or download the CSV, which lists a link for every key-pass.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {noPackage ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">Your organisation does not have an active package yet. Choose a package to invite your team with key-passes.</p>
+              <Button asChild size="sm"><Link to={PACKAGE_CHOOSER_PATH}>Choose a package</Link></Button>
+            </div>
+          ) : (<>
+          {packageEndsAt && (
+            <p className="text-sm text-muted-foreground">
+              Your package ends on {formatDate(packageEndsAt.toISOString())}. Key-passes cannot be valid after that date.
+            </p>
+          )}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="kp-quantity">How many</Label>
@@ -176,7 +214,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
               <Select value={expiresInDays} onValueChange={setExpiresInDays}>
                 <SelectTrigger id="keypass-valid-for" className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['7', '14', '30', '60', '90', '180', '365'].map((d) => <SelectItem key={d} value={d}>{d} days</SelectItem>)}
+                  {validityOptions.map((d) => <SelectItem key={d} value={d}>{d} days</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -186,6 +224,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
             </Button>
           </div>
           {formError && <p className="text-sm text-destructive" role="alert">{formError}</p>}
+          </>)}
 
           {newCodes && (
             <div className="rounded-md border bg-muted/30 p-4 space-y-3" role="status">

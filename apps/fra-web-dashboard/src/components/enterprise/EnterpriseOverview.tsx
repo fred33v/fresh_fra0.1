@@ -372,7 +372,7 @@ export function EnterpriseOverview({ employees, refreshSignal, onShowEmployees }
 
       {report.data && (
         <p className="text-xs text-muted-foreground">
-          Compliance position generated {new Date(report.data.generatedAt).toLocaleString('en-GB')}. Self-assessment indicators from records held in Stop FRA; they support, but don't replace, legal advice or a formal GovS 013 assurance review.
+          Compliance position generated {new Date(report.data.generatedAt).toLocaleString('en-GB')}. Self-assessment indicators from records held in FRAUD-RISK.CO.UK; they support, but don't replace, legal advice or a formal GovS 013 assurance review.
         </p>
       )}
     </div>

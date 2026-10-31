@@ -317,13 +317,13 @@ describe('Index', () => {
       expect(link).toHaveAttribute('href', '/package/professional');
     });
 
-    it('Start Workshop link goes to workshop when authenticated', () => {
+    it('Start Workshop link goes to the dashboard when authenticated, which shows the training or what to buy', () => {
       setupAuth({ user: makeUser() });
 
       renderIndex();
 
       const link = screen.getByRole('link', { name: /Start Workshop Now/ });
-      expect(link).toHaveAttribute('href', '/workshop');
+      expect(link).toHaveAttribute('href', '/dashboard');
     });
 
     it('shows Download Resources link', () => {

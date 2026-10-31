@@ -436,6 +436,55 @@ describe('Keypasses endpoints', () => {
       expect(days).toBeLessThanOrEqual(30);
     });
 
+    it('caps codes at the yearly package end even when a one-time Starter is also active', async () => {
+      // Starter never ends; Professional (365 days) was bought 335 days ago, so 30 days remain
+      const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
+      seedPurchase(user.organisationId, user.userId, 'pkg_basic', new Date(Date.now() - 400 * DAY_MS).toISOString());
+      const boughtAt = new Date(Date.now() - 335 * DAY_MS);
+      seedPurchase(user.organisationId, user.userId, 'pkg_training', boughtAt.toISOString());
+
+      const { res, json } = await allocate(user.accessToken, { quantity: 1, expiresInDays: 365 });
+      expect(res.status).toBe(200);
+      expect(new Date(json.data.expiresAt).getTime()).toBeLessThanOrEqual(boughtAt.getTime() + 365 * DAY_MS);
+
+      const quota = await app.request(`http://localhost/api/v1/keypasses/organisation/${user.organisationId}/quota`, { headers: authHeaders(user.accessToken) });
+      const q = (await quota.json()) as any;
+      expect(new Date(q.data.packageEndsAt).getTime()).toBe(boughtAt.getTime() + 365 * DAY_MS);
+    });
+
+    it('counts a renewal already paid for when capping codes', async () => {
+      // Current term ends in 30 days; an early renewal adds another year after it
+      const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
+      const boughtAt = new Date(Date.now() - 335 * DAY_MS);
+      seedPurchase(user.organisationId, user.userId, 'pkg_training', boughtAt.toISOString());
+      seedPurchase(user.organisationId, user.userId, 'pkg_training', new Date(Date.now() - DAY_MS).toISOString());
+
+      const { json } = await allocate(user.accessToken, { quantity: 1, expiresInDays: 90 });
+      const days = (new Date(json.data.expiresAt).getTime() - Date.now()) / DAY_MS;
+      expect(days).toBeGreaterThan(89);
+    });
+
+    it('stops codes from a lapsed Professional working once Starter\'s single key-pass is used', async () => {
+      const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
+      seedPurchase(user.organisationId, user.userId, 'pkg_basic', new Date(Date.now() - 400 * DAY_MS).toISOString());
+      const proId = seedPurchase(user.organisationId, user.userId, 'pkg_training') as string;
+      const { json } = await allocate(user.accessToken, { quantity: 2, expiresInDays: 30 });
+      const [first, second] = json.data.codes;
+
+      // Professional ends; only Starter (1 key-pass) remains
+      purchasesById.get(proId)!.createdAt = new Date(Date.now() - 400 * DAY_MS).toISOString();
+
+      const join = (code: string, tag: string) => app.request('http://localhost/api/v1/keypasses/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, email: `${tag}+${Date.now()}@example.com`, password: 'Employee-Pass-2026', name: tag }),
+      });
+      expect((await join(first, 'one')).status).toBe(200);
+      const refused = await join(second, 'two');
+      expect(refused.status).toBe(403);
+      expect(((await refused.json()) as any).error.code).toBe('PACKAGE_INACTIVE');
+    });
+
     it('refuses to redeem or validate a code once the package has lapsed, and leaves the code unused', async () => {
       const user = await createAuthenticatedUser({ name: 'KP User', organisationName: 'KP Org' });
       const purchaseId = seedPurchase(user.organisationId, user.userId) as string;

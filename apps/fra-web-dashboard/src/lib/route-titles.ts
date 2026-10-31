@@ -10,6 +10,8 @@ const TITLES: [RegExp, string][] = [
   [/^\/assessment\b/, 'Risk assessment'],
   [/^\/budget-guide\b/, 'Budget guide'],
   [/^\/resources\b/, 'Resources'],
+  [/^\/tools\/self-assessment\b/, 'Self-assessment checklist'],
+  [/^\/tools\/roadmap\b/, '90-day roadmap'],
   [/^\/certificate\b/, 'Your certificate'],
   [/^\/action-plan\b/, 'Your action plan'],
   [/^\/package\/starter\b/, 'Starter package'],

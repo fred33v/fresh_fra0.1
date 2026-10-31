@@ -13,6 +13,9 @@ import { Layout } from '@/components/layout/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { KeypassManager } from '@/components/enterprise/KeypassManager';
 import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
+import { checkoutPath, getPackage } from '@/data/packages';
+
+const ENTERPRISE = getPackage('Enterprise')!;
 import { EnterpriseOverview } from '@/components/enterprise/EnterpriseOverview';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { Button } from '@/components/ui/button';
@@ -386,12 +389,25 @@ export default function EmployerDashboard() {
               {analyticsLocked ? (
                 <Card>
                   <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      Employee analytics and the live overview are part of the Enterprise package. You can issue key-passes below.
-                    </p>
-                    <Button variant="outline" size="sm" onClick={() => navigate('/package/enterprise')}>
-                      See the Enterprise package
-                    </Button>
+                    {entitlements?.packageName ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Employee analytics and the live overview are part of the Enterprise package. You can issue key-passes below.
+                        </p>
+                        <Button size="sm" onClick={() => navigate(checkoutPath(ENTERPRISE))}>
+                          Upgrade to Enterprise
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Your organisation does not have an active package yet. Choose one to invite your team and see their progress here.
+                        </p>
+                        <Button size="sm" onClick={() => navigate('/dashboard')}>
+                          Choose a package
+                        </Button>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               ) : (

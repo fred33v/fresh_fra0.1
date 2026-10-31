@@ -149,7 +149,7 @@ function Overview({ report }: { report: Report }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <FrameworkCard title="ECCTA 2023" subtitle="Failure to prevent fraud — the six principles of reasonable procedures" framework={report.eccta2023} />
-        <FrameworkCard title="GovS 013" subtitle="Counter-fraud functional standard: the components Stop FRA records" framework={report.govs013} />
+        <FrameworkCard title="GovS 013" subtitle="Counter-fraud functional standard: the components FRAUD-RISK.CO.UK records" framework={report.govs013} />
       </div>
 
       {report.topRiskAreas.length > 0 && (
