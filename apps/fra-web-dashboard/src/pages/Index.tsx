@@ -72,7 +72,7 @@ export default function Index() {
   ];
 
   return (
-    <Layout showHeader={false}>
+    <Layout showHeader={false} showFooter={false}>
       {/* ===== GOV.UK-style top bar ===== */}
       <div className="bg-[#0b0c0c]">
         <div className="container flex h-10 items-center justify-between">
@@ -187,7 +187,7 @@ export default function Index() {
             >
               <Card className="border-2 border-white/20 shadow-xl bg-white">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-xl text-[#0b0c0c]">Join a Live Session</CardTitle>
+                  <CardTitle level={2} className="text-xl text-[#0b0c0c]">Join a Live Session</CardTitle>
                   <CardDescription className="text-[#505a5f]">
                     Enter the session code provided by your facilitator
                   </CardDescription>
@@ -672,6 +672,7 @@ export default function Index() {
             <nav aria-label="Legal" className="flex gap-4 text-sm">
               <Link to="/privacy" className="text-[#b1b4b6] hover:text-white">Privacy notice</Link>
               <Link to="/terms" className="text-[#b1b4b6] hover:text-white">Terms of service</Link>
+              <Link to="/accessibility" className="text-[#b1b4b6] hover:text-white">Accessibility statement</Link>
             </nav>
             <p className="text-sm text-[#b1b4b6]">
               © {new Date().getFullYear()} FRAUD-RISK.CO.UK. All rights reserved.

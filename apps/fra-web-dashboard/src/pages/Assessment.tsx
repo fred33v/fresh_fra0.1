@@ -83,7 +83,7 @@ export default function Assessment() {
           <Card>
             <CardHeader>
               <Lock className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
-              <CardTitle>
+              <CardTitle level={1}>
                 {errorCode === 'ASSESSMENT_LIMIT_REACHED' ? 'Assessment limit reached' : 'A package is required'}
               </CardTitle>
               <CardDescription>{error}</CardDescription>
@@ -109,8 +109,11 @@ export default function Assessment() {
       <Layout>
         <div className="container py-8">
           <Card className="border-destructive">
-            <CardContent className="pt-6">
-              <p className="text-destructive">{error}</p>
+            <CardHeader>
+              <CardTitle level={1} className="text-xl">We could not load your assessment</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-destructive" role="alert">{error}</p>
               <Button onClick={() => startAssessment()} className="mt-4">
                 Try Again
               </Button>

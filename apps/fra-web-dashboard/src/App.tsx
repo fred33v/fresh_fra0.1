@@ -32,6 +32,7 @@ const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
 const PackageEnterprise = lazy(() => import("./pages/PackageEnterprise"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const Accessibility = lazy(() => import("./pages/Accessibility"));
 const Terms = lazy(() => import("./pages/Terms"));
 const CheckoutComplete = lazy(() => import("./pages/CheckoutComplete"));
 const EmployerDashboard = lazy(() => import("./pages/EmployerDashboard"));
@@ -93,6 +94,7 @@ const App = () => (
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
+                <Route path="/accessibility" element={<Accessibility />} />
                 <Route path="/checkout/complete" element={<CheckoutComplete />} />
                 <Route path="/facilitator" element={<ProtectedRoute requiredRole="facilitator"><Facilitator /></ProtectedRoute>} />
                 <Route path="/employer" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><EmployerDashboard /></ProtectedRoute>} />

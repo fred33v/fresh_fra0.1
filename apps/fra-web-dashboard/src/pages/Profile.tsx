@@ -84,7 +84,7 @@ export default function Profile() {
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Account Details</CardTitle>
+            <CardTitle level={2} className="text-base">Account Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
@@ -123,7 +123,7 @@ export default function Profile() {
         {isEditing ? (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Edit Profile</CardTitle>
+              <CardTitle level={2} className="text-base">Edit Profile</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

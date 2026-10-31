@@ -241,7 +241,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <main id="main-content" className="min-h-screen flex">
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 gradient-hero p-12 flex-col justify-between">
         <div>
@@ -286,7 +286,7 @@ export default function Auth() {
       </div>
 
       {/* Right side - Form */}
-      <main className="flex-1 flex items-center justify-center p-6 bg-background">
+      <div className="flex-1 flex items-center justify-center p-6 bg-background">
         <div className="w-full max-w-md">
           {/* The branding panel with the page heading is hidden on small screens */}
           <h1 className="sr-only lg:hidden">Sign in or create an account</h1>
@@ -802,7 +802,7 @@ export default function Auth() {
             )}
           </AnimatePresence>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

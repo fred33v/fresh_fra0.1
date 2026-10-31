@@ -33,9 +33,9 @@ export function Header() {
   return (
     <header className="print:hidden sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2" aria-label="Fraud Risk Awareness, home">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-primary-foreground" />
+            <Shield className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
           </div>
           <span className="hidden font-semibold sm:inline-block">
             Fraud Risk Awareness
@@ -58,7 +58,8 @@ export function Header() {
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label="User menu">
+                  {/* The name starts with the initials people see, so speech users can say "click AT" (WCAG 2.5.3) */}
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label={profile?.full_name ? `${getInitials(profile.full_name)} User menu` : 'User menu'}>
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {profile?.full_name ? getInitials(profile.full_name) : <User className="h-4 w-4" />}

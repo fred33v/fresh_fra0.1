@@ -155,7 +155,7 @@ describe('Resources', () => {
       renderResources();
 
       for (const resource of downloadableResources) {
-        const link = screen.getByLabelText(`Download ${resource.title} (PDF)`);
+        const link = screen.getByLabelText(`Download PDF: ${resource.title}`);
         expect(link).toHaveAttribute('href', `/resources/${resource.filename}`);
         expect(link).toHaveAttribute('download');
       }

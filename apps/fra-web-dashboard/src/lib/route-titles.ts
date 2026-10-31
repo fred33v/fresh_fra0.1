@@ -23,6 +23,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/checkout\b/, 'Checkout'],
   [/^\/privacy\b/, 'Privacy notice'],
   [/^\/terms\b/, 'Terms of service'],
+  [/^\/accessibility\b/, 'Accessibility statement'],
   [/^\/facilitator\b/, 'Facilitator'],
   [/^\/employer\b/, 'Organisation dashboard'],
   [/^\/risk-register\b/, 'Risk register'],

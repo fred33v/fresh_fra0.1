@@ -188,7 +188,7 @@ export default function PackageStarter() {
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl mb-12 text-center">
             Package Comparison
           </h2>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Package comparison table">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">

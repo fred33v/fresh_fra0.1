@@ -112,7 +112,7 @@ export default function PackageEnterprise() {
             >
               <Card className="border-0 shadow-2xl bg-card/95 backdrop-blur">
                 <CardHeader>
-                  <CardTitle className="text-xl">Everything in Professional</CardTitle>
+                  <CardTitle level={2} className="text-xl">Everything in Professional</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {professionalFeatures.map((f) => (
