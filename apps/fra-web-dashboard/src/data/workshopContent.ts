@@ -75,6 +75,7 @@ export const downloadableResources = [
     description: 'A comprehensive checklist to evaluate your organisation\'s fraud risk controls',
     icon: 'ClipboardCheck',
     filename: 'fraud-risk-self-assessment-checklist.pdf',
+    webPath: '/tools/self-assessment',
   },
   {
     id: 'guidance',
@@ -89,5 +90,6 @@ export const downloadableResources = [
     description: 'A structured plan for implementing fraud prevention measures',
     icon: 'Map',
     filename: '90-day-implementation-roadmap.pdf',
+    webPath: '/tools/roadmap',
   },
 ];

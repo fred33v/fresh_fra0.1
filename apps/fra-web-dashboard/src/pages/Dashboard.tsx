@@ -6,6 +6,7 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { HealthCheckCard } from '@/components/HealthCheckCard';
 import { PackageOffer } from '@/components/PackageOffer';
+import { JoinSessionCard } from '@/components/JoinSessionCard';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,6 @@ import {
   Target,
   ArrowRight,
   FileText,
-  Users,
   Loader2,
   Lock,
 } from 'lucide-react';
@@ -339,17 +339,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-md transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" role="button" tabIndex={0} onClick={() => navigate('/workshop')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/workshop'); } }}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-info" aria-hidden="true" />
-                </div>
-                <div>
-                  <div className="font-medium">Join Session</div>
-                  <div className="text-sm text-muted-foreground">Live workshop</div>
-                </div>
-              </CardContent>
-            </Card>
+            <JoinSessionCard />
             </>)}
 
             {isCompleted && (

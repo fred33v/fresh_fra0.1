@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/layout/Layout';
@@ -96,7 +96,15 @@ export default function Resources() {
                         <CardTitle className="text-lg">{resource.title}</CardTitle>
                         <CardDescription>{resource.description}</CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="space-y-2">
+                        {'webPath' in resource && resource.webPath && (
+                          <Button className="w-full" asChild>
+                            <Link to={resource.webPath} aria-label={`Fill in ${resource.title} online`}>
+                              <ClipboardCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Fill in online
+                            </Link>
+                          </Button>
+                        )}
                         <Button variant="outline" className="w-full" asChild>
                           <a href={`/resources/${resource.filename}`} download aria-label={`Download ${resource.title} (PDF)`}>
                             <Download className="mr-2 h-4 w-4" aria-hidden="true" />
