@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { requireUUIDParam, assessmentCreateSchema, assessmentPatchSchema, parsePagination, paginate } from '../types.js';
 import type { Assessment, AssessmentStatus } from '../types.js';
@@ -9,9 +10,10 @@ import {
 } from '../db/index.js';
 import { rateLimit, getClientIp } from '../middleware.js';
 import { getAssessmentAllowance } from '../entitlements.js';
-import { ASSESSMENT_MODULES, buildAssessmentResults } from '../assessment-modules.js';
+import { ASSESSMENT_MODULES } from '../assessment-modules.js';
 import { emitOrgEvent } from '../webhooks-out.js';
 import { scoreAssessment } from '../assessment-risk.js';
+import { computeResult, isSubmitted, resultsOf } from '../assessment-result.js';
 import { organisationReassessmentStatus } from '../reassessment.js';
 import { issueAssessmentCertificateLater } from '../certificates.js';
 
@@ -33,6 +35,9 @@ function notifySubmitted(a: Assessment) {
     });
   }
 }
+
+const answersLocked = (c: Context) => jsonError(c, 409, 'ANSWERS_LOCKED',
+  'A submitted assessment cannot be changed. Start a reassessment to record new answers.');
 
 const assessments = new Hono();
 
@@ -208,6 +213,7 @@ assessments.patch('/assessments/:id', async (c) => {
     if (parsed.data.status && !validTransitions[assessment.status]?.includes(newStatus)) {
       return jsonError(c, 400, 'INVALID_STATUS_TRANSITION', `Cannot transition from ${assessment.status} to ${newStatus}`);
     }
+    if (parsed.data.answers !== undefined && isSubmitted(assessment)) return answersLocked(c);
 
     const now = new Date().toISOString();
     const updated: Assessment = {
@@ -218,6 +224,7 @@ assessments.patch('/assessments/:id', async (c) => {
       updatedAt: now,
       submittedAt: newStatus === 'submitted' && assessment.status !== 'submitted' ? now : assessment.submittedAt,
     };
+    if (isSubmitted(updated) && !updated.result) updated.result = computeResult(updated, now);
 
     assessmentsById.set(id, updated);
     if (newStatus === 'submitted' && assessment.status !== 'submitted') notifySubmitted(updated);
@@ -236,14 +243,17 @@ assessments.patch('/assessments/:id', async (c) => {
   if (parsed.data.status && !validTransitions[existing.status]?.includes(newStatus)) {
     return jsonError(c, 400, 'INVALID_STATUS_TRANSITION', `Cannot transition from ${existing.status} to ${newStatus}`);
   }
+  if (parsed.data.answers !== undefined && isSubmitted(existing)) return answersLocked(c);
 
   const now = new Date().toISOString();
+  const answers = parsed.data.answers ?? existing.answers;
   const updated = await dbUpdateAssessment(id, {
     title: parsed.data.title ?? existing.title,
     status: newStatus,
-    answers: parsed.data.answers ?? existing.answers,
+    answers,
     updatedAt: now,
     submittedAt: newStatus === 'submitted' && existing.status !== 'submitted' ? now : undefined,
+    result: isSubmitted({ status: newStatus }) && !existing.result ? computeResult({ id, answers }, now) : undefined,
   });
 
   if (!updated) return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
@@ -289,6 +299,7 @@ assessments.post('/assessments/:id/submit', async (c) => {
       status: 'submitted',
       submittedAt: now,
       updatedAt: now,
+      result: computeResult(assessment, now),
     };
     assessmentsById.set(id, updated);
 
@@ -320,6 +331,7 @@ assessments.post('/assessments/:id/submit', async (c) => {
     status: 'submitted',
     submittedAt: now,
     updatedAt: now,
+    result: computeResult(existing, now),
   });
 
   if (!updated) return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
@@ -354,7 +366,14 @@ assessments.get('/assessments/:id/results', async (c) => {
     return jsonError(c, 409, 'NOT_SUBMITTED', 'Results are available once the assessment has been submitted');
   }
 
-  return c.json({ success: true, data: buildAssessmentResults(assessment.id, assessment.answers) });
+  // Submitted before results were saved: save them now, once
+  if (!assessment.result) {
+    const result = computeResult(assessment);
+    if (hasDatabase()) await dbUpdateAssessment(assessment.id, { result, updatedAt: assessment.updatedAt });
+    else assessmentsById.set(assessment.id, { ...assessment, result });
+    assessment.result = result;
+  }
+  return c.json({ success: true, data: { ...resultsOf(assessment), methodVersion: assessment.result.methodVersion, scoredAt: assessment.result.scoredAt } });
 });
 
 export default assessments;

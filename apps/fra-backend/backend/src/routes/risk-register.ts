@@ -13,17 +13,18 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import { type AuthContext, hasDatabase, isManagerRole, jsonError, requireAuth } from '../helpers.js';
 import { requirePackage } from '../entitlements.js';
-import { riskRegisterById, usersByEmail } from '../stores.js';
+import { assessmentsById, riskRegisterById, usersByEmail } from '../stores.js';
 import {
   requireUUIDParam, type ControlEffectiveness, type RiskPriority, type RiskRegisterEntry,
 } from '../types.js';
 import { getClientIp } from '../middleware.js';
 import {
-  auditLog, dbDeleteRisk, dbGetRisk, dbGetUserById, dbInsertRisk, dbListRisks, dbListRisksByOwner, dbUpdateRisk,
+  auditLog, dbDeleteRisk, dbListAssessmentsByOrganisation, dbGetRisk, dbGetUserById, dbInsertRisk, dbListRisks, dbListRisksByOwner, dbUpdateRisk,
 } from '../db/index.js';
 import { getIntakeByOrg } from '../speak-up-store.js';
 import { csvResponse, wantsCsv } from '../csv.js';
 import { emitOrgEvent } from '../webhooks-out.js';
+import { registerSuggestions } from '../assessment-to-register.js';
 
 const CONTROL_REDUCTION: Record<ControlEffectiveness, number> = {
   very_strong: 0.4,
@@ -223,6 +224,53 @@ riskRegister.post('/risk-register/:id/review', async (c) => {
   notifyRiskChange(updated, 'risk.updated', existing.priority);
 
   return c.json({ success: true, data: updated });
+});
+
+// ── From the fraud risk assessment ──────────────────────────────
+
+async function suggestionsFor(orgId: string) {
+  const [assessments, register] = await Promise.all([
+    hasDatabase() ? dbListAssessmentsByOrganisation(orgId) : Promise.resolve([...assessmentsById.values()].filter((a) => a.organisationId === orgId)),
+    listRisks(orgId),
+  ]);
+  return registerSuggestions(assessments, register);
+}
+
+/** What the assessments found that is not in the register yet. */
+riskRegister.get('/risk-register/from-assessment', async (c) => {
+  const auth = await requireRiskAccess(c);
+  if (auth instanceof Response) return auth;
+  return c.json({ success: true, data: await suggestionsFor(auth.organisationId) });
+});
+
+/** Adds them as open risks with no owner, for the employer to review and assign. */
+riskRegister.post('/risk-register/from-assessment', async (c) => {
+  const auth = await requireRiskAccess(c);
+  if (auth instanceof Response) return auth;
+  const body = (await c.req.json().catch(() => ({}))) as { titles?: unknown };
+  const wanted = Array.isArray(body.titles) ? new Set(body.titles.filter((t): t is string => typeof t === 'string')) : null;
+  const picked = (await suggestionsFor(auth.organisationId)).filter((s) => !wanted || wanted.has(s.title));
+
+  const now = new Date().toISOString();
+  const created: RiskRegisterEntry[] = [];
+  for (const s of picked) {
+    const entry: RiskRegisterEntry = {
+      id: crypto.randomUUID(), organisationId: auth.organisationId, title: s.title, riskArea: s.riskArea, description: s.description,
+      impact: s.impact, likelihood: s.likelihood, controlEffectiveness: s.controlEffectiveness,
+      ...scoreRisk(s.impact, s.likelihood, s.controlEffectiveness),
+      status: 'open', createdByUserId: auth.userId, createdAt: now, updatedAt: now,
+    };
+    if (hasDatabase()) await dbInsertRisk(entry);
+    else riskRegisterById.set(entry.id, entry);
+    notifyRiskChange(entry, 'risk.created');
+    created.push(entry);
+  }
+  await auditLog({
+    eventType: 'risk_register.imported_from_assessment', actorId: auth.userId, actorEmail: auth.email,
+    organisationId: auth.organisationId, resourceType: 'risk_register', details: { count: created.length, titles: created.map((r) => r.title) },
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+  });
+  return c.json({ success: true, data: created }, 201);
 });
 
 riskRegister.get('/risk-register', async (c) => {

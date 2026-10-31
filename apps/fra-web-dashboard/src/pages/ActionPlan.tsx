@@ -25,6 +25,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { actionsFromAssessment, missingAssessmentActions } from '@/lib/assessment-actions';
+import type { AssessmentResults } from '@/types/assessment';
 
 // The one template action that asks for the risk assessment. Once the organisation has submitted
 // one, it would send people back to something they have already done.
@@ -34,7 +36,9 @@ export default function ActionPlan() {
   const { user, profile } = useAuth();
   useWorkshopProgress();
   const { entitlements, isLoading: entitlementsLoading } = useEntitlements();
-  const { isLoading: assessmentsLoading, hasFinishedAssessment } = useOrgAssessments(!!entitlements?.features.assessment);
+  const { isLoading: assessmentsLoading, hasFinishedAssessment, latestResult } = useOrgAssessments(!!entitlements?.features.assessment);
+  // What the organisation's fraud risk assessment found (package 1) starts the plan
+  const assessmentResult = latestResult(user?.id);
   const navigate = useNavigate();
   const [actionPlan, setActionPlan] = useState<ActionPlanType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,12 +57,12 @@ export default function ActionPlan() {
       if (data) {
         setActionPlan({
           ...data,
-          action_items: (data.action_items as unknown as ActionItem[]) || generateDefaultItems(hasFinishedAssessment),
+          action_items: (data.action_items as unknown as ActionItem[]) || generateDefaultItems(hasFinishedAssessment, assessmentResult),
         });
         setCustomCommitments(data.commitments?.join('\n') || '');
       } else {
         // Create default action plan
-        const defaultItems = generateDefaultItems(hasFinishedAssessment);
+        const defaultItems = generateDefaultItems(hasFinishedAssessment, assessmentResult);
         const newPlan = await api.post<ActionPlanType>('/api/v1/workshop/action-plans', {
           actionItems: defaultItems,
           commitments: [],
@@ -76,6 +80,7 @@ export default function ActionPlan() {
     }
 
     setIsLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the result comes with hasFinishedAssessment
   }, [user, hasFinishedAssessment]);
 
   // Wait until we know whether the assessment is done, so a new plan starts with the right items
@@ -86,8 +91,9 @@ export default function ActionPlan() {
     }
   }, [user, ready, fetchActionPlan]);
 
-  const generateDefaultItems = (assessmentDone: boolean): ActionItem[] => {
+  const generateDefaultItems = (assessmentDone: boolean, result: AssessmentResults | null): ActionItem[] => {
     const items = [
+      ...actionsFromAssessment(result),
       ...actionPlanTemplates.immediate.map((item, i) => ({
         id: `immediate-${i}`,
         title: item,
@@ -223,6 +229,20 @@ export default function ActionPlan() {
     ninetyDays: items.filter(i => i.timeframe === '90 Days'),
   };
 
+  const missingFromAssessment = missingAssessmentActions(items, assessmentResult);
+  const addFromAssessment = async () => {
+    if (!actionPlan) return;
+    const updatedItems = [...missingFromAssessment, ...actionPlan.action_items];
+    try {
+      await api.patch(`/api/v1/workshop/action-plans/${actionPlan.id}`, { actionItems: updatedItems });
+      setActionPlan({ ...actionPlan, action_items: updatedItems });
+      toast.success('Added the risks your assessment found');
+    } catch (err: unknown) {
+      logger.error('Error adding assessment actions', err);
+      toast.error('Could not add the actions');
+    }
+  };
+
   const totalItems = items.length;
   const completedItems = items.filter(i => i.completed).length;
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
@@ -269,6 +289,17 @@ export default function ActionPlan() {
               </CardContent>
             </Card>
           </div>
+
+          {missingFromAssessment.length > 0 && (
+            <Card className="mb-6 border-primary/40">
+              <CardContent className="pt-6 flex flex-wrap items-center justify-between gap-4">
+                <p className="text-sm">
+                  Your latest fraud risk assessment found {missingFromAssessment.length} risk area{missingFromAssessment.length === 1 ? '' : 's'} to work on that {missingFromAssessment.length === 1 ? 'is' : 'are'} not in your plan yet.
+                </p>
+                <Button size="sm" onClick={addFromAssessment}>Add them to my plan</Button>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Immediate Actions */}
