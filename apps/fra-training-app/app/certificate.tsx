@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CheckCircle, Shield } from 'lucide-react-native';
 import ActionButton from '@/components/ActionButton';
@@ -14,6 +14,9 @@ const FAILURE_MESSAGES: Record<Exclude<CertificateResult, { ok: true }>['reason'
   'quiz-not-passed': 'The certificate needs 80% of the quiz questions right. Open the quizzes you missed, answer them again, then try again.',
   error: 'Your certificate could not be issued just now. Please try again.',
 };
+
+/** The website, where anyone can check a certificate and the holder can download its PDF */
+const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fraud-risk.co.uk').replace(/\/+$/, '');
 
 function formatDate(dateString: string | null): string {
   if (!dateString) {
@@ -149,8 +152,16 @@ export default function CertificateScreen() {
           </Text>
         </View>
 
+        <Text style={styles.verifyText}>
+          Anyone can check this certificate is genuine on our website. Sign in there to download it as a PDF with a QR code.
+        </Text>
+
         {/* Back button */}
         <View style={styles.buttonContainer}>
+          <ActionButton
+            label="Check it online"
+            onPress={() => Linking.openURL(`${WEB_URL}/certificate/verify?n=${encodeURIComponent(certificateNumber)}`)}
+          />
           <ActionButton
             label="Back to Home"
             onPress={handleBackToHome}
@@ -251,6 +262,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
     textAlign: 'center',
+  },
+  verifyText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
   buttonContainer: {
     width: '100%',
