@@ -16,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 const normaliseCode = (raw: string) => raw.replace(/[\s-]/g, '').toUpperCase();
 
 const joinSchema = z.object({
-  code: z.string().refine((v) => /^[A-Z0-9]{6,64}$/.test(normaliseCode(v)), 'Enter the access code your employer gave you'),
+  code: z.string().refine((v) => /^[A-Z0-9]{6,64}$/.test(normaliseCode(v)), 'Enter the key-pass your employer gave you'),
   name: z.string().max(200).optional(),
   email: z.string().email('Please enter a valid email address'),
   password: z.string()
@@ -37,12 +37,12 @@ function joinErrorMessage(error: Error): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'NOT_FOUND':
-        return "We don't recognise that code. Check it against the one your employer gave you.";
+        return "We don't recognise that key-pass. Check it against the one your employer gave you.";
       case 'EXPIRED':
-        return 'This code has expired. Ask your employer for a new one.';
+        return 'This key-pass has expired. Ask your employer for a new one.';
       case 'NOT_AVAILABLE':
       case 'ALREADY_USED':
-        return 'This code has already been used or was withdrawn. Ask your employer for a new one.';
+        return 'This key-pass has already been used or was withdrawn. Ask your employer for a new one.';
       case 'PACKAGE_INACTIVE':
         return "Your organisation's package is no longer active. Ask your employer to renew it, then try again.";
       case 'ACCOUNT_EXISTS':
@@ -128,9 +128,9 @@ export default function Join() {
           ) : (
             <>
               <CardHeader className="space-y-1">
-                <CardTitle level={2} className="text-xl">Use your access code</CardTitle>
+                <CardTitle level={2} className="text-xl">Use your key-pass</CardTitle>
                 <CardDescription>
-                  Your employer gave you a code that works once. Choose a password so you can sign back in later.
+                  Your employer gave you a key-pass that works once. Choose a password so you can sign back in later.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -153,7 +153,7 @@ export default function Join() {
                       name="code"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Access code</FormLabel>
+                          <FormLabel>Key-pass</FormLabel>
                           <FormControl>
                             <Input autoComplete="off" autoCapitalize="characters" spellCheck={false} className="font-mono uppercase" {...field} />
                           </FormControl>

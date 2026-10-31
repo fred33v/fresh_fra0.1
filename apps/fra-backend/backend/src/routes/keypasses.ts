@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
-import { getActiveWindows, hasDatabase, jsonError, requireAuth } from '../helpers.js';
+import { getActiveWindows, getEntitlementWindows, hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { keypassGenerateSchema, keypassValidateSchema, keypassUseSchema, keypassBulkSchema, RATE_LIMITS, KEYPASS_GRACE_PERIOD_DAYS, parsePagination, paginate, requireUUIDParam } from '../types.js';
 import type { User, Keypass } from '../types.js';
 import { usersByEmail, organisationsById, keypassesByCode } from '../stores.js';
@@ -40,14 +40,37 @@ async function getOrgKeypassQuota(orgId: string): Promise<{ allowance: number; u
 // ── Package window helper ───────────────────────────────────────
 
 /**
- * When the org's current packages stop: a Date, null when a package with no end date
- * (Starter) is active, or undefined when no package is active at all.
+ * When the org's key-passes must stop working: a Date, null when only packages with no end
+ * date (Starter) are active, or undefined when no package is active at all.
+ *
+ * A one-time Starter purchase never ends, so it must not lift the limit of a yearly package
+ * bought alongside it: as soon as a package with an end date is active, codes stop at its end
+ * (counting renewals already paid for, which start when the current term ends).
  */
-async function getPackageEnd(orgId: string): Promise<Date | null | undefined> {
-  const windows = getActiveWindows(await listOrgPurchases(orgId));
-  if (windows.length === 0) return undefined;
-  if (windows.some((w) => w.expiresAt === null)) return null;
-  return new Date(Math.max(...windows.map((w) => (w.expiresAt as Date).getTime())));
+async function getPackageEnd(orgId: string, now: Date = new Date()): Promise<Date | null | undefined> {
+  const purchases = await listOrgPurchases(orgId);
+  const active = getActiveWindows(purchases, now);
+  if (active.length === 0) return undefined;
+  const datedPackages = new Set(active.filter((w) => w.expiresAt !== null).map((w) => w.purchase.packageId));
+  if (datedPackages.size === 0) return null;
+  const ends = getEntitlementWindows(purchases)
+    .filter((w) => datedPackages.has(w.purchase.packageId) && w.expiresAt !== null && w.expiresAt.getTime() > now.getTime())
+    .map((w) => (w.expiresAt as Date).getTime());
+  return new Date(Math.max(...ends));
+}
+
+/**
+ * Whether the org's current packages still cover one more employee joining. A code issued under
+ * a package that has since ended (Professional, 50 codes) must not keep working because a smaller
+ * package (Starter, 1 code) is still active.
+ */
+async function packageCoversAnotherJoin(orgId: string): Promise<boolean> {
+  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId));
+  if (allowance < 0) return true;
+  const all = hasDatabase()
+    ? await dbListKeypassesByOrganisation(orgId)
+    : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === orgId);
+  return all.filter((k) => k.status === 'used').length < allowance;
 }
 
 // ── Keypass creation helper ──────────────────────────────────────
@@ -160,8 +183,8 @@ keypasses.post('/keypasses/use', async (c) => {
 
   if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
 
-  // A code only works while the package that paid for it is active, even inside the grace period
-  if ((await getPackageEnd(kp.organisationId)) === undefined) {
+  // A code only works while a package covers it, even inside the grace period
+  if ((await getPackageEnd(kp.organisationId)) === undefined || !(await packageCoversAnotherJoin(kp.organisationId))) {
     await auditLog({
       eventType: 'keypass.use_rejected', actorEmail: parsed.data.email.toLowerCase(),
       organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
@@ -382,7 +405,7 @@ keypasses.post('/keypasses/validate', async (c) => {
     return jsonError(c, 400, 'EXPIRED', 'Keypass is expired');
   }
 
-  if ((await getPackageEnd(kp.organisationId)) === undefined) {
+  if ((await getPackageEnd(kp.organisationId)) === undefined || !(await packageCoversAnotherJoin(kp.organisationId))) {
     return jsonError(c, 403, 'PACKAGE_INACTIVE', "This organisation's package is no longer active");
   }
 
@@ -407,11 +430,14 @@ keypasses.get('/keypasses/organisation/:orgId/quota', async (c) => {
   if (orgId !== auth.organisationId) return jsonError(c, 403, 'FORBIDDEN', 'Forbidden');
 
   const quota = await getOrgKeypassQuota(orgId);
+  const packageEnd = await getPackageEnd(orgId);
 
   return c.json({
     success: true,
     data: {
       organisationId: orgId,
+      // Codes cannot be valid past this date; null when no package with an end date is active
+      packageEndsAt: packageEnd ? packageEnd.toISOString() : null,
       allowance: quota.allowance,
       unlimited: quota.allowance < 0,
       used: quota.used,

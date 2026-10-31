@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import EmployerDashboard from '@/pages/EmployerDashboard';
@@ -16,8 +16,9 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/hooks/useAuth');
 
+const entitlementsState = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock('@/hooks/useEntitlements', () => ({
-  useEntitlements: () => ({ entitlements: null, isLoading: false }),
+  useEntitlements: () => ({ entitlements: entitlementsState.current, isLoading: false }),
 }));
 
 vi.mock('@/components/enterprise/KeypassManager', () => ({
@@ -287,7 +288,8 @@ describe('EmployerDashboard', () => {
       expect(screen.getByText('Try Again')).toBeInTheDocument();
     });
 
-    it('keeps key-passes available when analytics need Enterprise', async () => {
+    it('keeps key-passes available when analytics need Enterprise, with a direct upgrade', async () => {
+      entitlementsState.current = { packageId: 'pkg_training', packageName: 'Professional', expiresAt: null };
       mockedApi.get.mockRejectedValueOnce(new ApiError('Upgrade needed', 'PACKAGE_REQUIRED'));
 
       renderDashboard();
@@ -295,10 +297,27 @@ describe('EmployerDashboard', () => {
       await waitFor(() => {
         expect(screen.getByText(/part of the Enterprise package/)).toBeInTheDocument();
       });
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Enterprise' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/checkout?package=Enterprise');
+      entitlementsState.current = null;
       // Professional employers pay for key-passes, so the manager must still render
       expect(screen.getByTestId('keypass-manager')).toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Employees' })).not.toBeInTheDocument();
       expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
+    });
+
+    it('does not promise key-passes to an organisation with no package', async () => {
+      entitlementsState.current = null;
+      mockedApi.get.mockRejectedValueOnce(new ApiError('Upgrade needed', 'PACKAGE_REQUIRED'));
+
+      renderDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByText(/does not have an active package yet/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/You can issue key-passes below/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Choose a package' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
     });
 
     it('retries fetch when Try Again is clicked', async () => {

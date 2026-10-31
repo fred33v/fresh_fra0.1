@@ -6,7 +6,10 @@ import { SubscriptionCard } from '@/components/enterprise/SubscriptionCard';
 import { api } from '@/lib/api';
 import type { Entitlements } from '@/hooks/useEntitlements';
 
-vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import('@/lib/api')>()).ApiError,
+  api: { get: vi.fn(), post: vi.fn() },
+}));
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
@@ -110,5 +113,23 @@ describe('SubscriptionCard', () => {
     const expiresAt = new Date(Date.now() + 10 * 86400000).toISOString();
     render(<MemoryRouter><SubscriptionCard entitlements={{ ...base, expiresAt }} /></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Renew now' })).toHaveAttribute('href', '/checkout?package=Enterprise');
+  });
+});
+
+describe('KeypassManager and the package', () => {
+  it('asks an organisation with no package to choose one instead of offering to create key-passes', async () => {
+    mockKeypasses({ allowance: 0, used: 0, remaining: 0, packageEndsAt: null });
+    render(<MemoryRouter><KeypassManager organisationId="org-1" /></MemoryRouter>);
+    expect(await screen.findByRole('link', { name: 'Choose a package' })).toHaveAttribute('href', '/#packages');
+    expect(screen.queryByRole('button', { name: /create key-passes/i })).not.toBeInTheDocument();
+  });
+
+  it('says when the package ends and only offers validity periods that fit before it', async () => {
+    // 20 days left: the default 30-day validity no longer fits, so the longest that does is chosen
+    const ends = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
+    mockKeypasses({ allowance: 50, used: 0, remaining: 50, packageEndsAt: ends });
+    render(<KeypassManager organisationId="org-1" />);
+    expect(await screen.findByText(/Your package ends on .*Key-passes cannot be valid after that date/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Valid for')).toHaveTextContent('14 days'));
   });
 });
