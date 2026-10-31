@@ -30,7 +30,7 @@ export type TrainingAccess = 'checking' | 'granted' | 'locked' | 'offline' | 'si
 
 export type CertificateResult =
   | { ok: true }
-  | { ok: false; reason: 'offline' | 'locked' | 'not-completed' | 'error'; message?: string };
+  | { ok: false; reason: 'offline' | 'locked' | 'not-completed' | 'quiz-not-passed' | 'error'; message?: string };
 
 const defaultProgress: TrainingProgress = {
   completedSections: [],
@@ -243,6 +243,8 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
       const done = await updateProgress(id, { completedAt: new Date().toISOString() });
       if (isPackageRequired(done)) return { ok: false, reason: 'locked' };
       if (done.error?.code === 'NOT_COMPLETED') return { ok: false, reason: 'not-completed', message: done.error.message };
+      // Every question answered, but under the 80% pass mark: the missed questions must be answered again
+      if (done.error?.code === 'QUIZ_NOT_PASSED') return { ok: false, reason: 'quiz-not-passed', message: done.error.message };
       if (!done.success || !done.data) return { ok: false, reason: isOffline(done) ? 'offline' : 'error' };
       commit(mergeServer(progressRef.current, done.data));
     }

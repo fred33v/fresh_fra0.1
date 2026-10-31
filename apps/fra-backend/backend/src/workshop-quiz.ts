@@ -46,3 +46,21 @@ export function missingForCompletion(
     quizzes: Object.keys(QUIZ_ANSWER_KEY).map(Number).filter((id) => typeof scores[String(id)] !== 'number'),
   };
 }
+
+/** Share of quiz questions, as a whole percentage, that must be answered correctly (decided 2026-10-30). */
+export const QUIZ_PASS_MARK = 80;
+
+/**
+ * The overall quiz result: the percentage of all quiz questions answered correctly
+ * (an unanswered question counts as wrong), whether it reaches the pass mark,
+ * and which sections' questions are not yet right.
+ */
+export function quizResult(quizScores: Record<string, number> | null | undefined): {
+  percent: number; passed: boolean; wrong: number[];
+} {
+  const scores = quizScores ?? {};
+  const ids = Object.keys(QUIZ_ANSWER_KEY).map(Number);
+  const wrong = ids.filter((id) => scores[String(id)] !== 100);
+  const percent = Math.round(((ids.length - wrong.length) / ids.length) * 100);
+  return { percent, passed: percent >= QUIZ_PASS_MARK, wrong };
+}

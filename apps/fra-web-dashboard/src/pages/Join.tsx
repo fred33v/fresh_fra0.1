@@ -16,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 const normaliseCode = (raw: string) => raw.replace(/[\s-]/g, '').toUpperCase();
 
 const joinSchema = z.object({
-  code: z.string().refine((v) => /^[A-Z0-9]{6,64}$/.test(normaliseCode(v)), 'Enter the access code your employer gave you'),
+  code: z.string().refine((v) => /^[A-Z0-9]{6,64}$/.test(normaliseCode(v)), 'Enter the key-pass your employer gave you'),
   name: z.string().max(200).optional(),
   email: z.string().email('Please enter a valid email address'),
   password: z.string()
@@ -37,14 +37,16 @@ function joinErrorMessage(error: Error): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'NOT_FOUND':
-        return "We don't recognise that code. Check it against the one your employer gave you.";
+        return "We don't recognise that key-pass. Check it against the one your employer gave you.";
       case 'EXPIRED':
-        return 'This code has expired. Ask your employer for a new one.';
+        return 'This key-pass has expired. Ask your employer for a new one.';
       case 'NOT_AVAILABLE':
       case 'ALREADY_USED':
-        return 'This code has already been used or was withdrawn. Ask your employer for a new one.';
+        return 'This key-pass has already been used or was withdrawn. Ask your employer for a new one.';
       case 'PACKAGE_INACTIVE':
         return "Your organisation's package is no longer active. Ask your employer to renew it, then try again.";
+      case 'EMAIL_MISMATCH':
+        return 'This key-pass was sent to a different email address. Use the address your invitation was sent to.';
       case 'ACCOUNT_EXISTS':
         return 'An account with this email already exists. Sign in instead.';
       case 'RATE_LIMITED':
@@ -63,12 +65,14 @@ export default function Join() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<{ message: string; accountExists: boolean } | null>(null);
 
+  // An emailed invitation carries the address it was sent to; the key-pass only works with it
+  const invitedEmail = searchParams.get('email')?.trim() ?? '';
   const form = useForm<JoinFormData>({
     resolver: zodResolver(joinSchema),
     defaultValues: {
       code: normaliseCode(searchParams.get('code') ?? ''),
       name: '',
-      email: '',
+      email: invitedEmail,
       password: '',
       confirmPassword: '',
     },
@@ -77,7 +81,7 @@ export default function Join() {
   const onSubmit = async (data: JoinFormData) => {
     setSubmitting(true);
     setFormError(null);
-    const { error } = await joinWithKeypass({
+    const { error, emailConfirmationRequired } = await joinWithKeypass({
       code: normaliseCode(data.code),
       email: data.email.trim(),
       password: data.password,
@@ -86,7 +90,9 @@ export default function Join() {
     if (error) {
       setFormError({ message: joinErrorMessage(error), accountExists: error instanceof ApiError && error.code === 'ACCOUNT_EXISTS' });
     } else {
-      toast.success('Welcome! Your account is ready.');
+      toast.success('Welcome! Your account is ready.', emailConfirmationRequired
+        ? { description: `We have sent a link to ${data.email.trim()}. Confirm your email address before you next sign in.`, duration: 10000 }
+        : undefined);
       navigate('/dashboard');
     }
     setSubmitting(false);
@@ -128,9 +134,9 @@ export default function Join() {
           ) : (
             <>
               <CardHeader className="space-y-1">
-                <CardTitle level={2} className="text-xl">Use your access code</CardTitle>
+                <CardTitle level={2} className="text-xl">Use your key-pass</CardTitle>
                 <CardDescription>
-                  Your employer gave you a code that works once. Choose a password so you can sign back in later.
+                  Your employer gave you a key-pass that works once. Choose a password so you can sign back in later.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -153,7 +159,7 @@ export default function Join() {
                       name="code"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Access code</FormLabel>
+                          <FormLabel>Key-pass</FormLabel>
                           <FormControl>
                             <Input autoComplete="off" autoCapitalize="characters" spellCheck={false} className="font-mono uppercase" {...field} />
                           </FormControl>
@@ -183,8 +189,9 @@ export default function Join() {
                         <FormItem>
                           <FormLabel>Work email</FormLabel>
                           <FormControl>
-                            <Input type="email" autoComplete="email" placeholder="you@organisation.com" {...field} />
+                            <Input type="email" autoComplete="email" placeholder="you@organisation.com" readOnly={!!invitedEmail} {...field} />
                           </FormControl>
+                          {invitedEmail && <p className="text-xs text-muted-foreground">Your invitation was sent to this address.</p>}
                           <FormMessage />
                         </FormItem>
                       )}

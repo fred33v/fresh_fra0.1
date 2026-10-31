@@ -505,6 +505,7 @@ describe('Dashboard', () => {
 
     it('Starter: health check, with the workshop shown as part of Professional', () => {
       setupPackage('pkg_basic');
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
       renderDashboard();
 
       expect(screen.getByTestId('health-check-card')).toBeInTheDocument();
@@ -526,22 +527,39 @@ describe('Dashboard', () => {
       expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
     });
 
-    it('no package: offers the packages, not the workshop, and does not talk about a current package', () => {
-      mockedUseEntitlements.mockReturnValue({
-        isLoading: false,
-        entitlements: {
-          packageId: null, packageName: null, tier: 0, expiresAt: null, keypassAllowance: 0,
-          features: { assessment: false, training: false, certificates: false, dashboard: false, compliance: false },
-          assessments: { allowed: false, limit: 0, used: 0 },
-        },
-      });
+    const NO_PACKAGE = {
+      isLoading: false,
+      entitlements: {
+        packageId: null, packageName: null, tier: 0, expiresAt: null, keypassAllowance: 0,
+        features: { assessment: false, training: false, certificates: false, dashboard: false, compliance: false },
+        assessments: { allowed: false, limit: 0, used: 0 },
+      },
+    } as const;
+
+    it('no package: shows the three packages with prices + VAT and a way to pay, not the workshop', () => {
+      mockedUseEntitlements.mockReturnValue(NO_PACKAGE as never);
+      setupAuth({ user: { ...makeUser(), role: 'employer' } });
       renderDashboard();
 
       expect(screen.queryByText('Start Workshop')).not.toBeInTheDocument();
-      expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
-      expect(screen.getByText(/Choose a package to unlock/)).toBeInTheDocument();
+      expect(screen.queryByTestId('health-check-card')).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Choose your package' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Choose Starter' })).toHaveAttribute('href', '/checkout?package=Starter');
+      expect(screen.getByRole('link', { name: 'Choose Professional' })).toHaveAttribute('href', '/checkout?package=Professional');
+      expect(screen.getByRole('link', { name: 'Choose Enterprise' })).toHaveAttribute('href', '/checkout?package=Enterprise');
+      expect(screen.getAllByText(/\+ VAT/)).toHaveLength(3);
+      expect(screen.getByText(/Risk appetite, Fraud triangle/)).toBeInTheDocument();
       expect(screen.queryByText(/your current package/)).not.toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'See the packages' })).toHaveAttribute('href', '/#packages');
+    });
+
+    it('employee whose organisation lacks training: points them to their manager, with nothing to buy', () => {
+      setupPackage('pkg_basic');
+      renderDashboard();
+
+      expect(screen.queryByText('Start Workshop')).not.toBeInTheDocument();
+      expect(screen.getByText(/Ask the person who manages/)).toBeInTheDocument();
+      expect(screen.queryByText('See Professional')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /^Choose / })).not.toBeInTheDocument();
     });
 
     it('waits for the package before showing the dashboard', () => {

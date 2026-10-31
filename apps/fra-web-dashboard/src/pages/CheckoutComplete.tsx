@@ -92,8 +92,8 @@ export default function CheckoutComplete() {
       icon: <Smartphone className="h-8 w-8 text-primary" aria-hidden="true" />,
       title: cancelled ? 'Payment cancelled' : 'Payment complete',
       body: cancelled
-        ? 'You have not been charged. Return to the Stop FRA app to try again.'
-        : 'Return to the Stop FRA app to continue.',
+        ? 'You have not been charged. Return to the FRAUD-RISK.CO.UK app to try again.'
+        : 'Return to the FRAUD-RISK.CO.UK app to continue.',
       actions: <Button className="w-full" asChild><a href={appUrl}>Return to the app</a></Button>,
     },
   };

@@ -12,10 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, Download, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Download, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { scoreRisk, type ControlEffectiveness, type Priority } from '@/lib/risk-scoring';
+import { RISK_AREA_LABELS, riskAreaLabel, scoreRisk, type ControlEffectiveness, type Priority } from '@/lib/risk-scoring';
 import { RiskHeatMap } from '@/components/enterprise/RiskHeatMap';
+import { ImportFromAssessment } from '@/components/enterprise/ImportFromAssessment';
 import { useConfirm } from '@/hooks/useConfirm';
 
 const logger = createLogger('RiskRegister');
@@ -38,6 +39,11 @@ export interface Risk {
   actionPlan?: string;
   dueDate?: string;
   status: RiskStatus;
+  /** The owner's latest word on their action, from their own dashboard */
+  ownerNote?: string;
+  ownerUpdatedAt?: string;
+  /** The owner marked it done and the employer has not confirmed it yet */
+  reviewPending?: boolean;
 }
 
 interface Summary {
@@ -45,6 +51,7 @@ interface Summary {
   byPriority: Record<Priority, number>;
   overdue: number;
   unowned: number;
+  awaitingReview?: number;
   heatMap: number[][]; // [impact-1][likelihood-1]
 }
 
@@ -60,12 +67,8 @@ const CONTROL_LABELS: Record<ControlEffectiveness, string> = {
 const STATUS_LABELS: Record<RiskStatus, string> = {
   open: 'Open', in_progress: 'In progress', mitigated: 'Mitigated', accepted: 'Accepted', closed: 'Closed',
 };
-const RISK_AREA_LABELS: Record<string, string> = {
-  procurement: 'Procurement', cash_banking: 'Cash and banking', payroll_hr: 'Payroll and HR', revenue: 'Revenue',
-  it_systems: 'IT systems', expenses: 'Expenses', assets: 'Assets', governance: 'Governance', other: 'Other',
-};
 const RISK_AREAS = Object.keys(RISK_AREA_LABELS);
-const riskAreaLabel = (area: string) => RISK_AREA_LABELS[area] ?? area.replace(/_/g, ' ');
+const TO_CONFIRM = 'to_confirm';
 
 const PRIORITY_CLASS: Record<Priority, string> = {
   HIGH: 'bg-destructive/10 text-destructive border-destructive/30',
@@ -129,7 +132,7 @@ export default function RiskRegister() {
 
   const filtered = useMemo(() => risks.filter((r) =>
     (priorityFilter === 'all' || r.priority === priorityFilter) &&
-    (statusFilter === 'all' || r.status === statusFilter)
+    (statusFilter === 'all' || (statusFilter === TO_CONFIRM ? !!r.reviewPending : r.status === statusFilter))
   ), [risks, priorityFilter, statusFilter]);
 
   const preview = scoreRisk(form.impact, form.likelihood, form.controlEffectiveness);
@@ -200,6 +203,17 @@ export default function RiskRegister() {
     }
   };
 
+  // The owner said it is done: confirm it, or send it back to them
+  const review = async (risk: Risk, decision: 'approve' | 'reopen') => {
+    try {
+      await api.post(`/api/v1/risk-register/${risk.id}/review`, { decision });
+      toast.success(decision === 'approve' ? 'Action confirmed' : 'Sent back to the owner');
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save your decision');
+    }
+  };
+
   const exportCsv = async () => {
     try {
       await api.download('/api/v1/risk-register?format=csv', 'risk-register.csv');
@@ -246,14 +260,16 @@ export default function RiskRegister() {
           </div>
         ) : (
           <>
+            <ImportFromAssessment onImported={load} />
             {summary && (
               <div className="grid gap-4 lg:grid-cols-[1fr_auto] mb-8">
-                <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 content-start">
+                <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 content-start">
                   {[
                     { label: 'Active risks', value: summary.total },
                     { label: 'High priority', value: summary.byPriority.HIGH },
                     { label: 'Overdue actions', value: summary.overdue },
                     { label: 'Without an owner', value: summary.unowned },
+                    { label: 'Done, to confirm', value: summary.awaitingReview ?? 0 },
                   ].map((s) => (
                     <Card key={s.label}>
                       <CardHeader className="pb-2">
@@ -292,6 +308,7 @@ export default function RiskRegister() {
                     <SelectTrigger className="w-36" aria-label="Filter by status"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value={TO_CONFIRM}>Done, to confirm</SelectItem>
                       {Object.entries(STATUS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -327,10 +344,26 @@ export default function RiskRegister() {
                             <TableCell className="text-right tabular-nums">{r.inherentScore}</TableCell>
                             <TableCell className="text-right tabular-nums">{r.residualScore}</TableCell>
                             <TableCell><Badge variant="outline" className={PRIORITY_CLASS[r.priority]}>{r.priority}</Badge></TableCell>
-                            <TableCell>{STATUS_LABELS[r.status]}</TableCell>
+                            <TableCell className="max-w-xs">
+                              <p>{STATUS_LABELS[r.status]}</p>
+                              {r.reviewPending && <Badge variant="secondary" className="mt-1">Done, to confirm</Badge>}
+                              {r.ownerNote && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Owner{r.ownerUpdatedAt ? ` (${r.ownerUpdatedAt.slice(0, 10)})` : ''}: {r.ownerNote}
+                                </p>
+                              )}
+                            </TableCell>
                             <TableCell>{ownerName(r.ownerUserId)}</TableCell>
                             <TableCell className="tabular-nums">{r.dueDate ?? '—'}</TableCell>
                             <TableCell className="text-right whitespace-nowrap">
+                              {r.reviewPending && (<>
+                                <Button variant="ghost" size="icon" onClick={() => review(r, 'approve')} aria-label={`Confirm ${r.title} is done`}>
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => review(r, 'reopen')} aria-label={`Send ${r.title} back to its owner`}>
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                              </>)}
                               <Button variant="ghost" size="icon" onClick={() => openEdit(r)} aria-label={`Edit ${r.title}`}>
                                 <Pencil className="h-4 w-4" />
                               </Button>

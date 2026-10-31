@@ -25,7 +25,7 @@ interface AuthContextType {
   verifyEmail: (token: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   /** Redeems an employer's access code: creates the employee account and signs the new user in */
-  joinWithKeypass: (input: { code: string; email: string; password: string; name?: string }) => Promise<{ error: Error | null }>;
+  joinWithKeypass: (input: { code: string; email: string; password: string; name?: string }) => Promise<{ error: Error | null; emailConfirmationRequired?: boolean }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   refreshProfile: () => Promise<void>;
@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
       await hydrateFromMe();
-      return { error: null };
+      return { error: null, emailConfirmationRequired: !!data.emailConfirmationRequired };
     } catch (err: unknown) {
       return { error: err as Error };
     }
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const joinWithKeypass = useCallback(async (input: { code: string; email: string; password: string; name?: string }) => {
     try {
-      const data = await api.post<AuthResponse>('/api/v1/keypasses/use', {
+      const data = await api.post<AuthResponse & { emailConfirmationRequired?: boolean }>('/api/v1/keypasses/use', {
         code: input.code,
         email: input.email,
         password: input.password,

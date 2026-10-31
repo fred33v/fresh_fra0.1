@@ -16,7 +16,8 @@ import { rateLimit, getClientIp } from './middleware.js';
 import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
 import { requirePackage } from './entitlements.js';
-import { mergeQuizScores, missingForCompletion } from './workshop-quiz.js';
+import { mergeQuizScores, missingForCompletion, quizResult, QUIZ_PASS_MARK } from './workshop-quiz.js';
+import { newCertificateNumber } from './certificates.js';
 import {
   workshopProfiles, workshopSessions, sessionParticipants, workshopProgress, polls, pollResponses, questions,
   questionUpvotes, actionPlans, certificates, newId, nowIso, memSessionRole, memParticipantCount, memFindProgress,
@@ -679,6 +680,18 @@ workshop.patch('/progress/:id', async (c) => {
       return jsonError(c, 400, 'NOT_COMPLETED',
         `Workshop not finished: sections [${missing.sections.join(', ')}] and quizzes [${missing.quizzes.join(', ')}] remain`);
     }
+    // Every question answered is not enough: the quiz must reach the pass mark. Questions can be answered again.
+    const result = quizResult(quizScores ?? current.quiz_scores);
+    if (!result.passed) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'QUIZ_NOT_PASSED',
+          message: `Quiz score ${result.percent}%: ${QUIZ_PASS_MARK}% is needed. Answer the question${result.wrong.length > 1 ? 's' : ''} in section${result.wrong.length > 1 ? 's' : ''} ${result.wrong.join(', ')} again.`,
+        },
+        data: { percent: result.percent, passMark: QUIZ_PASS_MARK, wrongSections: result.wrong },
+      }, 400);
+    }
     completedAt = current.completed_at ?? nowIso(); // keep the first completion date
   }
 
@@ -1292,7 +1305,7 @@ workshop.post('/certificates', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => ({})));
 
   // Generate certificate number server-side
-  const certNumber = `FRA-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const certNumber = newCertificateNumber();
   let issued: unknown;
 
   if (hasDatabase()) {
@@ -1303,26 +1316,35 @@ workshop.post('/certificates', async (c) => {
     if (existing.rows[0]) return c.json({ success: true, data: existing.rows[0] });
 
     // Verify workshop completion before issuing certificate
+    // Completed with the quiz pass mark (progress completed before the pass mark existed does not count)
     const progress = await pool.query(
-      'SELECT completed_at FROM workshop_progress WHERE user_id = $1 AND completed_at IS NOT NULL LIMIT 1',
+      'SELECT quiz_scores FROM workshop_progress WHERE user_id = $1 AND completed_at IS NOT NULL ORDER BY completed_at DESC',
       [auth.userId]
     );
-    if (!progress.rows[0]) {
-      return jsonError(c, 400, 'NOT_COMPLETED', 'Workshop must be completed before generating a certificate');
+    const passed = progress.rows.map((r: { quiz_scores: Record<string, number> }) => quizResult(r.quiz_scores)).find((r) => r.passed);
+    if (!passed) {
+      return jsonError(c, 400, 'NOT_COMPLETED', `Workshop must be completed with a quiz score of at least ${QUIZ_PASS_MARK}% before generating a certificate`);
     }
 
     const res = await pool.query(
-      `INSERT INTO certificates (user_id, session_id, certificate_number)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [auth.userId, parsed.data?.sessionId ?? null, certNumber]
+      `INSERT INTO certificates (user_id, session_id, certificate_number, quiz_score)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [auth.userId, parsed.data?.sessionId ?? null, certNumber, passed.percent]
     );
     issued = res.rows[0];
   } else {
     const existing = [...certificates.values()].find((ct) => ct.user_id === auth.userId);
     if (existing) return c.json({ success: true, data: existing });
-    const completed = [...workshopProgress.values()].some((wp) => wp.user_id === auth.userId && wp.completed_at);
-    if (!completed) return jsonError(c, 400, 'NOT_COMPLETED', 'Workshop must be completed before generating a certificate');
-    const row = { id: newId(), user_id: auth.userId, session_id: parsed.data?.sessionId ?? null, certificate_number: certNumber, issued_at: nowIso() };
+    const passed = [...workshopProgress.values()]
+      .filter((wp) => wp.user_id === auth.userId && wp.completed_at)
+      .map((wp) => quizResult(wp.quiz_scores)).find((r) => r.passed);
+    if (!passed) {
+      return jsonError(c, 400, 'NOT_COMPLETED', `Workshop must be completed with a quiz score of at least ${QUIZ_PASS_MARK}% before generating a certificate`);
+    }
+    const row = {
+      id: newId(), user_id: auth.userId, session_id: parsed.data?.sessionId ?? null,
+      certificate_number: certNumber, quiz_score: passed.percent, issued_at: nowIso(),
+    };
     certificates.set(row.id, row);
     issued = row;
   }

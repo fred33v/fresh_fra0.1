@@ -99,4 +99,31 @@ describe('RiskRegister page', () => {
     await userEvent.click(await screen.findByRole('button', { name: /export csv/i }));
     expect(mockedApi.download).toHaveBeenCalledWith('/api/v1/risk-register?format=csv', 'risk-register.csv');
   });
+
+  it('lets the employer confirm an action its owner marked done', async () => {
+    mockLoad([{ ...risk, status: 'mitigated', reviewPending: true, ownerNote: 'Call-back check in place', ownerUpdatedAt: '2026-11-01T09:00:00Z' }]);
+    mockedApi.post.mockResolvedValue({});
+    render(<RiskRegister />);
+    const row = (await screen.findByText('Supplier invoice fraud')).closest('tr')!;
+    expect(within(row).getByText('Done, to confirm')).toBeInTheDocument();
+    expect(within(row).getByText(/Call-back check in place/)).toBeInTheDocument();
+    await userEvent.click(within(row).getByRole('button', { name: /confirm supplier invoice fraud is done/i }));
+    expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/risk-register/r1/review', { decision: 'approve' });
+  });
+
+  it('can send an action back to its owner', async () => {
+    mockLoad([{ ...risk, status: 'mitigated', reviewPending: true }]);
+    mockedApi.post.mockResolvedValue({});
+    render(<RiskRegister />);
+    const row = (await screen.findByText('Supplier invoice fraud')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: /send supplier invoice fraud back/i }));
+    expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/risk-register/r1/review', { decision: 'reopen' });
+  });
+
+  it('shows no review buttons when nothing waits for confirmation', async () => {
+    mockLoad();
+    render(<RiskRegister />);
+    const row = (await screen.findByText('Supplier invoice fraud')).closest('tr')!;
+    expect(within(row).queryByRole('button', { name: /confirm/i })).not.toBeInTheDocument();
+  });
 });

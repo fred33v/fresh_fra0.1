@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# On pull requests a new push cancels the run it replaces. On main every merge
+# gets its own group (keyed by commit), so each one is tested to the end even
+# when several merges land within seconds of each other. With a shared group,
+# GitHub would cancel the earlier ones and a broken intermediate state would
+# go unnoticed.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint-and-typecheck:
@@ -168,3 +173,22 @@ jobs:
         if: failure()
         working-directory: apps/fra-backend/backend
         run: cat backend.log || true
+
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Init (no remote state)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate

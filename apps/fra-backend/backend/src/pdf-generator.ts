@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 import type { Assessment } from './types.js';
 import { createLogger } from './logger.js';
-import { buildAssessmentResults } from './assessment-modules.js';
+import { resultsOf } from './assessment-result.js';
 
 const logger = createLogger('pdf-generator');
 
@@ -53,7 +53,7 @@ export interface PDFGenerationOptions {
  * The page runs with no scripts and no network, so injected markup cannot reach
  * internal addresses or run code.
  */
-export async function renderHtmlToPdf(html: string): Promise<Buffer> {
+export async function renderHtmlToPdf(html: string, options: { landscape?: boolean } = {}): Promise<Buffer> {
   let browser = null;
   try {
     browser = await puppeteer.launch({
@@ -70,11 +70,10 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
     // 'load', not 'networkidle0': every outside request is aborted above, and waiting for the
     // network to go idle after an aborted request can hang until the 30s timeout
     await page.setContent(html, { waitUntil: 'load', timeout: 15_000 });
-    const pdf = await page.pdf({
-      format: 'A4',
-      margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
-      printBackground: true,
-    });
+    const pdf = await page.pdf(options.landscape
+      // Landscape pages (certificates) set their own margins in their CSS
+      ? { format: 'A4', landscape: true, margin: { top: '0', right: '0', bottom: '0', left: '0' }, printBackground: true, preferCSSPageSize: true }
+      : { format: 'A4', margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }, printBackground: true });
     await page.close();
     return Buffer.from(pdf);
   } catch (error) {
@@ -97,8 +96,8 @@ function createReportHTML(options: PDFGenerationOptions): string {
   const { assessment, riskSummary, organizationName, title, enhancedData } = options;
   const answerCount = Object.keys(assessment.answers ?? {}).length;
 
-  // Same scoring as the results page, so the report and the screen always agree
-  const { overallScore: riskScore, riskLevel } = buildAssessmentResults(assessment.id, assessment.answers ?? {});
+  // The result saved at submission, as on the results page, so the report and the screen always agree
+  const { overallScore: riskScore, riskLevel } = resultsOf({ ...assessment, answers: assessment.answers ?? {} });
 
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
