@@ -170,8 +170,28 @@ const progressId = data(p)?.id;
 // Quiz answers (the chosen option per section) are marked by the server
 [s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { currentSection: 6, completedSections: [0, 1, 2, 3, 4, 5, 6], quizAnswers: { 1: 1, 2: 2, 3: 1, 4: 0 } }, ent);
 if (check('workshop progress update', s, 200, p)) expect('quiz scored by the server', JSON.stringify(data(p).quiz_scores) === '{"1":100,"2":100,"3":100,"4":0}', data(p).quiz_scores);
-[s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { completedAt: new Date().toISOString() }, ent); check('workshop complete', s, 200, p);
-[s, p] = await call('POST', '/workshop/certificates', {}, ent); check('certificate issued', s, [200, 201], p);
+// 3 of 4 right is 75%, under the 80% pass mark: not complete, and no certificate
+[s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { completedAt: new Date().toISOString() }, ent);
+if (check('workshop under the pass mark refused', s, 400, p)) expect('refused for the quiz score', p?.error?.code === 'QUIZ_NOT_PASSED' && p?.data?.percent === 75, p);
+[s, p] = await call('POST', '/workshop/certificates', {}, ent); check('no certificate under the pass mark', s, 400, p);
+// Answering the missed question again passes
+[s, p] = await call('PATCH', `/workshop/progress/${progressId}`, { quizAnswers: { 4: 2 }, completedAt: new Date().toISOString() }, ent); check('workshop complete', s, 200, p);
+[s, p] = await call('POST', '/workshop/certificates', {}, ent);
+let trainingCert;
+if (check('certificate issued', s, [200, 201], p)) {
+  trainingCert = data(p).certificate_number;
+  expect('certificate records the quiz score', data(p).quiz_score === 100, data(p).quiz_score);
+}
+// Anyone can verify a certificate, without signing in
+[s, p] = await call('GET', `/certificates/verify/${trainingCert}`);
+if (check('training certificate verify', s, 200, p)) expect('verify shows the course', data(p).kind === 'training' && data(p).quizScore === 100, data(p));
+[s, p] = await call('GET', `/assessments/${assessmentId}/certificate`, undefined, ent);
+if (check('assessment certificate', s, 200, p)) {
+  const number = data(p).certificateNumber;
+  [s, p] = await call('GET', `/certificates/verify/${number}`);
+  if (check('assessment certificate verify', s, 200, p)) expect('verify shows the assessment', data(p).kind === 'assessment' && data(p).areasAssessed === 13, data(p));
+}
+[s, p] = await call('GET', '/certificates/verify/FRA-0000-0000-0000'); check('unknown certificate', s, 404, p);
 [s, p] = await call('POST', '/workshop/action-plans', { actionItems: [{ text: 'Review supplier changes', done: false }], commitments: ['Brief board'] }, ent);
 check('action plan create', s, 201, p);
 [s, p] = await call('PATCH', `/workshop/action-plans/${data(p)?.id}`, { commitments: ['Brief board', 'Quarterly review'] }, ent); check('action plan update', s, 200, p);
