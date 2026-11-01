@@ -28,7 +28,9 @@ export type QuestionRow = {
 export type ActionPlanRow = {
   id: string; user_id: string; session_id: string | null; action_items: unknown; commitments: string[]; generated_at: string;
 };
-export type CertificateRow = { id: string; user_id: string; session_id: string | null; certificate_number: string; issued_at: string };
+export type CertificateRow = {
+  id: string; user_id: string; session_id: string | null; certificate_number: string; quiz_score?: number | null; issued_at: string;
+};
 
 export const workshopProfiles = new Map<string, ProfileRow>(); // by user id
 export const workshopSessions = new Map<string, SessionRow>();

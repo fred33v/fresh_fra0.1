@@ -151,8 +151,11 @@ export function useWorkshopProgress(sessionId?: string | null, { enabled = true 
     }
   };
 
-  /** Asks the server to mark the workshop complete; it checks every section and quiz is done. */
-  const markComplete = async (): Promise<boolean> => {
+  /**
+   * Asks the server to mark the workshop complete; it checks every section and quiz is done and that
+   * the quiz reaches the pass mark. When the score is too low, onQuizNotPassed gets the sections to retake.
+   */
+  const markComplete = async (onQuizNotPassed?: (wrongSections: number[]) => void): Promise<boolean> => {
     if (!user || !progress) return false;
 
     try {
@@ -164,7 +167,15 @@ export function useWorkshopProgress(sessionId?: string | null, { enabled = true 
       return true;
     } catch (err: unknown) {
       logger.error('Error marking complete', err);
-      if (err instanceof ApiError && err.code === 'NOT_COMPLETED') {
+      if (err instanceof ApiError && err.code === 'QUIZ_NOT_PASSED') {
+        const details = (err.details ?? {}) as { percent?: number; passMark?: number; wrongSections?: number[] };
+        const wrong = details.wrongSections ?? [];
+        toast.error(
+          `Your quiz score is ${details.percent ?? 0}%. You need ${details.passMark ?? 80}% for the certificate, ` +
+          `so answer ${wrong.length === 1 ? 'the question you missed' : 'the questions you missed'} again.`,
+        );
+        onQuizNotPassed?.(wrong);
+      } else if (err instanceof ApiError && err.code === 'NOT_COMPLETED') {
         toast.error('Please complete every section and answer every quiz question first');
       } else {
         toast.error('Failed to complete workshop');

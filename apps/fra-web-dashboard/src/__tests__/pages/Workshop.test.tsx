@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Workshop from '@/pages/Workshop';
@@ -340,6 +340,24 @@ describe('Workshop', () => {
       expect(mockNavigate).not.toHaveBeenCalledWith('/certificate');
     });
 
+    it('goes back to the first question to retake when the quiz score is under the pass mark', async () => {
+      const markComplete = vi.fn().mockImplementation(async (onQuizNotPassed?: (wrong: number[]) => void) => {
+        onQuizNotPassed?.([3, 2]);
+        return false;
+      });
+      setupProgress({
+        progress: makeProgress({ current_section: workshopSections.length - 1 }),
+        markComplete,
+      });
+
+      const user = userEvent.setup();
+      renderWorkshop();
+      await user.click(screen.getByText('Complete Workshop'));
+
+      expect(mockNavigate).not.toHaveBeenCalledWith('/certificate');
+      await waitFor(() => expect(mockUpdateSection).toHaveBeenCalledWith(2));
+    });
+
     it('Previous button navigates back after advancing', async () => {
       setupProgress({
         progress: makeProgress({ current_section: 2 }),
@@ -474,6 +492,30 @@ describe('Workshop', () => {
 
       expect(mockSaveQuizAnswer).toHaveBeenCalledWith(quizSectionIndex, wrongIndex);
       expect(toast.error).toHaveBeenCalledWith('Not quite right. Review the explanation.');
+    });
+
+    it('offers another try after a wrong answer', async () => {
+      const user = userEvent.setup();
+      renderWorkshop();
+
+      const wrongIndex = quiz.correctAnswer === 0 ? 1 : 0;
+      await user.click(screen.getByText(quiz.options[wrongIndex]));
+      await user.click(screen.getByText('Submit Answer'));
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+      await user.click(screen.getByText(quiz.options[quiz.correctAnswer]));
+      await user.click(screen.getByText('Submit Answer'));
+      expect(mockSaveQuizAnswer).toHaveBeenLastCalledWith(quizSectionIndex, quiz.correctAnswer);
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+
+    it('asks again for a question answered wrongly on an earlier visit', () => {
+      setupProgress({
+        progress: makeProgress({ current_section: quizSectionIndex, quiz_scores: { [String(quizSectionIndex)]: 0 } }),
+      });
+      renderWorkshop();
+      expect(screen.getByText(/Your last answer to this question was wrong/)).toBeInTheDocument();
+      expect(screen.getByText('Submit Answer')).toBeInTheDocument();
     });
 
     it('shows explanation after submitting', async () => {

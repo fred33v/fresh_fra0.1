@@ -24,7 +24,8 @@ echo ""
 # --- Step 1: Build ---
 echo "[1/4] Building dashboard..."
 cd "$DASHBOARD_DIR"
-npm run build
+# The commit goes into each frontend error report, so a report can be matched to the code
+VITE_APP_VERSION="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)" npm run build
 echo "  Build complete: $(du -sh dist | cut -f1)"
 
 # --- Step 2: Upload to S3 ---

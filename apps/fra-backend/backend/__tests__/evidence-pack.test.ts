@@ -1,10 +1,10 @@
 /// <reference types="jest" />
 
-import zlib from 'node:zlib';
 import { describe, expect, it } from '@jest/globals';
 import { app, authHeaders, createPaidUser } from './helpers';
 import { auditEvents } from '../src/stores';
 import { createZip } from '../src/zip';
+import { readZip } from './zip-reader';
 
 const API = 'http://localhost/api/v1';
 const get = (path: string, token: string) => app.request(`${API}${path}`, { headers: authHeaders(token) });
@@ -13,26 +13,6 @@ const send = (method: string, path: string, token: string, body: unknown = {}) =
 const json = async (res: Response) => ((await res.json()) as any).data;
 
 /** Reads a ZIP from its local file headers (enough for the archives createZip writes). */
-function readZip(buf: Buffer): Map<string, string> {
-  const files = new Map<string, string>();
-  let at = 0;
-  while (buf.readUInt32LE(at) === 0x04034b50) {
-    const method = buf.readUInt16LE(at + 8);
-    const crc = buf.readUInt32LE(at + 14);
-    const size = buf.readUInt32LE(at + 18);
-    const nameLen = buf.readUInt16LE(at + 26);
-    const extraLen = buf.readUInt16LE(at + 28);
-    const name = buf.subarray(at + 30, at + 30 + nameLen).toString('utf8');
-    const start = at + 30 + nameLen + extraLen;
-    const raw = buf.subarray(start, start + size);
-    const data = method === 8 ? zlib.inflateRawSync(raw) : raw;
-    expect(zlib.crc32(data)).toBe(crc);
-    files.set(name, data.toString('utf8'));
-    at = start + size;
-  }
-  expect(buf.readUInt32LE(at)).toBe(0x02014b50); // central directory follows
-  return files;
-}
 
 describe('createZip', () => {
   it('round-trips names and contents, including non-ASCII', () => {
@@ -62,7 +42,7 @@ describe('GET /compliance/evidence-pack', () => {
       '1-policy-and-tone/policies.csv', '1-policy-and-tone/tone-from-the-top.csv',
       '2-risk-assessment/assessments.csv', '2-risk-assessment/risk-register.csv',
       '3-due-diligence/associated-persons.csv',
-      '4-training/training.csv',
+      '4-training/training.csv', '4-training/budget-holders.csv',
       '5-reporting-routes/reporting-routes.csv', '5-reporting-routes/speak-up-case-log.csv',
       '6-monitoring/compliance-scores.csv', '6-monitoring/detection-activity.csv', '6-monitoring/audit-trail.csv',
       '7-incidents/incidents.csv', '7-incidents/losses-and-recoveries.csv',
@@ -82,7 +62,7 @@ describe('GET /compliance/evidence-pack', () => {
     expect(files.get('6-monitoring/compliance-scores.csv')).toContain('ECCTA 2023,eccta-1,');
 
     const event = auditEvents.find((e) => e.organisationId === organisationId && e.eventType === 'compliance.evidence_pack_exported');
-    expect(event?.details).toMatchObject({ files: 16, pdf: false });
+    expect(event?.details).toMatchObject({ files: 17, pdf: false });
   });
 
   it('keeps speak-up report text and reporter identity out of the case log', async () => {

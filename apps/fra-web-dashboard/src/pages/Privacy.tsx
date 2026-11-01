@@ -31,7 +31,7 @@ const sections: LegalSection[] = [
         <li><strong>Account details:</strong> name, work email address, organisation, department, role and an encrypted (hashed) password. We never store your password itself.</li>
         <li><strong>Assessment answers</strong> about fraud risks and controls, and the scores worked out from them.</li>
         <li><strong>Compliance records</strong> your organisation enters: risks, incidents, policies, board minutes, losses, associated persons and due diligence, gifts and hospitality, conflicts of interest.</li>
-        <li><strong>Training records:</strong> workshop progress, quiz scores, action plans and certificates.</li>
+        <li><strong>Training records:</strong> workshop progress, quiz scores, action plans and certificates. Anyone who has a certificate's number (it is printed on the certificate, with a QR code) can check it on our verification page, which shows the holder's name, organisation, course, quiz score and date. Assessment certificates show the organisation's name and the date, never its answers or risk scores.</li>
         <li><strong>Payment records:</strong> what was bought, when and for how much. Card details are entered on Stripe's page and never reach us.</li>
         <li><strong>Security and audit records:</strong> sign-ins and changes to records, with the internet (IP) address and browser used, so organisations can evidence who did what. These are not kept for speak-up reports (see section 4).</li>
       </ul>

@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getDbPool } from './db.js';
 import { createLogger } from './logger.js';
+import { computeResult } from './assessment-result.js';
+import type { Pool } from 'pg';
 
 const logger = createLogger('migrate');
 
@@ -44,7 +46,23 @@ async function main() {
   }
 
   logger.info('Migrations applied');
+  await backfillAssessmentResults(pool);
   await pool.end();
+}
+
+/**
+ * Assessments submitted before results were saved (031) get their result once,
+ * computed from their answers with today's method. updated_at is left alone.
+ */
+async function backfillAssessmentResults(pool: Pool) {
+  const { rows } = await pool.query<{ id: string; answers: Record<string, unknown>; submitted_at: Date | null }>(
+    "SELECT id, answers, submitted_at FROM public.assessments WHERE status IN ('submitted', 'completed') AND result IS NULL",
+  );
+  for (const r of rows) {
+    const result = computeResult({ id: r.id, answers: r.answers ?? {} });
+    await pool.query('UPDATE public.assessments SET result = $1 WHERE id = $2 AND result IS NULL', [JSON.stringify(result), r.id]);
+  }
+  if (rows.length) logger.info(`Saved the result of ${rows.length} assessment(s) submitted before results were kept`);
 }
 
 main().catch((err) => {

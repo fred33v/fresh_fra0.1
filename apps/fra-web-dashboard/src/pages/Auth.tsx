@@ -380,7 +380,7 @@ export default function Auth() {
                       </button>
                     </div>
                     <div className="mt-2 text-center text-sm text-muted-foreground">
-                      Got an access code from your employer?{' '}
+                      Got a key-pass from your employer?{' '}
                       <Link to="/join" className="text-primary font-medium hover:underline">
                         Join with your code
                       </Link>

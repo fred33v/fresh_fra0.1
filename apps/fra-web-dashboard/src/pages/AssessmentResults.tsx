@@ -36,9 +36,11 @@ import {
   Shield,
   AlertCircle,
   Loader2,
+  Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AssessmentResults as AssessmentResultsData } from '@/types/assessment';
+import type { AssessmentCertificate } from '@/types/workshop';
 
 type Impact = 'high' | 'medium' | 'low';
 
@@ -68,6 +70,25 @@ export default function AssessmentResults() {
       setDownloading(false);
     }
   };
+  // Every submitted assessment has its own verifiable certificate
+  const [certificate, setCertificate] = useState<AssessmentCertificate | null>(null);
+  const [downloadingCertificate, setDownloadingCertificate] = useState(false);
+
+  const downloadCertificate = async () => {
+    if (!certificate) return;
+    setDownloadingCertificate(true);
+    try {
+      await api.download(
+        `/api/v1/certificates/${encodeURIComponent(certificate.certificateNumber)}/pdf`,
+        `certificate-${certificate.certificateNumber}.pdf`,
+      );
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'The certificate could not be downloaded');
+    } finally {
+      setDownloadingCertificate(false);
+    }
+  };
+
   const [results, setResults] = useState<AssessmentResultsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +112,12 @@ export default function AssessmentResults() {
     };
 
     fetchResults();
+    // Only the person who filled it in and the organisation's managers get the certificate; others see no card
+    if (assessmentId && user) {
+      api.get<AssessmentCertificate>(`/api/v1/assessments/${assessmentId}/certificate`)
+        .then(setCertificate)
+        .catch(() => setCertificate(null));
+    }
   }, [assessmentId, user]);
 
   if (!user || !profile) return null;
@@ -258,6 +285,34 @@ export default function AssessmentResults() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {certificate && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-8"
+          >
+            <Card>
+              <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                <Award className="h-10 w-10 text-primary flex-none" aria-hidden="true" />
+                <div className="flex-1">
+                  <h2 className="font-semibold">Assessment certificate</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Certificate <span className="font-mono">{certificate.certificateNumber}</span>, issued{' '}
+                    {new Date(certificate.issuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.
+                    It shows this assessment was carried out, not your results. Anyone can{' '}
+                    <a href={`/certificate/verify?n=${encodeURIComponent(certificate.certificateNumber)}`} className="underline">check it is genuine</a>.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={downloadCertificate} disabled={downloadingCertificate}>
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {downloadingCertificate ? 'Preparing…' : 'Download certificate'}
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Risk by Module */}
         <motion.div

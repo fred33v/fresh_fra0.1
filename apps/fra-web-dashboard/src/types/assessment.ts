@@ -12,6 +12,8 @@ export interface AssessmentRecord {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
+  /** Saved by the server when the assessment is submitted, and never recalculated */
+  result?: { methodVersion: number; scoredAt: string; results: AssessmentResults };
 }
 
 /** GET /api/v1/assessments/modules — question IDs are `<moduleId>.<field>` */

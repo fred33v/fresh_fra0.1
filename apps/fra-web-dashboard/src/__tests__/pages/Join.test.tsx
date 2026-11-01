@@ -50,7 +50,7 @@ const PASSWORD = 'Employee-Pass-2026';
 
 async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, overrides: { code?: string; email?: string; password?: string; confirm?: string; name?: string } = {}) {
   if (overrides.code !== undefined) {
-    const code = screen.getByLabelText('Access code');
+    const code = screen.getByLabelText('Key-pass');
     await user.clear(code);
     if (overrides.code) await user.type(code, overrides.code);
   }
@@ -72,20 +72,20 @@ describe('Join page', () => {
     renderJoin();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1, name: 'Join your organisation' })).toBeInTheDocument();
-    for (const label of ['Access code', 'Work email', 'Choose a password', 'Confirm password']) {
+    for (const label of ['Key-pass', 'Work email', 'Choose a password', 'Confirm password']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
   });
 
   it('keeps the headings in order: one h1, then the card title as an h2', () => {
     renderJoin();
-    expect(screen.getByRole('heading', { level: 2, name: 'Use your access code' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Use your key-pass' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
   });
 
   it('fills in the code from the link, ignoring case and dashes', () => {
     renderJoin('/join?code=k7qx-4mpa-9wtd');
-    expect(screen.getByLabelText('Access code')).toHaveValue('K7QX4MPA9WTD');
+    expect(screen.getByLabelText('Key-pass')).toHaveValue('K7QX4MPA9WTD');
   });
 
   it('sends the cleaned-up code, email and password, then goes to the dashboard', async () => {
@@ -118,13 +118,13 @@ describe('Join page', () => {
     const user = userEvent.setup();
     renderJoin();
     await fillAndSubmit(user, { code: '' });
-    expect(await screen.findByText('Enter the access code your employer gave you')).toBeInTheDocument();
+    expect(await screen.findByText('Enter the key-pass your employer gave you')).toBeInTheDocument();
     expect(mockJoin).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['NOT_FOUND', /don't recognise that code/],
-    ['EXPIRED', /code has expired/],
+    ['NOT_FOUND', /don't recognise that key-pass/],
+    ['EXPIRED', /key-pass has expired/],
     ['NOT_AVAILABLE', /already been used or was withdrawn/],
     ['ALREADY_USED', /already been used or was withdrawn/],
     ['PACKAGE_INACTIVE', /package is no longer active/],
@@ -164,7 +164,28 @@ describe('Join page', () => {
     setupAuth({ user: { userId: 'u1', email: 'boss@acme.example', name: 'Boss', role: 'employer', organisationId: 'o1', createdAt: '2026-01-01' } });
     renderJoin();
     expect(screen.getByText(/signed in as boss@acme.example/)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Access code')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Key-pass')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to your dashboard' })).toHaveAttribute('href', '/dashboard');
   });
+
+  it('fills in and locks the address an invitation was sent to', async () => {
+    const user = userEvent.setup();
+    renderJoin('/join?code=K7QX4MPA9WTD&email=alex%40acme.example');
+    const email = screen.getByLabelText('Work email');
+    expect(email).toHaveValue('alex@acme.example');
+    expect(email).toHaveAttribute('readonly');
+    await user.type(screen.getByLabelText('Choose a password'), PASSWORD);
+    await user.type(screen.getByLabelText('Confirm password'), PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => expect(mockJoin).toHaveBeenCalledWith(expect.objectContaining({ email: 'alex@acme.example' })));
+  });
+
+  it('explains when the key-pass was sent to another address', async () => {
+    mockJoin.mockResolvedValue({ error: new ApiError('EMAIL_MISMATCH', 'mismatch') });
+    const user = userEvent.setup();
+    renderJoin('/join?code=K7QX4MPA9WTD');
+    await fillAndSubmit(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sent to a different email address/);
+  });
 });
+

@@ -5,6 +5,11 @@ import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { HealthCheckCard } from '@/components/HealthCheckCard';
+import { PackageOffer } from '@/components/PackageOffer';
+import { JoinSessionCard } from '@/components/JoinSessionCard';
+import { MyActions } from '@/components/MyActions';
+import { NextActions } from '@/components/NextActions';
+import { BudgetHolderCard } from '@/components/BudgetHolderCard';
 import { Layout } from '@/components/layout/Layout';
 import { ReassessmentBanner } from '@/components/ReassessmentBanner';
 import { Button } from '@/components/ui/button';
@@ -21,7 +26,6 @@ import {
   Target,
   ArrowRight,
   FileText,
-  Users,
   Loader2,
   Lock,
 } from 'lucide-react';
@@ -63,6 +67,8 @@ export default function Dashboard() {
   const isManager = user.role === 'employer' || user.role === 'admin';
   const guidedSteps = isManager && hasTraining && !!entitlements?.features.assessment;
   const trainingLocked = guidedSteps && !hasFinishedAssessment;
+  // The people who run an account with no package see what they can buy instead of locked cards
+  const showOffer = isManager && !hasTraining && !entitlements?.packageName;
 
   const getSectorLabel = (sector: string) => {
     switch (sector) {
@@ -104,11 +110,19 @@ export default function Dashboard() {
             The first assessment is prompted by the risk assessment card below, so the banner is for later ones. */}
         {(user.role === 'employer' || user.role === 'admin') && hasFinishedAssessment && <ReassessmentBanner />}
 
+        {/* Enterprise: the risk actions given to this person, and the confidential reporting link */}
+        {entitlements?.packageId === 'pkg_full' && <MyActions onlyIfAssigned={isManager} />}
+        {entitlements?.packageId === 'pkg_full' && <BudgetHolderCard />}
+
+        {showOffer ? (
+          <PackageOffer />
+        ) : (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <HealthCheckCard entitlements={entitlements} assessments={assessments} step={guidedSteps ? 1 : undefined} />
         </motion.div>
+        )}
 
-        {trainingLocked ? (
+        {showOffer ? null : trainingLocked ? (
           <Card className="mb-6">
             <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6">
               <div className="flex items-center gap-3">
@@ -137,17 +151,17 @@ export default function Dashboard() {
                 <div>
                   <div className="font-medium">Fraud Risk Awareness Workshop</div>
                   <div className="text-sm text-muted-foreground">
-                    {entitlements?.packageName
-                      ? 'Staff training and certificates are included in Professional and Enterprise, together with everything in your current package.'
-                      : 'Choose a package to unlock your organisation\u2019s risk assessment. Staff training and certificates are included in Professional and Enterprise.'}
+                    {!isManager
+                      ? 'Your organisation\u2019s package does not include the training yet. Ask the person who manages your organisation\u2019s account.'
+                      : 'Staff training and certificates are included in Professional and Enterprise, together with everything in your current package.'}
                   </div>
                 </div>
               </div>
-              <Button variant="outline" asChild>
-                {entitlements?.packageName
-                  ? <Link to="/package/professional">See Professional</Link>
-                  : <Link to="/#packages">See the packages</Link>}
-              </Button>
+              {isManager && (
+                <Button variant="outline" asChild>
+                  <Link to="/package/professional">See Professional</Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -298,6 +312,13 @@ export default function Dashboard() {
         </div>
         )}
 
+        {/* The person's own action plan, from the training */}
+        {hasTraining && !trainingLocked && (
+          <div className="mt-6">
+            <NextActions showEmployerNote={!isManager} />
+          </div>
+        )}
+
         {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -332,17 +353,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-md transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" role="button" tabIndex={0} onClick={() => navigate('/workshop')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/workshop'); } }}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-info" aria-hidden="true" />
-                </div>
-                <div>
-                  <div className="font-medium">Join Session</div>
-                  <div className="text-sm text-muted-foreground">Live workshop</div>
-                </div>
-              </CardContent>
-            </Card>
+            <JoinSessionCard />
             </>)}
 
             {isCompleted && (

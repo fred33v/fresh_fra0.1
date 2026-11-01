@@ -71,7 +71,13 @@ uses one once on the web `/join` page or in the apps, choosing an email and a pa
 creates an employee account in the employer's organisation and signs them in.
 
 - A code never outlives the package that paid for it, and is refused if the organisation has no
-  active package. A refused code is not burned, so it works again after a renewal.
+  active package. A one-time Starter does not lift that limit: while a yearly package is active,
+  codes stop at its end (renewals already paid for included). A refused code is not burned, so it
+  works again after a renewal.
+- A code is also refused once the current packages cannot cover another employee, for example
+  when Professional (50 key-passes) has ended and only Starter (1) remains.
+- `GET /api/v1/keypasses/organisation/:orgId/quota` returns `packageEndsAt`, so the employer page
+  only offers validity periods that fit before it.
 - Using a code never signs in to an existing account.
 
 ### Payments

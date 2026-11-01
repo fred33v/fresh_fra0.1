@@ -150,3 +150,15 @@ If a setting is missing, the backend refuses to start and logs which one. See
    ```
 
    The backup alarm clears once this first backup has run.
+
+### Frontend errors
+
+Errors in users' browsers are sent to the API, written to the backend log and counted.
+More than 5 in 15 minutes triggers the `frontend-errors` alarm email. To read them:
+
+```bash
+sudo journalctl -u stopfra-backend --since "-1h" | grep '"client-error"'
+```
+
+Each line has the message, stack, page path, browser and build commit. Emails, tokens
+and query strings are removed before logging, and the IP address is never logged.

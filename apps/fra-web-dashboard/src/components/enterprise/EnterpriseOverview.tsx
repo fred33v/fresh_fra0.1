@@ -34,6 +34,7 @@ interface RiskSummary {
   byPriority: { HIGH: number; MEDIUM: number; LOW: number };
   overdue: number;
   unowned: number;
+  awaitingReview?: number;
   heatMap: number[][];
 }
 interface Gap { framework: string; requirementId: string; requirement: string; priority: 'CRITICAL' | 'HIGH' | 'MEDIUM'; recommendation: string }
@@ -129,6 +130,7 @@ export function EnterpriseOverview({ employees, refreshSignal, onShowEmployees }
       items.push({ key: `gap-${gap.requirementId}`, severity: 'high', text: `${gap.framework}: ${gap.requirement} is not met`, detail: gap.recommendation, action: { label: 'See gap', to: '/compliance?tab=gaps' } });
     }
     if (highRiskStaff) items.push({ key: 'staff', severity: 'high', text: `${highRiskStaff} employee${highRiskStaff === 1 ? '' : 's'} reported high fraud risk`, action: { label: 'Show employees', onClick: () => onShowEmployees({ risk: 'high' }) } });
+    if (s?.awaitingReview) items.push({ key: 'review', severity: 'medium', text: `${s.awaitingReview} risk action${s.awaitingReview === 1 ? ' was' : 's were'} marked done by the owner and need${s.awaitingReview === 1 ? 's' : ''} your confirmation`, action: { label: 'Confirm actions', to: '/risk-register' } });
     if (s?.unowned) items.push({ key: 'unowned', severity: 'medium', text: `${s.unowned} open risk${s.unowned === 1 ? ' has' : 's have'} no owner`, action: { label: 'Assign owners', to: '/risk-register' } });
     if (m && m.employees > 0) {
       const last = m.latestAssessmentAt ? Date.parse(m.latestAssessmentAt) : null;
@@ -372,7 +374,7 @@ export function EnterpriseOverview({ employees, refreshSignal, onShowEmployees }
 
       {report.data && (
         <p className="text-xs text-muted-foreground">
-          Compliance position generated {new Date(report.data.generatedAt).toLocaleString('en-GB')}. Self-assessment indicators from records held in Stop FRA; they support, but don't replace, legal advice or a formal GovS 013 assurance review.
+          Compliance position generated {new Date(report.data.generatedAt).toLocaleString('en-GB')}. Self-assessment indicators from records held in FRAUD-RISK.CO.UK; they support, but don't replace, legal advice or a formal GovS 013 assurance review.
         </p>
       )}
     </div>

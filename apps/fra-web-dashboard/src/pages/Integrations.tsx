@@ -326,7 +326,7 @@ export default function Integrations() {
       <div className="container py-8 lg:py-12 max-w-4xl space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-1">Integrations</h1>
-          <p className="text-muted-foreground">Connect Stop FRA to your GRC, SIEM and reporting tools</p>
+          <p className="text-muted-foreground">Connect FRAUD-RISK.CO.UK to your GRC, SIEM and reporting tools</p>
         </div>
         <ApiKeysCard />
         <WebhooksCard />

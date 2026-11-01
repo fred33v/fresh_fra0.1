@@ -55,6 +55,7 @@ type RiskRow = {
   inherent_score: number; residual_score: number; priority: string; owner_user_id: string | null;
   action_plan: string | null; due_date: string | Date | null; status: string; created_by_user_id: string;
   created_at: string; updated_at: string;
+  owner_note: string | null; owner_updated_at: string | null; review_pending: boolean | null;
 };
 
 function rowToRisk(r: RiskRow): RiskRegisterEntry {
@@ -66,24 +67,26 @@ function rowToRisk(r: RiskRow): RiskRegisterEntry {
     ownerUserId: r.owner_user_id ?? undefined, actionPlan: r.action_plan ?? undefined,
     dueDate: r.due_date ? new Date(r.due_date).toISOString().slice(0, 10) : undefined,
     status: r.status as RiskStatus, createdByUserId: r.created_by_user_id,
+    ownerNote: r.owner_note ?? undefined, ownerUpdatedAt: iso(r.owner_updated_at),
+    reviewPending: !!r.review_pending,
     createdAt: iso(r.created_at)!, updatedAt: iso(r.updated_at)!,
   };
 }
 
-const RISK_COLUMNS = 'id, organisation_id, title, risk_area, description, impact, likelihood, control_effectiveness, controls, inherent_score, residual_score, priority, owner_user_id, action_plan, due_date, status, created_by_user_id, created_at, updated_at';
+const RISK_COLUMNS = 'id, organisation_id, title, risk_area, description, impact, likelihood, control_effectiveness, controls, inherent_score, residual_score, priority, owner_user_id, action_plan, due_date, status, created_by_user_id, created_at, updated_at, owner_note, owner_updated_at, review_pending';
 
 function riskValues(r: RiskRegisterEntry) {
   return [
     r.id, r.organisationId, r.title, r.riskArea, r.description ?? null, r.impact, r.likelihood,
     r.controlEffectiveness, r.controls ?? null, r.inherentScore, r.residualScore, r.priority,
     r.ownerUserId ?? null, r.actionPlan ?? null, r.dueDate ?? null, r.status, r.createdByUserId,
-    r.createdAt, r.updatedAt,
+    r.createdAt, r.updatedAt, r.ownerNote ?? null, r.ownerUpdatedAt ?? null, !!r.reviewPending,
   ];
 }
 
 export async function dbInsertRisk(r: RiskRegisterEntry): Promise<void> {
   await getDbPool().query(
-    `insert into public.risk_register (${RISK_COLUMNS}) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+    `insert into public.risk_register (${RISK_COLUMNS}) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
     riskValues(r)
   );
 }
@@ -92,12 +95,14 @@ export async function dbUpdateRisk(r: RiskRegisterEntry): Promise<void> {
   await getDbPool().query(
     `update public.risk_register set title=$3, risk_area=$4, description=$5, impact=$6, likelihood=$7,
        control_effectiveness=$8, controls=$9, inherent_score=$10, residual_score=$11, priority=$12,
-       owner_user_id=$13, action_plan=$14, due_date=$15, status=$16, updated_at=$17
+       owner_user_id=$13, action_plan=$14, due_date=$15, status=$16, updated_at=$17,
+       owner_note=$18, owner_updated_at=$19, review_pending=$20
      where id=$1 and organisation_id=$2`,
     [
       r.id, r.organisationId, r.title, r.riskArea, r.description ?? null, r.impact, r.likelihood,
       r.controlEffectiveness, r.controls ?? null, r.inherentScore, r.residualScore, r.priority,
       r.ownerUserId ?? null, r.actionPlan ?? null, r.dueDate ?? null, r.status, r.updatedAt,
+      r.ownerNote ?? null, r.ownerUpdatedAt ?? null, !!r.reviewPending,
     ]
   );
 }
@@ -112,6 +117,14 @@ export async function dbGetRisk(id: string, orgId: string): Promise<RiskRegister
 export async function dbListRisks(orgId: string): Promise<RiskRegisterEntry[]> {
   const res = await getDbPool().query<RiskRow>(
     `select ${RISK_COLUMNS} from public.risk_register where organisation_id = $1 order by residual_score desc, created_at desc`, [orgId]
+  );
+  return res.rows.map(rowToRisk);
+}
+
+export async function dbListRisksByOwner(ownerUserId: string, orgId: string): Promise<RiskRegisterEntry[]> {
+  const res = await getDbPool().query<RiskRow>(
+    `select ${RISK_COLUMNS} from public.risk_register where owner_user_id = $1 and organisation_id = $2
+     order by due_date asc nulls last, residual_score desc`, [ownerUserId, orgId]
   );
   return res.rows.map(rowToRisk);
 }

@@ -202,7 +202,8 @@ const isFinished = (a: Assessment) => a.status === 'submitted' || a.status === '
 /** Risk for a submitted assessment; drafts are not scored. */
 export function scoreAssessment(a: Assessment): AssessmentRisk {
   if (!isFinished(a)) return EMPTY;
-  return scoreAnswers(a.answers);
+  // The result saved at submission wins, so a later change to the method never rewrites it
+  return a.result?.risk ?? scoreAnswers(a.answers);
 }
 
 /** The latest submitted assessment for each user. */

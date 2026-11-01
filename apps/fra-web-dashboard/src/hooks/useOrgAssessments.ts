@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
-import type { AssessmentRecord } from '@/types/assessment';
+import type { AssessmentRecord, AssessmentResults } from '@/types/assessment';
 
 const logger = createLogger('useOrgAssessments');
 
 /** A risk assessment counts as done once it has been submitted. */
 export const isFinishedAssessment = (a: AssessmentRecord) => a.status === 'submitted' || a.status === 'completed';
+
+/**
+ * Results of the latest submitted assessment: the person's own if they have one, otherwise the organisation's.
+ */
+export function latestResult(assessments: AssessmentRecord[], userId?: string): AssessmentResults | null {
+  const done = assessments.filter((a) => isFinishedAssessment(a) && a.result)
+    .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt));
+  return (done.find((a) => a.createdByUserId === userId) ?? done[0])?.result?.results ?? null;
+}
 
 /**
  * The organisation's fraud risk assessments (package 1, included in every package).
@@ -39,5 +48,6 @@ export function useOrgAssessments(enabled: boolean) {
     assessments,
     isLoading,
     hasFinishedAssessment: !!assessments?.some(isFinishedAssessment),
+    latestResult: (userId?: string) => latestResult(assessments ?? [], userId),
   };
 }

@@ -29,6 +29,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+/** Share of the quiz that must be right for the certificate; the server enforces it */
+const QUIZ_PASS_MARK = 80;
+
 export default function Workshop() {
   const [searchParams] = useSearchParams();
   const sessionCode = searchParams.get('session');
@@ -106,6 +109,8 @@ export default function Workshop() {
   const currentQuiz = quizQuestions[currentSlide];
   // A quiz must be answered (now or on an earlier visit) before moving on; it counts towards completion
   const quizPending = !!currentQuiz && !quizSubmitted && progress?.quiz_scores?.[String(currentSlide)] === undefined;
+  // Answered wrongly on an earlier visit: it can be answered again, and must be for the pass mark
+  const previouslyWrong = !!currentQuiz && progress?.quiz_scores?.[String(currentSlide)] === 0;
   const sectorCaseStudy = caseStudies[profile.sector];
 
   const handleNext = async () => {
@@ -121,7 +126,8 @@ export default function Workshop() {
     } else {
       // Workshop complete: record the completion date, which unlocks the certificate and counts as training evidence
       await completeSection(currentSlide);
-      if (await markComplete()) {
+      // A quiz score under the pass mark: go back to the first question to retake
+      if (await markComplete((wrong) => { if (wrong.length) goToSlide(Math.min(...wrong)); })) {
         toast.success('Congratulations! Workshop completed!');
         navigate('/certificate');
       }
@@ -362,6 +368,11 @@ export default function Workshop() {
                           ))}
                         </RadioGroup>
 
+                        {!quizSubmitted && previouslyWrong && (
+                          <p className="mt-4 text-sm text-destructive" role="status">
+                            Your last answer to this question was wrong. Answer it again: the certificate needs {QUIZ_PASS_MARK}% of the quiz right.
+                          </p>
+                        )}
                         {!quizSubmitted ? (
                           <Button 
                             className="mt-4" 
@@ -371,10 +382,21 @@ export default function Workshop() {
                             Submit Answer
                           </Button>
                         ) : (
-                          <div className="mt-4 p-4 rounded-lg bg-muted" role="status" aria-label="Quiz explanation">
-                            <p className="font-medium mb-1">Explanation:</p>
-                            <p className="text-muted-foreground">{currentQuiz.explanation}</p>
-                          </div>
+                          <>
+                            <div className="mt-4 p-4 rounded-lg bg-muted" role="status" aria-label="Quiz explanation">
+                              <p className="font-medium mb-1">Explanation:</p>
+                              <p className="text-muted-foreground">{currentQuiz.explanation}</p>
+                            </div>
+                            {quizAnswer !== currentQuiz.correctAnswer && (
+                              <Button
+                                variant="outline"
+                                className="mt-4"
+                                onClick={() => { setQuizAnswer(null); setQuizSubmitted(false); }}
+                              >
+                                Try again
+                              </Button>
+                            )}
+                          </>
                         )}
                       </CardContent>
                     </Card>

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '@/lib/api';
+import { Link } from 'react-router-dom';
+import { api, ApiError } from '@/lib/api';
+import { PACKAGE_CHOOSER_PATH } from '@/data/packages';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Copy, Download, KeyRound, Link2, Loader2 } from 'lucide-react';
+import { Copy, Download, KeyRound, Link2, Loader2, Mail, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -21,9 +24,41 @@ export interface Keypass {
   expiresAt: string;
   usedAt?: string;
   usedByUserId?: string;
+  /** The address the key-pass was emailed to; it only works with that address */
+  invitedEmail?: string;
+  invitedAt?: string;
 }
 
-interface Quota { allowance: number; unlimited?: boolean; used: number; remaining: number | null }
+interface InviteResult {
+  invited: Array<{ email: string; code: string; expiresAt: string }>;
+  skipped: Array<{ email: string; reason: 'account_exists' | 'already_invited' | 'duplicate' }>;
+  emailSent: boolean;
+}
+
+const SKIP_REASON: Record<InviteResult['skipped'][number]['reason'], string> = {
+  account_exists: 'already has an account',
+  already_invited: 'already invited, not joined yet (use Resend below)',
+  duplicate: 'listed twice',
+};
+
+/** Addresses typed or pasted one per line, or separated by commas, spaces or semicolons. */
+export function parseEmails(text: string): { emails: string[]; invalid: string[] } {
+  const parts = text.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean);
+  const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  return { emails: parts.filter((p) => valid.test(p)), invalid: parts.filter((p) => !valid.test(p)) };
+}
+
+interface Quota {
+  allowance: number;
+  unlimited?: boolean;
+  used: number;
+  remaining: number | null;
+  /** Codes cannot be valid past this date; null when the package has no end date */
+  packageEndsAt?: string | null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const VALIDITY_DAYS = ['7', '14', '30', '60', '90', '180', '365'];
 
 const STATUS_LABEL: Record<Keypass['status'], string> = {
   available: 'Available', used: 'Redeemed', revoked: 'Revoked', expired: 'Expired',
@@ -40,12 +75,12 @@ const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
 /** The page an employee opens to use a key-pass, with the code filled in. */
-function joinLink(code: string): string {
-  return `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+function joinLink(code: string, email?: string): string {
+  return `${window.location.origin}/join?code=${encodeURIComponent(code)}${email ? `&email=${encodeURIComponent(email)}` : ''}`;
 }
 
 function downloadCodes(codes: string[], expiresAt: string) {
-  const csv = ['Key-pass,Expires', ...codes.map((c) => `${c},${expiresAt.slice(0, 10)}`)].join('\n');
+  const csv = ['Key-pass,Expires,Join link', ...codes.map((c) => `${c},${expiresAt.slice(0, 10)},${joinLink(c)}`)].join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   const a = document.createElement('a');
   a.href = url;
@@ -71,6 +106,10 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
   const [isGenerating, setIsGenerating] = useState(false);
   const [newCodes, setNewCodes] = useState<{ codes: string[]; expiresAt: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [inviteText, setInviteText] = useState('');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,6 +136,19 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
 
   const visible = statusFilter === 'all' ? keypasses : keypasses.filter((k) => k.status === statusFilter);
 
+  // A code never outlives the package, so only offer validity periods that fit before it ends
+  const packageEndsAt = quota?.packageEndsAt ? new Date(quota.packageEndsAt) : null;
+  const daysToPackageEnd = packageEndsAt ? Math.floor((packageEndsAt.getTime() - Date.now()) / DAY_MS) : null;
+  const validityOptions = useMemo(() => {
+    if (daysToPackageEnd === null) return VALIDITY_DAYS;
+    const fitting = VALIDITY_DAYS.filter((d) => Number(d) <= daysToPackageEnd);
+    return fitting.length > 0 ? fitting : [VALIDITY_DAYS[0]];
+  }, [daysToPackageEnd]);
+  useEffect(() => {
+    if (!validityOptions.includes(expiresInDays)) setExpiresInDays(validityOptions[validityOptions.length - 1]);
+  }, [validityOptions, expiresInDays]);
+  const noPackage = quota !== null && quota.allowance === 0;
+
   const generate = async () => {
     const n = Number(quantity);
     const days = Number(expiresInDays);
@@ -115,9 +167,53 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
       toast.success(`${result.codes.length} key-pass${result.codes.length === 1 ? '' : 'es'} created`);
       await load();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create key-passes');
+      setFormError(err instanceof ApiError && err.code === 'NO_PACKAGE'
+        ? 'Your organisation does not have an active package. Choose a package to invite your team.'
+        : err instanceof Error ? err.message : 'Failed to create key-passes');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const invite = async () => {
+    const { emails, invalid } = parseEmails(inviteText);
+    if (invalid.length) {
+      setInviteError(`Check ${invalid.length === 1 ? 'this address' : 'these addresses'}: ${invalid.slice(0, 5).join(', ')}`);
+      return;
+    }
+    if (emails.length === 0) {
+      setInviteError('Enter at least one email address');
+      return;
+    }
+    if (emails.length > 100) {
+      setInviteError('Send at most 100 invitations at a time');
+      return;
+    }
+    setIsInviting(true);
+    try {
+      const result = await api.post<InviteResult>('/api/v1/keypasses/invite', { emails, expiresInDays: Number(expiresInDays) });
+      setInviteResult(result);
+      if (result.invited.length) {
+        toast.success(`${result.invited.length} invitation${result.invited.length === 1 ? '' : 's'} sent`);
+        setInviteText('');
+      }
+      await load();
+    } catch (err: unknown) {
+      setInviteError(err instanceof ApiError && err.code === 'QUOTA_EXCEEDED'
+        ? `Your package allows ${quota?.remaining ?? 0} more key-pass${quota?.remaining === 1 ? '' : 'es'}`
+        : err instanceof Error ? err.message : 'Failed to send the invitations');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const resend = async (k: Keypass) => {
+    try {
+      await api.post(`/api/v1/keypasses/${k.code}/resend`);
+      toast.success(`Invitation sent again to ${k.invitedEmail}`);
+      await load();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resend the invitation');
     }
   };
 
@@ -157,14 +253,60 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
         ))}
       </div>
 
+      {!noPackage && (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg"><KeyRound className="h-5 w-5" aria-hidden="true" /> Issue key-passes</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-lg"><Mail className="h-5 w-5" aria-hidden="true" /> Invite your team by email</CardTitle>
           <CardDescription>
-            Give one key-pass to each employee. They use it once to join your organisation and start their assessment, on the join page ({`${window.location.origin}/join`}) or in the Stop FRA app.
+            Each person gets an email from FRAUD-RISK.CO.UK with their own join link. The key-pass only works with their address, so you know the account is theirs. Invitations use the validity chosen below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="kp-invite-emails">Email addresses, one per line</Label>
+            <Textarea id="kp-invite-emails" rows={4} value={inviteText} aria-invalid={!!inviteError}
+              placeholder={'alex@yourcharity.org\nsam@yourcharity.org'}
+              onChange={(e) => { setInviteText(e.target.value); setInviteError(null); }} />
+          </div>
+          <Button onClick={invite} disabled={isInviting}>
+            {isInviting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="mr-2 h-4 w-4" aria-hidden="true" />}
+            Send invitations
+          </Button>
+          {inviteError && <p className="text-sm text-destructive" role="alert">{inviteError}</p>}
+          {inviteResult && (
+            <div className="rounded-md border bg-muted/30 p-4 space-y-2 text-sm" role="status">
+              {inviteResult.invited.length > 0 && (
+                <p>Sent to {inviteResult.invited.map((i) => i.email).join(', ')}.</p>
+              )}
+              {inviteResult.skipped.map((s) => <p key={s.email + s.reason} className="text-muted-foreground">Not sent to {s.email}: {SKIP_REASON[s.reason]}.</p>)}
+              {!inviteResult.emailSent && inviteResult.invited.length > 0 && (
+                <p className="text-muted-foreground">Email is not set up on this server yet, so nothing left it. Copy each person&apos;s link from the list below.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><KeyRound className="h-5 w-5" aria-hidden="true" /> Or create key-passes to share yourself</CardTitle>
+          <CardDescription>
+            Hand out codes or links your own way. Each key-pass works once on the join page ({`${window.location.origin}/join`}). People who join with them confirm their email address before they next sign in. Copy each employee&apos;s join link, or download the CSV, which lists a link for every key-pass.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {noPackage ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">Your organisation does not have an active package yet. Choose a package to invite your team with key-passes.</p>
+              <Button asChild size="sm"><Link to={PACKAGE_CHOOSER_PATH}>Choose a package</Link></Button>
+            </div>
+          ) : (<>
+          {packageEndsAt && (
+            <p className="text-sm text-muted-foreground">
+              Your package ends on {formatDate(packageEndsAt.toISOString())}. Key-passes cannot be valid after that date.
+            </p>
+          )}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="kp-quantity">How many</Label>
@@ -176,7 +318,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
               <Select value={expiresInDays} onValueChange={setExpiresInDays}>
                 <SelectTrigger id="keypass-valid-for" className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['7', '14', '30', '60', '90', '180', '365'].map((d) => <SelectItem key={d} value={d}>{d} days</SelectItem>)}
+                  {validityOptions.map((d) => <SelectItem key={d} value={d}>{d} days</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -186,6 +328,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
             </Button>
           </div>
           {formError && <p className="text-sm text-destructive" role="alert">{formError}</p>}
+          </>)}
 
           {newCodes && (
             <div className="rounded-md border bg-muted/30 p-4 space-y-3" role="status">
@@ -197,7 +340,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                 <Button variant="outline" size="sm" onClick={() => copyText(newCodes.codes.join('\n'), 'Codes copied')}>
                   <Copy className="mr-2 h-4 w-4" aria-hidden="true" /> Copy all
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => copyText(newCodes.codes.map(joinLink).join('\n'), 'Join links copied')}>
+                <Button variant="outline" size="sm" onClick={() => copyText(newCodes.codes.map((code) => joinLink(code)).join('\n'), 'Join links copied')}>
                   <Link2 className="mr-2 h-4 w-4" aria-hidden="true" /> Copy join links
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => downloadCodes(newCodes.codes, newCodes.expiresAt)}>
@@ -237,6 +380,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Expires</TableHead>
+                    <TableHead>Sent to</TableHead>
                     <TableHead>Redeemed by</TableHead>
                     <TableHead><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
@@ -248,6 +392,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                       <TableCell><Badge variant="outline" className={STATUS_STYLE[k.status]}>{STATUS_LABEL[k.status] ?? k.status}</Badge></TableCell>
                       <TableCell>{formatDate(k.createdAt)}</TableCell>
                       <TableCell>{formatDate(k.expiresAt)}</TableCell>
+                      <TableCell>{k.invitedEmail ?? <span className="text-muted-foreground">—</span>}</TableCell>
                       <TableCell>
                         {k.status === 'used'
                           ? <>{(k.usedByUserId && userNames[k.usedByUserId]) || 'Employee'} <span className="text-muted-foreground text-xs">{formatDate(k.usedAt)}</span></>
@@ -256,7 +401,12 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                       <TableCell className="text-right">
                         {k.status === 'available' && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => copyText(joinLink(k.code), 'Join link copied')} aria-label={`Copy join link for key-pass ${k.code}`}>
+                            {k.invitedEmail && (
+                              <Button variant="ghost" size="sm" onClick={() => resend(k)} aria-label={`Resend the invitation to ${k.invitedEmail}`}>
+                                <Send className="mr-1 h-4 w-4" aria-hidden="true" /> Resend
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => copyText(joinLink(k.code, k.invitedEmail), 'Join link copied')} aria-label={`Copy join link for key-pass ${k.code}`}>
                               <Link2 className="mr-1 h-4 w-4" aria-hidden="true" /> Copy link
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => revoke(k.code)} aria-label={`Revoke key-pass ${k.code}`}>Revoke</Button>

@@ -67,42 +67,37 @@ export default function Certificate() {
     setIsGenerating(false);
   };
 
-  const handleDownloadPDF = () => {
-    if (!certificateRef.current) return;
+  const [isDownloading, setIsDownloading] = useState(false);
 
-    // Add print-only styles dynamically
-    const style = document.createElement('style');
-    style.id = 'certificate-print-styles';
-    style.textContent = `
-      @media print {
-        body * { visibility: hidden !important; }
-        #certificate-printable, #certificate-printable * { visibility: visible !important; }
-        #certificate-printable {
-          position: absolute !important;
-          left: 0 !important;
-          top: 0 !important;
-          width: 100% !important;
-          padding: 40px !important;
-        }
-        @page { size: landscape; margin: 20mm; }
-      }
-    `;
-    document.head.appendChild(style);
-    window.print();
-    // Clean up after print dialog closes
-    setTimeout(() => {
-      document.getElementById('certificate-print-styles')?.remove();
-    }, 1000);
+  /** The PDF is made by the server, with a QR code that opens the public verification page */
+  const handleDownloadPDF = async () => {
+    if (!certificate) return;
+    setIsDownloading(true);
+    try {
+      await api.download(
+        `/api/v1/certificates/${encodeURIComponent(certificate.certificate_number)}/pdf`,
+        `certificate-${certificate.certificate_number}.pdf`,
+      );
+    } catch (err: unknown) {
+      logger.error('Error downloading certificate', err);
+      toast.error('The certificate PDF could not be downloaded. Please try again.');
+    }
+    setIsDownloading(false);
   };
+
+  const verifyLink = certificate
+    ? `${window.location.origin}/certificate/verify?n=${encodeURIComponent(certificate.certificate_number)}`
+    : '';
 
   const handleShareCertificate = async () => {
     if (!certificate || !profile) return;
 
     const safeName = profile.full_name.replace(/[\n\r\t]/g, ' ').trim();
+    // The verification link works for anyone, without signing in
     const shareData = {
       title: 'Fraud Risk Awareness Certificate',
       text: `${safeName} has completed the Fraud Risk Awareness Workshop. Certificate: ${certificate.certificate_number}`,
-      url: window.location.href,
+      url: verifyLink,
     };
 
     if (navigator.share) {
@@ -122,7 +117,7 @@ export default function Certificate() {
   const copyToClipboard = async (shareData: { text: string; url: string }) => {
     try {
       await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
-      toast.success('Certificate link copied to clipboard');
+      toast.success('Verification link copied to clipboard');
     } catch {
       toast.error('Unable to copy to clipboard');
     }
@@ -221,6 +216,12 @@ export default function Certificate() {
                       <p className="text-muted-foreground">Certificate Number</p>
                       <p className="font-mono font-medium">{certificate.certificate_number}</p>
                     </div>
+                    {typeof certificate.quiz_score === 'number' && (
+                      <div className="text-center">
+                        <p className="text-muted-foreground">Quiz Score</p>
+                        <p className="font-medium">{certificate.quiz_score}%</p>
+                      </div>
+                    )}
                     <div className="text-center">
                       <p className="text-muted-foreground">Date Issued</p>
                       <p className="font-medium">
@@ -256,8 +257,10 @@ export default function Certificate() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-4 justify-center">
-                <Button size="lg" onClick={handleDownloadPDF}>
-                  <Download className="mr-2 h-5 w-5" aria-hidden="true" />
+                <Button size="lg" onClick={handleDownloadPDF} disabled={isDownloading} aria-busy={isDownloading}>
+                  {isDownloading
+                    ? <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+                    : <Download className="mr-2 h-5 w-5" aria-hidden="true" />}
                   Download PDF
                 </Button>
                 <Button size="lg" variant="outline" onClick={handleShareCertificate}>
@@ -265,6 +268,11 @@ export default function Certificate() {
                   Share Certificate
                 </Button>
               </div>
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Anyone can check this certificate is genuine at{' '}
+                <a href={verifyLink} className="underline">{window.location.host}/certificate/verify</a>.
+                The PDF has a QR code that opens this check.
+              </p>
             </>
           ) : (
             <Card className="text-center">
