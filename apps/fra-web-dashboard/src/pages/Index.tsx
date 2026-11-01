@@ -544,7 +544,7 @@ export default function Index() {
                       href={`/resources/${resource.filename}`}
                       download
                       className="inline-flex items-center gap-2 font-bold text-[#1d70b8] underline underline-offset-4 hover:text-[#003078] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2"
-                      aria-label={`Download ${resource.title} as a PDF`}
+                      aria-label={`Download PDF: ${resource.title}`}
                     >
                       Download PDF
                       <Download className="h-4 w-4" aria-hidden="true" />

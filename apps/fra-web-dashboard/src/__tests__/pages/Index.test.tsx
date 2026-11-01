@@ -302,7 +302,7 @@ describe('Index', () => {
       renderIndex();
 
       expect(screen.getByText('Free fraud prevention guides')).toBeInTheDocument();
-      const link = screen.getByRole('link', { name: 'Download Fraud Risk Self-Assessment Checklist as a PDF' });
+      const link = screen.getByRole('link', { name: 'Download PDF: Fraud Risk Self-Assessment Checklist' });
       expect(link).toHaveAttribute('href', '/resources/fraud-risk-self-assessment-checklist.pdf');
     });
   });

@@ -43,7 +43,7 @@ const sections: LegalSection[] = [
   {
     id: 'other-formats', title: 'Asking for information in another format',
     body: <>
-      <p>If you need information on this website in a different format, such as accessible PDF, large print, easy read or plain text, email {mail(LEGAL.supportEmail)}.</p>
+      <p>If you need information on this website in a different format, such as accessible PDF, large print or plain text, email {mail(LEGAL.supportEmail)}.</p>
       <p>Tell us the web address (URL) of the page or the name of the document, your name and email address, and the format you need.</p>
       <p>We will consider your request and aim to get back to you within 5 working days.</p>
     </>,
