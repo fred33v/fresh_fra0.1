@@ -23,7 +23,7 @@ const sections: LegalSection[] = [
         <li>change colours, contrast levels and fonts using your browser or device settings</li>
         <li>move through the website using just a keyboard, with a link at the top of each page to skip straight to the content</li>
         <li>use the website with speech recognition software (we have not tested this yet, see section 6)</li>
-        <li>listen to the website using a screen reader, such as NVDA, JAWS or VoiceOver (we have not tested this yet, see section 6)</li>
+        <li>listen to the website using a screen reader, such as VoiceOver, NVDA or JAWS (we have tested VoiceOver; see section 6 for the others)</li>
       </ul>
       <p>We have also tried to make the text as simple as possible to understand.</p>
       <p>{external('https://mcmw.abilitynet.org.uk/', 'AbilityNet')} has advice on making your device easier to use if you have a disability.</p>
@@ -34,7 +34,7 @@ const sections: LegalSection[] = [
     body: <>
       <p>Some parts of this website may not be fully accessible:</p>
       <ul>
-        <li>we have not yet tested the website with a screen reader, so some problems for screen reader users may not be known yet</li>
+        <li>we have tested the website with VoiceOver on a Mac, but not yet with NVDA, JAWS or speech recognition software, so some problems with those may not be known yet</li>
         <li>the downloadable PDFs (workshop resources and certificates) are produced with tags, but have not yet been checked with a screen reader</li>
       </ul>
       <p>Section 6 explains what is left to test and when we plan to do it.</p>
@@ -78,8 +78,8 @@ const sections: LegalSection[] = [
       <h3 className="font-semibold">Content we have not fully tested</h3>
       <ul>
         <li>
-          The website as a whole with a screen reader or speech recognition software. Our checks so far are automated tools and
-          keyboard-only use. We plan to test it with VoiceOver, NVDA and Voice Control by 3 November 2026.
+          The website with Windows screen readers (NVDA, JAWS) and with speech recognition software. We have tested it with VoiceOver
+          in Safari on a Mac. We plan to test it with NVDA and Voice Control by 3 November 2026.
         </li>
         <li>
           PDF documents, including the workshop resources and the training and assessment certificates. They are generated with tags and
@@ -99,7 +99,7 @@ const sections: LegalSection[] = [
     body: <>
       <p>
         We check every page with automated accessibility tools and a keyboard each time we test the site, and fix problems as we find
-        them. Next, we plan to test the website and its PDFs with screen readers (NVDA and VoiceOver) and with people who use assistive
+        them. Next, we plan to test the website with NVDA and Voice Control, test its PDFs with screen readers, and test it with people who use assistive
         technology.
       </p>
     </>,
@@ -110,7 +110,8 @@ const sections: LegalSection[] = [
       <p>This statement was prepared on {ACCESSIBILITY.preparedOn}. It was last reviewed on {ACCESSIBILITY.lastUpdated}.</p>
       <p>
         This website was last tested on {ACCESSIBILITY.lastTested}. The test was carried out by our own team, against WCAG 2.2 AA, using
-        automated checks (axe-core) and keyboard-only navigation in a Chromium browser on a desktop screen.
+        automated checks (axe-core), keyboard-only navigation in a Chromium browser on a desktop screen, and the VoiceOver screen reader in
+        Safari on a Mac.
       </p>
       <p>
         We tested every page of the website: 32 pages, including each tab of the organisation dashboard and the compliance pages,
