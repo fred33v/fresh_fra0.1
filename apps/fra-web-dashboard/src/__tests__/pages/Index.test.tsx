@@ -349,6 +349,17 @@ describe('Index', () => {
       expect(screen.getAllByText('FRAUD-RISK.CO.UK').length).toBeGreaterThanOrEqual(1);
     });
 
+    it('lists the contact email addresses', () => {
+      renderIndex();
+
+      for (const address of ['assessment', 'help', 'recruitment']) {
+        expect(screen.getByRole('link', { name: `${address}@fraud-risk.co.uk` })).toHaveAttribute(
+          'href',
+          `mailto:${address}@fraud-risk.co.uk`,
+        );
+      }
+    });
+
     it('shows copyright with current year', () => {
       renderIndex();
 

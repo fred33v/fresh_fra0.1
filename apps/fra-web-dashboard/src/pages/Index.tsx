@@ -693,6 +693,12 @@ export default function Index() {
                     help@fraud-risk.co.uk
                   </a>
                 </li>
+                <li className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
+                  <a href="mailto:recruitment@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                    recruitment@fraud-risk.co.uk
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
