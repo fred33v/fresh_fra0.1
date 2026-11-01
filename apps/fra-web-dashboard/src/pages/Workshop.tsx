@@ -196,7 +196,6 @@ export default function Workshop() {
                   key={section.id}
                   onClick={() => goToSlide(index)}
                   aria-current={isCurrent ? 'step' : undefined}
-                  aria-label={`Section ${index + 1}: ${section.title}${isComplete ? ' (completed)' : ''}`}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
                     isCurrent
                       ? 'bg-primary text-primary-foreground'
@@ -220,6 +219,7 @@ export default function Workshop() {
                       {section.duration}
                     </div>
                   </div>
+                  {isComplete && <span className="sr-only"> (completed)</span>}
                 </button>
               );
             })}
@@ -239,7 +239,8 @@ export default function Workshop() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col">
+        {/* Layout already provides the page's main landmark */}
+        <div className="flex-1 flex flex-col">
           {/* Top Bar */}
           <header className="border-b p-4 flex items-center justify-between bg-card" aria-label="Workshop navigation">
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
@@ -543,14 +544,17 @@ export default function Workshop() {
                     onClick={() => goToSlide(index)}
                     aria-label={`Go to section ${index + 1}`}
                     aria-current={index === currentSlide ? 'step' : undefined}
-                    className={`h-2 w-2 rounded-full transition-colors ${
+                    className="flex h-6 w-6 items-center justify-center rounded-full"
+                  >
+                    {/* The dot stays small; the button around it is 24px so it is easy to hit (WCAG 2.5.8) */}
+                    <span aria-hidden="true" className={`h-2 w-2 rounded-full transition-colors ${
                       index === currentSlide
                         ? 'bg-primary'
                         : progress?.completed_sections?.includes(index)
                           ? 'bg-success'
                           : 'bg-muted-foreground/30'
-                    }`}
-                  />
+                    }`} />
+                  </button>
                 ))}
               </div>
 
@@ -564,7 +568,7 @@ export default function Workshop() {
               </Button>
             </div>
           </footer>
-        </main>
+        </div>
       </div>
     </Layout>
   );

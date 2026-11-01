@@ -596,7 +596,7 @@ export default function EmployerDashboard() {
                       />
                     </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by status">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -607,7 +607,7 @@ export default function EmployerDashboard() {
                       </SelectContent>
                     </Select>
                     <Select value={riskFilter} onValueChange={setRiskFilter}>
-                      <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by risk">
                         <SelectValue placeholder="Filter by risk" />
                       </SelectTrigger>
                       <SelectContent>
@@ -620,7 +620,7 @@ export default function EmployerDashboard() {
                     </Select>
                     {departments.length > 1 && (
                       <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by department">
                           <SelectValue placeholder="Filter by department" />
                         </SelectTrigger>
                         <SelectContent>
@@ -694,7 +694,7 @@ export default function EmployerDashboard() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-8"></TableHead>
+                            <TableHead className="w-8"><span className="sr-only">Details</span></TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Department</TableHead>
@@ -887,7 +887,7 @@ function RiskBadge({ riskLevel }: { riskLevel: string | null }) {
     case 'high':
       return <Badge className="bg-destructive/10 text-destructive border-destructive/20">High</Badge>;
     case 'medium':
-      return <Badge className="bg-warning/10 text-warning border-warning/20">Medium</Badge>;
+      return <Badge className="bg-warning/10 text-amber-800 border-warning/20">Medium</Badge>;
     case 'low':
       return <Badge className="bg-success/10 text-success border-success/20">Low</Badge>;
     default:

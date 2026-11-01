@@ -406,7 +406,7 @@ export function KeypassManager({ organisationId, userNames = {} }: KeypassManage
                                 <Send className="mr-1 h-4 w-4" aria-hidden="true" /> Resend
                               </Button>
                             )}
-                            <Button variant="ghost" size="sm" onClick={() => copyText(joinLink(k.code, k.invitedEmail), 'Join link copied')} aria-label={`Copy join link for key-pass ${k.code}`}>
+                            <Button variant="ghost" size="sm" onClick={() => copyText(joinLink(k.code, k.invitedEmail), 'Join link copied')} aria-label={`Copy link for key-pass ${k.code}`}>
                               <Link2 className="mr-1 h-4 w-4" aria-hidden="true" /> Copy link
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => revoke(k.code)} aria-label={`Revoke key-pass ${k.code}`}>Revoke</Button>

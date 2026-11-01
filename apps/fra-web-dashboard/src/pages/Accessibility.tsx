@@ -3,9 +3,9 @@ import { LEGAL } from '@/lib/legal';
 
 // When the site is tested again, update these dates and the lists of known problems below.
 const ACCESSIBILITY = {
-  lastUpdated: '31 October 2026',
+  lastUpdated: '1 November 2026',
   preparedOn: '31 October 2026',
-  lastTested: '31 October 2026',
+  lastTested: '1 November 2026',
   standard: 'Web Content Accessibility Guidelines (WCAG) version 2.2 AA',
 };
 
@@ -89,7 +89,7 @@ const sections: LegalSection[] = [
           a document language, but we have not yet tested them with a screen reader. If you cannot use one, ask us for another format
           (see section 3).
         </li>
-        <li>Signed-in pages once an organisation has entered its data, such as full registers, reports and team lists. We tested these pages without data, except the fraud risk assessment and its results.</li>
+        <li>Signed-in pages with a large organisation’s data. We tested them with a sample organisation of about ten staff.</li>
       </ul>
       <h3 className="font-semibold">Content provided by others</h3>
       <p>
@@ -117,10 +117,9 @@ const sections: LegalSection[] = [
         automated checks (axe-core) and keyboard-only navigation in a Chromium browser on a desktop screen.
       </p>
       <p>
-        We tested the home page, sign in, joining an organisation, the package pages, privacy notice, terms, certificate checking and
-        speak-up pages, and, when signed in, the dashboard, the fraud risk assessment (all 13 modules, answered with a keyboard only),
-        assessment results, budget guide, workshop, resources, action plan, profile, organisation dashboard, risk register and
-        compliance pages.
+        We tested every page of the website: 32 pages, including each tab of the organisation dashboard and the compliance pages,
+        checkout, the speak-up pages and the staff dashboard. Signed-in pages were tested with a sample organisation’s data, and the
+        fraud risk assessment was completed with a keyboard only.
       </p>
     </>,
   },

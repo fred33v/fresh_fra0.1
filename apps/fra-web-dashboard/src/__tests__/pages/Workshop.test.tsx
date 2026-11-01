@@ -389,14 +389,14 @@ describe('Workshop', () => {
       renderWorkshop();
 
       for (const section of workshopSections) {
-        expect(screen.getByLabelText(new RegExp(section.title))).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: new RegExp(section.title) })).toBeInTheDocument();
       }
     });
 
     it('marks current section with aria-current', () => {
       renderWorkshop();
 
-      const firstSection = screen.getByLabelText(new RegExp(workshopSections[0].title));
+      const firstSection = screen.getByRole('button', { name: new RegExp(workshopSections[0].title) });
       expect(firstSection).toHaveAttribute('aria-current', 'step');
     });
 
@@ -404,7 +404,7 @@ describe('Workshop', () => {
       const user = userEvent.setup();
       renderWorkshop();
 
-      await user.click(screen.getByLabelText(new RegExp(workshopSections[2].title)));
+      await user.click(screen.getByRole('button', { name: new RegExp(workshopSections[2].title) }));
 
       expect(mockUpdateSection).toHaveBeenCalledWith(2);
       expect(screen.getByText('Section 3')).toBeInTheDocument();
@@ -417,8 +417,8 @@ describe('Workshop', () => {
 
       renderWorkshop();
 
-      expect(screen.getByLabelText(/Section 1.*completed/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Section 2.*completed/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`${workshopSections[0].title}.*\\(completed\\)`) })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`${workshopSections[1].title}.*\\(completed\\)`) })).toBeInTheDocument();
     });
   });
 

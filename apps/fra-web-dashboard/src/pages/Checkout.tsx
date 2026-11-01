@@ -147,6 +147,8 @@ export default function Checkout() {
             transition={{ duration: 0.3 }}
             className="mb-8 space-y-4"
           >
+            {/* Screen readers and tab titles need a page heading; the cards below carry the visible ones */}
+            <h1 className="sr-only">Checkout: {packageName} package</h1>
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
               <ChevronRight className="h-3.5 w-3.5" />
@@ -186,7 +188,7 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div>
-                    <h3 className="text-2xl font-bold mb-1">{packageName}</h3>
+                    <p className="text-2xl font-bold mb-1">{packageName}</p>
                     <p className="text-primary-foreground/70 text-sm">
                       {packageName === 'Professional'
                         ? 'FRA + Training - Annual Subscription'

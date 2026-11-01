@@ -45,6 +45,6 @@ describe('Legal pages', () => {
     expect(screen.getByRole('region', { name: /Technical information/ })).toHaveTextContent('partially compliant with the Web Content Accessibility Guidelines (WCAG) version 2.2 AA');
     const reporting = screen.getByRole('region', { name: /Reporting accessibility problems/ });
     expect(within(reporting).getByRole('link', { name: 'help@fraud-risk.co.uk' })).toHaveAttribute('href', 'mailto:help@fraud-risk.co.uk');
-    expect(screen.getByRole('region', { name: /Preparation/ })).toHaveTextContent('last tested on 31 October 2026');
+    expect(screen.getByRole('region', { name: /Preparation/ })).toHaveTextContent('last tested on 1 November 2026');
   });
 });

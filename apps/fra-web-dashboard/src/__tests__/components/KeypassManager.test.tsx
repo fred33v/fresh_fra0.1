@@ -102,7 +102,7 @@ describe('KeypassManager invitations by email', () => {
     expect(within(row).getByText('alex@example.org')).toBeInTheDocument();
     await user.click(within(row).getByRole('button', { name: 'Resend the invitation to alex@example.org' }));
     expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/keypasses/INV00001/resend');
-    await user.click(within(row).getByRole('button', { name: /Copy join link/ }));
+    await user.click(within(row).getByRole('button', { name: /Copy link/ }));
     expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/join?code=INV00001&email=alex%40example.org`);
   });
 });
@@ -114,10 +114,10 @@ describe('KeypassManager join links', () => {
     render(<KeypassManager organisationId="org-1" />);
 
     const usedRow = (await screen.findByText('USED5678')).closest('tr')!;
-    expect(within(usedRow).queryByRole('button', { name: /Copy join link/ })).not.toBeInTheDocument();
+    expect(within(usedRow).queryByRole('button', { name: /Copy link/ })).not.toBeInTheDocument();
 
     const availRow = screen.getByText('AVAIL1234').closest('tr')!;
-    await user.click(within(availRow).getByRole('button', { name: 'Copy join link for key-pass AVAIL1234' }));
+    await user.click(within(availRow).getByRole('button', { name: 'Copy link for key-pass AVAIL1234' }));
     expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/join?code=AVAIL1234`);
   });
 
