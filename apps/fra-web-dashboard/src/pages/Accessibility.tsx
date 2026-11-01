@@ -22,8 +22,8 @@ const sections: LegalSection[] = [
       <ul>
         <li>change colours, contrast levels and fonts using your browser or device settings</li>
         <li>move through the website using just a keyboard, with a link at the top of each page to skip straight to the content</li>
-        <li>use the website with speech recognition software</li>
-        <li>listen to the website using a screen reader, such as NVDA, JAWS or VoiceOver</li>
+        <li>use the website with speech recognition software (we have not tested this yet, see section 6)</li>
+        <li>listen to the website using a screen reader, such as NVDA, JAWS or VoiceOver (we have not tested this yet, see section 6)</li>
       </ul>
       <p>We have also tried to make the text as simple as possible to understand.</p>
       <p>{external('https://mcmw.abilitynet.org.uk/', 'AbilityNet')} has advice on making your device easier to use if you have a disability.</p>
@@ -32,12 +32,12 @@ const sections: LegalSection[] = [
   {
     id: 'how-accessible', title: 'How accessible this website is',
     body: <>
-      <p>We know some parts of this website are not fully accessible:</p>
+      <p>Some parts of this website may not be fully accessible:</p>
       <ul>
-        <li>some charts, such as those on assessment results, the budget guide and the organisation dashboard, have no text description for screen reader users</li>
+        <li>we have not yet tested the website with a screen reader, so some problems for screen reader users may not be known yet</li>
         <li>the downloadable PDFs (workshop resources and certificates) are produced with tags, but have not yet been checked with a screen reader</li>
       </ul>
-      <p>Section 6 explains each problem and when we plan to fix it.</p>
+      <p>Section 6 explains what is left to test and when we plan to do it.</p>
     </>,
   },
   {
@@ -66,30 +66,26 @@ const sections: LegalSection[] = [
     body: <>
       <p>We are committed to making our website accessible, in line with the Equality Act 2010.</p>
       <p>
-        This website is <strong>partially compliant</strong> with the {ACCESSIBILITY.standard}, because of the problems listed in section 6.
+        This website is <strong>partially compliant</strong> with the {ACCESSIBILITY.standard}, because some content has not yet been
+        fully tested, as listed in section 6.
       </p>
     </>,
   },
   {
     id: 'non-accessible', title: 'Non-accessible content',
     body: <>
-      <p>The content listed below is not accessible, for the following reasons.</p>
-      <h3 className="font-semibold">Non-compliance with the accessibility regulations</h3>
-      <ul>
-        <li>
-          Charts on the assessment results, budget guide and organisation dashboard pages have no text alternative. Where the same figures
-          are not also shown as text on the page, screen reader users cannot get them. This fails WCAG 2.2 success criterion 1.1.1
-          (non-text content). We plan to add a text summary or table to each chart by 31 March 2027.
-        </li>
-      </ul>
+      <p>The content listed below may not be fully accessible, for the following reasons.</p>
       <h3 className="font-semibold">Content we have not fully tested</h3>
       <ul>
+        <li>
+          The website as a whole with a screen reader or speech recognition software. Our checks so far are automated tools and
+          keyboard-only use. We plan to test it with VoiceOver, NVDA and Voice Control by 31 March 2027.
+        </li>
         <li>
           PDF documents, including the workshop resources and the training and assessment certificates. They are generated with tags and
           a document language, but we have not yet tested them with a screen reader. If you cannot use one, ask us for another format
           (see section 3).
         </li>
-        <li>Signed-in pages with a large organisation’s data. We tested them with a sample organisation of about ten staff.</li>
       </ul>
       <h3 className="font-semibold">Content provided by others</h3>
       <p>
@@ -102,7 +98,7 @@ const sections: LegalSection[] = [
     id: 'improving', title: 'What we are doing to improve accessibility',
     body: <>
       <p>
-        We check the main pages with automated accessibility tools and a keyboard each time we test the site, and fix problems as we find
+        We check every page with automated accessibility tools and a keyboard each time we test the site, and fix problems as we find
         them. Next, we plan to test the website and its PDFs with screen readers (NVDA and VoiceOver) and with people who use assistive
         technology.
       </p>
@@ -118,8 +114,8 @@ const sections: LegalSection[] = [
       </p>
       <p>
         We tested every page of the website: 32 pages, including each tab of the organisation dashboard and the compliance pages,
-        checkout, the speak-up pages and the staff dashboard. Signed-in pages were tested with a sample organisation’s data, and the
-        fraud risk assessment was completed with a keyboard only.
+        checkout, the speak-up pages and the staff dashboard. Signed-in pages were tested with a sample organisation of 500 staff, and the
+        fraud risk assessment was completed with a keyboard only. Each chart has a text summary and a table of its figures.
       </p>
     </>,
   },

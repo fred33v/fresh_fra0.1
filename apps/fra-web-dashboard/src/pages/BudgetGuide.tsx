@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ChartFigure } from '@/components/ChartFigure';
 import { AlertCircle, TrendingUp, CheckCircle2, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useBudgetGuide } from '@/hooks/useBudgetGuide';
 import { api } from '@/lib/api';
@@ -51,6 +52,28 @@ const _RISK_LEVELS = [
   { value: 'high', label: 'High', color: '#EF4444' },
   { value: 'critical', label: 'Critical', color: '#7C2D12' },
 ];
+
+
+type Slice = { name: string; value: number };
+
+/** Text alternative for an allocation pie chart: lists every share, largest first. */
+function allocationSummary(title: string, data: Slice[]): string {
+  const shares = data.filter(d => d.value > 0).sort((a, b) => b.value - a.value);
+  if (shares.length === 0) return `Pie chart: ${title}. Nothing allocated yet.`;
+  return `Pie chart: ${title}. ` + shares.map(d => `${d.name} ${d.value}%`).join(', ') + '.';
+}
+
+/** Text alternative for the comparison chart: names the categories furthest from the recommendation. */
+function comparisonSummary(recommended: Slice[], actual: Slice[]): string {
+  const gaps = recommended
+    .map((d, i) => ({ name: d.name, gap: Number(((actual[i]?.value ?? 0) - d.value).toFixed(1)) }))
+    .filter(g => g.gap !== 0)
+    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
+  if (gaps.length === 0) return 'Bar chart comparing recommended and current allocation. They match in every category.';
+  const g = gaps[0];
+  return 'Bar chart comparing recommended and current allocation by category. ' +
+    `The biggest difference is ${g.name}: ${Math.abs(g.gap)} points ${g.gap > 0 ? 'above' : 'below'} the recommendation.`;
+}
 
 export function BudgetGuidePage() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
@@ -255,25 +278,33 @@ export function BudgetGuidePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={recommendedData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, value }) => `${name}: ${value}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {Object.keys(CATEGORY_COLORS).map((key) => (
-                            <Cell key={key} fill={CATEGORY_COLORS[key]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ChartFigure
+                      summary={allocationSummary('Recommended allocation', recommendedData)}
+                      caption="Recommended budget allocation by category"
+                      columns={['Category', 'Share of budget (%)']}
+                      rows={recommendedData.map(d => [d.name, d.value])}
+                    >
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            rootTabIndex={-1}
+                            data={recommendedData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, value }) => `${name}: ${value}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {Object.keys(CATEGORY_COLORS).map((key) => (
+                              <Cell key={key} fill={CATEGORY_COLORS[key]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </ChartFigure>
                   </CardContent>
                 </Card>
 
@@ -286,25 +317,33 @@ export function BudgetGuidePage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={actualData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, value }) => `${name}: ${value}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {Object.keys(CATEGORY_COLORS).map((key) => (
-                            <Cell key={key} fill={CATEGORY_COLORS[key]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ChartFigure
+                      summary={allocationSummary('Your current allocation', actualData)}
+                      caption="Your current budget allocation by category"
+                      columns={['Category', 'Share of budget (%)']}
+                      rows={actualData.map(d => [d.name, d.value])}
+                    >
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            rootTabIndex={-1}
+                            data={actualData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, value }) => `${name}: ${value}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {Object.keys(CATEGORY_COLORS).map((key) => (
+                              <Cell key={key} fill={CATEGORY_COLORS[key]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </ChartFigure>
                   </CardContent>
                 </Card>
               </div>
@@ -315,21 +354,28 @@ export function BudgetGuidePage() {
                   <CardTitle level={2}>Allocation Comparison</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={recommendedData.map((item, idx) => ({
-                      ...item,
-                      recommended: item.value,
-                      actual: actualData[idx]?.value || 0,
-                    }))}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="recommended" fill="#8B5CF6" />
-                      <Bar dataKey="actual" fill="#10B981" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ChartFigure
+                    summary={comparisonSummary(recommendedData, actualData)}
+                    caption="Recommended and current budget allocation by category"
+                    columns={['Category', 'Recommended (%)', 'Current (%)']}
+                    rows={recommendedData.map((d, i) => [d.name, d.value, actualData[i]?.value ?? 0])}
+                  >
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart accessibilityLayer={false} data={recommendedData.map((item, idx) => ({
+                        ...item,
+                        recommended: item.value,
+                        actual: actualData[idx]?.value || 0,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="recommended" fill="#8B5CF6" />
+                        <Bar dataKey="actual" fill="#10B981" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartFigure>
                 </CardContent>
               </Card>
             </TabsContent>
