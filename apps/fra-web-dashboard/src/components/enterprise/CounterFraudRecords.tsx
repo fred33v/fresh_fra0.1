@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { LoadError } from '@/components/LoadError';
 import { api } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
@@ -419,10 +420,11 @@ function RecordForm({ config, onSaved }: { config: KindConfig; onSaved: () => vo
 function RecordRegister({ config, onChange }: { config: KindConfig; onChange: () => void }) {
   const confirm = useConfirm();
   const [records, setRecords] = useState<CounterFraudRecord[] | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(() => api.get<CounterFraudRecord[]>(`/api/v1/compliance/records?kind=${config.kind}`)
-    .then(setRecords)
-    .catch((err: unknown) => { logger.error(`Failed to load ${config.kind} records`, err); setRecords([]); }), [config.kind]);
+    .then((r) => { setFailed(false); setRecords(r); })
+    .catch((err: unknown) => { logger.error(`Failed to load ${config.kind} records`, err); setFailed(true); }), [config.kind]);
   useEffect(() => { load(); }, [load]);
 
   const changed = async () => { await load(); onChange(); };
@@ -468,7 +470,7 @@ function RecordRegister({ config, onChange }: { config: KindConfig; onChange: ()
       </CardHeader>
       <CardContent className="space-y-6">
         <RecordForm config={config} onSaved={changed} />
-        {records === null ? null : records.length === 0 ? (
+        {failed ? <LoadError what="this register" onRetry={load} /> : records === null ? null : records.length === 0 ? (
           <p className="text-center text-muted-foreground py-6">Nothing recorded yet.</p>
         ) : (
           <Table>

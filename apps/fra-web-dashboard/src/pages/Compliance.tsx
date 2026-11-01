@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { LoadError } from '@/components/LoadError';
 import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
@@ -191,12 +192,17 @@ function Overview({ report }: { report: Report }) {
 
 function Gaps() {
   const [gaps, setGaps] = useState<Gap[] | null>(null);
-  useEffect(() => {
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(() => {
+    setFailed(false);
+    setGaps(null);
     api.get<{ gaps: Gap[] }>('/api/v1/compliance/gap-analysis')
       .then((d) => setGaps(d.gaps))
-      .catch((err: unknown) => { logger.error('Gap analysis failed', err); setGaps([]); });
+      .catch((err: unknown) => { logger.error('Gap analysis failed', err); setFailed(true); });
   }, []);
+  useEffect(() => { load(); }, [load]);
 
+  if (failed) return <LoadError what="the gap analysis" onRetry={load} />;
   if (!gaps) return <Skeleton className="h-48 w-full" />;
   if (gaps.length === 0) {
     return <Card><CardContent className="pt-6 text-center text-muted-foreground">No gaps found — every tracked requirement is met.</CardContent></Card>;
@@ -225,14 +231,16 @@ function Gaps() {
 
 function Incidents({ onChange }: { onChange: () => void }) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [failed, setFailed] = useState(false);
   const [type, setType] = useState('fraud_incident');
   const [severity, setSeverity] = useState('medium');
   const [description, setDescription] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => api.get<Incident[]>('/api/v1/compliance/incidents').then(setIncidents)
-    .catch((err: unknown) => logger.error('Failed to load incidents', err)), []);
+  const load = useCallback(() => api.get<Incident[]>('/api/v1/compliance/incidents')
+    .then((r) => { setFailed(false); setIncidents(r); })
+    .catch((err: unknown) => { logger.error('Failed to load incidents', err); setFailed(true); }), []);
   useEffect(() => { load(); }, [load]);
 
   const record = async () => {
@@ -311,7 +319,7 @@ function Incidents({ onChange }: { onChange: () => void }) {
           </Button>
         </CardHeader>
         <CardContent>
-          {incidents.length === 0 ? (
+          {failed ? <LoadError what="the incident log" onRetry={load} /> : incidents.length === 0 ? (
             <p className="text-center text-muted-foreground py-6">No incidents recorded.</p>
           ) : (
             <Table>
@@ -376,12 +384,14 @@ function Incidents({ onChange }: { onChange: () => void }) {
 function SeniorManagement({ employees, onChange }: { employees: Employee[]; onChange: () => void }) {
   const confirm = useConfirm();
   const [managers, setManagers] = useState<SeniorManager[]>([]);
+  const [failed, setFailed] = useState(false);
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState('CEO');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const load = useCallback(() => api.get<SeniorManager[]>('/api/v1/compliance/senior-management').then(setManagers)
-    .catch((err: unknown) => logger.error('Failed to load senior managers', err)), []);
+  const load = useCallback(() => api.get<SeniorManager[]>('/api/v1/compliance/senior-management')
+    .then((r) => { setFailed(false); setManagers(r); })
+    .catch((err: unknown) => { logger.error('Failed to load senior managers', err); setFailed(true); }), []);
   useEffect(() => { load(); }, [load]);
 
   const today = () => new Date().toISOString().slice(0, 10);
@@ -454,7 +464,7 @@ function SeniorManagement({ employees, onChange }: { employees: Employee[]; onCh
         </div>
         {formError && <p className="text-sm text-destructive" role="alert">{formError}</p>}
 
-        {managers.length === 0 ? (
+        {failed ? <LoadError what="the senior managers" onRetry={load} /> : managers.length === 0 ? (
           <p className="text-center text-muted-foreground py-6">No senior managers recorded.</p>
         ) : (
           <Table>
@@ -496,10 +506,14 @@ function SeniorManagement({ employees, onChange }: { employees: Employee[]; onCh
 
 function Training() {
   const [data, setData] = useState<{ totalUsers: number; completedTraining: number; completionRate: number; staff: TrainingRow[] } | null>(null);
-  useEffect(() => {
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(() => {
+    setFailed(false);
     api.get<typeof data>('/api/v1/compliance/training').then(setData)
-      .catch((err: unknown) => logger.error('Failed to load training', err));
+      .catch((err: unknown) => { logger.error('Failed to load training', err); setFailed(true); });
   }, []);
+  useEffect(() => { load(); }, [load]);
+  if (failed) return <LoadError what="the training records" onRetry={load} />;
   if (!data) return <Skeleton className="h-48 w-full" />;
 
   return (
@@ -552,6 +566,8 @@ const AUDIT_FILTERS: Record<string, string> = {
 
 function AuditTrail() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState('all');
   const [hasMore, setHasMore] = useState(false);
@@ -560,9 +576,9 @@ function AuditTrail() {
   useEffect(() => {
     const type = filter === 'all' ? '' : `&eventType=${encodeURIComponent(filter)}`;
     api.get<AuditEvent[]>(`/api/v1/compliance/audit-trail?page=${page}&pageSize=${PAGE_SIZE}${type}`)
-      .then((rows) => { setEvents(rows); setHasMore(rows.length === PAGE_SIZE); })
-      .catch((err: unknown) => logger.error('Failed to load audit trail', err));
-  }, [page, filter]);
+      .then((rows) => { setFailed(false); setEvents(rows); setHasMore(rows.length === PAGE_SIZE); })
+      .catch((err: unknown) => { logger.error('Failed to load audit trail', err); setFailed(true); });
+  }, [page, filter, attempt]);
 
   return (
     <Card>
@@ -582,7 +598,7 @@ function AuditTrail() {
         </div>
       </CardHeader>
       <CardContent>
-        {events.length === 0 ? (
+        {failed ? <LoadError what="the audit trail" onRetry={() => setAttempt((n) => n + 1)} /> : events.length === 0 ? (
           <p className="text-center text-muted-foreground py-6">No events.</p>
         ) : (
           <Table>
