@@ -77,14 +77,14 @@ describe('Index', () => {
     it('shows main heading', () => {
       renderIndex();
 
-      expect(screen.getAllByText('FRAUD-RISK.CO.UK').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Protect Your Organisation')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: /Fraud risk assessment/ })).toBeInTheDocument();
+      expect(screen.getByText('and prevention training')).toBeInTheDocument();
     });
 
-    it('shows compliance badge', () => {
+    it('shows the not-legal-advice badge', () => {
       renderIndex();
 
-      expect(screen.getByText('Built for GovS 013 & ECCTA 2023')).toBeInTheDocument();
+      expect(screen.getByText('Self-assessment and awareness tools — not legal advice')).toBeInTheDocument();
     });
 
     it('shows "Get Started" link to the package chooser when not authenticated', () => {
@@ -99,15 +99,15 @@ describe('Index', () => {
 
       renderIndex();
 
-      const link = screen.getByRole('link', { name: /Go to Dashboard/ });
-      expect(link).toHaveAttribute('href', '/dashboard');
+      const links = screen.getAllByRole('link', { name: /Go to Dashboard/ });
+      links.forEach((link) => expect(link).toHaveAttribute('href', '/dashboard'));
     });
 
     it('shows View Resources link', () => {
       renderIndex();
 
       const link = screen.getByRole('link', { name: /View Resources/ });
-      expect(link).toHaveAttribute('href', '/resources');
+      expect(link).toHaveAttribute('href', '/#free-guides');
     });
 
     it('shows stats (30 Minutes, 6 Modules, 100% Interactive)', () => {
@@ -148,21 +148,21 @@ describe('Index', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/workshop?session=ABC123');
     });
 
-    it('Self-paced button navigates to signup when not authenticated', async () => {
+    it('training button navigates to the Professional package when not authenticated', async () => {
       const user = userEvent.setup();
       renderIndex();
 
-      await user.click(screen.getByText('Start Self-Paced Workshop'));
+      await user.click(screen.getByRole('button', { name: 'Explore Training Package' }));
 
-      expect(mockNavigate).toHaveBeenCalledWith('/auth?mode=signup');
+      expect(mockNavigate).toHaveBeenCalledWith('/package/professional');
     });
 
-    it('Self-paced button navigates to workshop when authenticated', async () => {
+    it('workshop button navigates to workshop when authenticated', async () => {
       setupAuth({ user: makeUser() });
       const user = userEvent.setup();
       renderIndex();
 
-      await user.click(screen.getByText('Start Self-Paced Workshop'));
+      await user.click(screen.getByRole('button', { name: 'Open Workshop' }));
 
       expect(mockNavigate).toHaveBeenCalledWith('/workshop');
     });
@@ -174,16 +174,15 @@ describe('Index', () => {
     it('shows section heading', () => {
       renderIndex();
 
-      expect(screen.getByText("What You'll Experience")).toBeInTheDocument();
+      expect(screen.getByText('From risk assessment to practical action')).toBeInTheDocument();
     });
 
-    it('shows all four feature cards', () => {
+    it('shows the three steps', () => {
       renderIndex();
 
-      expect(screen.getByText('Interactive Learning')).toBeInTheDocument();
-      expect(screen.getByText('Live Collaboration')).toBeInTheDocument();
-      expect(screen.getByText('Personalised Action Plans')).toBeInTheDocument();
-      expect(screen.getByText('Certificate of Completion')).toBeInTheDocument();
+      expect(screen.getByText('Assess 13 areas of fraud risk')).toBeInTheDocument();
+      expect(screen.getByText('Understand what to address')).toBeInTheDocument();
+      expect(screen.getByText('Extend awareness across your team')).toBeInTheDocument();
     });
   });
 
@@ -207,16 +206,22 @@ describe('Index', () => {
       expect(screen.getByText('£4,995')).toBeInTheDocument();
     });
 
-    it('shows "Most Popular" badge on Professional', () => {
+    it('shows the "Training & support" badge on Professional', () => {
       renderIndex();
 
-      expect(screen.getByText('Most Popular')).toBeInTheDocument();
+      expect(screen.getByText('Training & support')).toBeInTheDocument();
+    });
+
+    it('says prices exclude VAT', () => {
+      renderIndex();
+
+      expect(screen.getByText(/Prices exclude VAT/)).toBeInTheDocument();
     });
 
     it('Starter links to the Starter package page', () => {
       renderIndex();
 
-      const link = screen.getByRole('link', { name: /Start Assessment/ });
+      const link = screen.getByRole('link', { name: /View Starter details/ });
       expect(link).toHaveAttribute('href', '/package/starter');
     });
 
@@ -265,7 +270,7 @@ describe('Index', () => {
     it('shows all six workshop modules', () => {
       renderIndex();
 
-      expect(screen.getByText('Regulatory Landscape')).toBeInTheDocument();
+      expect(screen.getByText('Fraud Prevention Landscape')).toBeInTheDocument();
       expect(screen.getByText('Fraud Types & Risks')).toBeInTheDocument();
       expect(screen.getByText('Defence Strategies')).toBeInTheDocument();
       expect(screen.getByText('Organisational Impact')).toBeInTheDocument();
@@ -282,24 +287,33 @@ describe('Index', () => {
 
   // ── CTA section ─────────────────────────────────
 
-  describe('FAQ section', () => {
-    it('shows the FAQ heading and opens an answer when a question is clicked', async () => {
-      setupAuth();
+  describe('ways to continue section', () => {
+    it('links each tool to its web page', () => {
       renderIndex();
-      expect(screen.getByRole('heading', { name: 'FAQ' })).toBeInTheDocument();
-      expect(screen.getByText('Common questions')).toBeInTheDocument();
-      expect(screen.queryByText(/came into force on 1 September 2025/)).not.toBeInTheDocument();
-      await userEvent.click(screen.getByRole('button', { name: 'What is the failure to prevent fraud offence?' }));
-      expect(screen.getByText(/came into force on 1 September 2025/)).toBeInTheDocument();
-    });
 
-    it('lists every package with its price in the package answer', async () => {
-      setupAuth();
+      expect(screen.getByRole('link', { name: /Open assessment/ })).toHaveAttribute('href', '/assessment');
+      expect(screen.getByRole('link', { name: /Open training/ })).toHaveAttribute('href', '/workshop');
+      expect(screen.getByRole('link', { name: /Open budget guide/ })).toHaveAttribute('href', '/budget-holder');
+    });
+  });
+
+  describe('free guides section', () => {
+    it('lists each public PDF with a download link', () => {
       renderIndex();
-      await userEvent.click(screen.getByRole('button', { name: 'Which package is right for us?' }));
-      expect(screen.getByText(/£795 one-time/)).toBeInTheDocument();
-      expect(screen.getByText(/£1,799 a year/)).toBeInTheDocument();
-      expect(screen.getByText(/£4,995 a year/)).toBeInTheDocument();
+
+      expect(screen.getByText('Free fraud prevention guides')).toBeInTheDocument();
+      const link = screen.getByRole('link', { name: 'Download Fraud Risk Self-Assessment Checklist as a PDF' });
+      expect(link).toHaveAttribute('href', '/resources/fraud-risk-self-assessment-checklist.pdf');
+    });
+  });
+
+  describe('FAQ section', () => {
+    it('shows the FAQ heading and the questions', () => {
+      renderIndex();
+
+      expect(screen.getByRole('heading', { name: 'Frequently asked questions' })).toBeInTheDocument();
+      expect(screen.getByText('Who is the service for?')).toBeInTheDocument();
+      expect(screen.getByText('Is this legal advice or a compliance guarantee?')).toBeInTheDocument();
     });
   });
 
@@ -307,30 +321,21 @@ describe('Index', () => {
     it('shows CTA heading', () => {
       renderIndex();
 
-      expect(screen.getByText('Ready to Strengthen Your Fraud Defences?')).toBeInTheDocument();
+      expect(screen.getByText('Choose your next step')).toBeInTheDocument();
     });
 
-    it('Start Workshop link goes to the Professional package when not authenticated', () => {
+    it('Compare Packages link goes to the packages when not authenticated', () => {
       renderIndex();
 
-      const link = screen.getByRole('link', { name: /Start Workshop Now/ });
-      expect(link).toHaveAttribute('href', '/package/professional');
+      const link = screen.getByRole('link', { name: /Compare Packages/ });
+      expect(link).toHaveAttribute('href', '/#packages');
     });
 
-    it('Start Workshop link goes to the dashboard when authenticated, which shows the training or what to buy', () => {
-      setupAuth({ user: makeUser() });
-
+    it('shows Download Free Guides link', () => {
       renderIndex();
 
-      const link = screen.getByRole('link', { name: /Start Workshop Now/ });
-      expect(link).toHaveAttribute('href', '/dashboard');
-    });
-
-    it('shows Download Resources link', () => {
-      renderIndex();
-
-      const link = screen.getByRole('link', { name: 'Download Resources' });
-      expect(link).toHaveAttribute('href', '/resources');
+      const link = screen.getByRole('link', { name: 'Download Free Guides' });
+      expect(link).toHaveAttribute('href', '/#free-guides');
     });
   });
 
@@ -342,6 +347,17 @@ describe('Index', () => {
 
       expect(screen.getByLabelText('Site footer')).toBeInTheDocument();
       expect(screen.getAllByText('FRAUD-RISK.CO.UK').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('lists the contact email addresses', () => {
+      renderIndex();
+
+      for (const address of ['assessment', 'help', 'recruitment']) {
+        expect(screen.getByRole('link', { name: `${address}@fraud-risk.co.uk` })).toHaveAttribute(
+          'href',
+          `mailto:${address}@fraud-risk.co.uk`,
+        );
+      }
     });
 
     it('shows copyright with current year', () => {
@@ -359,8 +375,8 @@ describe('Index', () => {
       renderIndex();
 
       expect(screen.getByLabelText('Hero')).toBeInTheDocument();
-      expect(screen.getByLabelText('Features')).toBeInTheDocument();
-      expect(screen.getByLabelText('Packages')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'From risk assessment to practical action' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Choose Your Package' })).toBeInTheDocument();
       expect(screen.getByLabelText('Workshop overview')).toBeInTheDocument();
       expect(screen.getByLabelText('Call to action')).toBeInTheDocument();
       expect(screen.getByLabelText('Site footer')).toBeInTheDocument();
