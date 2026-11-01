@@ -160,3 +160,29 @@ describe('Compliance page', () => {
     await waitFor(() => expect(within(panel).getByRole('button', { name: 'Download evidence pack' })).toBeEnabled());
   });
 });
+
+describe('a list that fails to load is never shown as an all-clear', () => {
+  const failing = (prefix: string) => mockedApi.get.mockImplementation(async (path: string) => {
+    if (path.startsWith(prefix)) throw new Error('Network error');
+    if (path.startsWith('/api/v1/compliance/report')) return report;
+    return [];
+  });
+
+  it('gap analysis: shows the error and a retry, not "No gaps found"', async () => {
+    failing('/api/v1/compliance/gap-analysis');
+    renderCompliance('/compliance?tab=gaps');
+    expect(await screen.findByRole('alert')).toHaveTextContent('We could not load the gap analysis');
+    expect(screen.queryByText(/No gaps found/)).not.toBeInTheDocument();
+
+    mockedApi.get.mockImplementation(async () => ({ gaps: [] }));
+    await userEvent.click(screen.getByRole('button', { name: /Try again/ }));
+    expect(await screen.findByText(/No gaps found/)).toBeInTheDocument();
+  });
+
+  it('incidents: shows the error, not "No incidents recorded"', async () => {
+    failing('/api/v1/compliance/incidents');
+    renderCompliance('/compliance?tab=incidents');
+    expect(await screen.findByText(/We could not load the incident log/)).toBeInTheDocument();
+    expect(screen.queryByText('No incidents recorded.')).not.toBeInTheDocument();
+  });
+});

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { LoadError } from '@/components/LoadError';
 import { api } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
 import { CATEGORY_LABELS, REFERRAL_LABELS, RELATIONSHIP_LABELS, STATUS_LABELS } from '@/lib/speakUp';
@@ -263,10 +264,12 @@ function CasePanel({ id, employees, onClose, onChange }: { id: string | null; em
 
 function CaseLog({ employees, onChange }: { employees: Employee[]; onChange: () => void }) {
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  const load = useCallback(() => api.get<CaseSummary[]>('/api/v1/compliance/speak-up/reports').then(setCases)
-    .catch((err: unknown) => { logger.error('Failed to load cases', err); setCases([]); }), []);
+  const load = useCallback(() => api.get<CaseSummary[]>('/api/v1/compliance/speak-up/reports')
+    .then((c) => { setFailed(false); setCases(c); })
+    .catch((err: unknown) => { logger.error('Failed to load cases', err); setFailed(true); }), []);
   useEffect(() => { load(); }, [load]);
 
   const download = () => api.download('/api/v1/compliance/speak-up/reports?format=csv', 'speak-up-case-log.csv')
@@ -284,7 +287,7 @@ function CaseLog({ employees, onChange }: { employees: Employee[]; onChange: () 
         </Button>
       </CardHeader>
       <CardContent>
-        {cases === null ? null : cases.length === 0 ? (
+        {failed ? <LoadError what="the case log" onRetry={load} /> : cases === null ? null : cases.length === 0 ? (
           <p className="text-center text-muted-foreground py-6">No reports received.</p>
         ) : (
           <Table>
