@@ -33,11 +33,11 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center p-4">
+        <main className="flex min-h-screen items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader className="flex flex-col items-center gap-2">
-              <AlertTriangle className="h-10 w-10 text-destructive" />
-              <CardTitle className="text-center">Something went wrong</CardTitle>
+              <AlertTriangle className="h-10 w-10 text-destructive" aria-hidden="true" />
+              <CardTitle level={1} className="text-center">Something went wrong</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4">
               <p className="text-center text-sm text-muted-foreground">
@@ -50,7 +50,7 @@ class ErrorBoundary extends Component<Props, State> {
               </Button>
             </CardContent>
           </Card>
-        </div>
+        </main>
       );
     }
 

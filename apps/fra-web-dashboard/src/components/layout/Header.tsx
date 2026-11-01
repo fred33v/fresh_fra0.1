@@ -58,7 +58,8 @@ export function Header() {
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label="User menu">
+                  {/* The name starts with the initials people see, so speech users can say "click AT" (WCAG 2.5.3) */}
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label={profile?.full_name ? `${getInitials(profile.full_name)} User menu` : 'User menu'}>
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {profile?.full_name ? getInitials(profile.full_name) : <User className="h-4 w-4" />}

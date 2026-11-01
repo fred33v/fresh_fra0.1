@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ChartFigure } from '@/components/ChartFigure';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
 import { createLogger } from '@/lib/logger';
@@ -51,6 +52,12 @@ import {
   FileText,
   Download,
 } from 'lucide-react';
+
+/** Text alternative for the overview charts: every count, in the chart's order. */
+function countSummary(title: string, data: Array<{ name: string; value: number }>): string {
+  const total = data.reduce((n, d) => n + d.value, 0);
+  return `Chart: ${title}, ${total} staff. ` + data.map(d => `${d.name}: ${d.value}`).join(', ') + '.';
+}
 
 const statusChartConfig = {
   completed: { label: 'Completed', color: 'hsl(var(--success))' },
@@ -539,17 +546,24 @@ export default function EmployerDashboard() {
                     <CardTitle className="text-lg">Status Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={statusChartConfig} className="mx-auto aspect-square max-h-[250px]">
-                      <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-                        <Pie data={statusChartData} dataKey="value" nameKey="name" innerRadius={50} strokeWidth={2}>
-                          {statusChartData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-                      </PieChart>
-                    </ChartContainer>
+                    <ChartFigure
+                      summary={countSummary('Status of staff assessments', statusChartData.map(d => ({ name: statusChartConfig[d.name as keyof typeof statusChartConfig].label, value: d.value })))}
+                      caption="Staff by assessment status"
+                      columns={['Status', 'Staff']}
+                      rows={statusChartData.map(d => [statusChartConfig[d.name as keyof typeof statusChartConfig].label, d.value])}
+                    >
+                      <ChartContainer config={statusChartConfig} className="mx-auto aspect-square max-h-[250px]">
+                        <PieChart>
+                          <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
+                          <Pie rootTabIndex={-1} data={statusChartData} dataKey="value" nameKey="name" innerRadius={50} strokeWidth={2}>
+                            {statusChartData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                        </PieChart>
+                      </ChartContainer>
+                    </ChartFigure>
                   </CardContent>
                 </Card>
 
@@ -558,19 +572,26 @@ export default function EmployerDashboard() {
                     <CardTitle className="text-lg">Risk Distribution</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={riskChartConfig} className="aspect-square max-h-[250px] w-full">
-                      <BarChart data={riskChartData} layout="vertical" margin={{ left: 20 }}>
-                        <CartesianGrid horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} />
-                        <YAxis type="category" dataKey="name" width={90} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                          {riskChartData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
+                    <ChartFigure
+                      summary={countSummary('Staff by risk level', riskChartData)}
+                      caption="Staff by risk level"
+                      columns={['Risk level', 'Staff']}
+                      rows={riskChartData.map(d => [d.name, d.value])}
+                    >
+                      <ChartContainer config={riskChartConfig} className="aspect-square max-h-[250px] w-full">
+                        <BarChart accessibilityLayer={false} data={riskChartData} layout="vertical" margin={{ left: 20 }}>
+                          <CartesianGrid horizontal={false} />
+                          <XAxis type="number" allowDecimals={false} />
+                          <YAxis type="category" dataKey="name" width={90} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                            {riskChartData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ChartContainer>
+                    </ChartFigure>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -596,7 +617,7 @@ export default function EmployerDashboard() {
                       />
                     </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by status">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -607,7 +628,7 @@ export default function EmployerDashboard() {
                       </SelectContent>
                     </Select>
                     <Select value={riskFilter} onValueChange={setRiskFilter}>
-                      <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by risk">
                         <SelectValue placeholder="Filter by risk" />
                       </SelectTrigger>
                       <SelectContent>
@@ -620,7 +641,7 @@ export default function EmployerDashboard() {
                     </Select>
                     {departments.length > 1 && (
                       <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by department">
                           <SelectValue placeholder="Filter by department" />
                         </SelectTrigger>
                         <SelectContent>
@@ -691,10 +712,10 @@ export default function EmployerDashboard() {
                     </div>
                   ) : (
                     <div className="rounded-md border">
-                      <Table>
+                      <Table aria-label="Employees">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-8"></TableHead>
+                            <TableHead className="w-8"><span className="sr-only">Details</span></TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Department</TableHead>
@@ -887,7 +908,7 @@ function RiskBadge({ riskLevel }: { riskLevel: string | null }) {
     case 'high':
       return <Badge className="bg-destructive/10 text-destructive border-destructive/20">High</Badge>;
     case 'medium':
-      return <Badge className="bg-warning/10 text-warning border-warning/20">Medium</Badge>;
+      return <Badge className="bg-warning/10 text-amber-800 border-warning/20">Medium</Badge>;
     case 'low':
       return <Badge className="bg-success/10 text-success border-success/20">Low</Badge>;
     default:

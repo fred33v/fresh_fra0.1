@@ -99,14 +99,14 @@ export default function Resources() {
                       <CardContent className="space-y-2">
                         {'webPath' in resource && resource.webPath && (
                           <Button className="w-full" asChild>
-                            <Link to={resource.webPath} aria-label={`Fill in ${resource.title} online`}>
+                            <Link to={resource.webPath} aria-label={`Fill in online: ${resource.title}`}>
                               <ClipboardCheck className="mr-2 h-4 w-4" aria-hidden="true" />
                               Fill in online
                             </Link>
                           </Button>
                         )}
                         <Button variant="outline" className="w-full" asChild>
-                          <a href={`/resources/${resource.filename}`} download aria-label={`Download ${resource.title} (PDF)`}>
+                          <a href={`/resources/${resource.filename}`} download aria-label={`Download PDF: ${resource.title}`}>
                             <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                             Download PDF
                           </a>

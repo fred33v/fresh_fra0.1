@@ -94,7 +94,7 @@ describe('Header', () => {
     it('does not render the avatar dropdown', () => {
       renderHeader();
 
-      expect(screen.queryByLabelText('User menu')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/User menu/)).not.toBeInTheDocument();
     });
   });
 
@@ -131,7 +131,7 @@ describe('Header', () => {
       const user = userEvent.setup();
       renderHeader();
 
-      await user.click(screen.getByLabelText('User menu'));
+      await user.click(screen.getByLabelText(/User menu/));
 
       expect(screen.getByText('Alice Smith')).toBeInTheDocument();
       expect(screen.getByText('alice@example.com')).toBeInTheDocument();
@@ -160,7 +160,7 @@ describe('Header', () => {
       const user = userEvent.setup();
       renderHeader();
 
-      await user.click(screen.getByLabelText('User menu'));
+      await user.click(screen.getByLabelText(/User menu/));
 
       const orgLinks = screen.getAllByRole('menuitem', { name: 'Organisation' });
       expect(orgLinks.length).toBeGreaterThanOrEqual(1);
@@ -218,7 +218,7 @@ describe('Header', () => {
       const user = userEvent.setup();
       renderHeader();
 
-      await user.click(screen.getByLabelText('User menu'));
+      await user.click(screen.getByLabelText(/User menu/));
       await user.click(screen.getByText('Sign out'));
 
       expect(mockSignOut).toHaveBeenCalled();

@@ -25,7 +25,7 @@ describe('titleForPath', () => {
   });
 
   it('gives every page a different title', () => {
-    const paths = ['/auth', '/join', '/dashboard', '/workshop', '/assessment', '/resources', '/certificate', '/action-plan', '/privacy', '/terms', '/employer', '/profile'];
+    const paths = ['/auth', '/join', '/dashboard', '/workshop', '/assessment', '/resources', '/certificate', '/action-plan', '/privacy', '/terms', '/accessibility', '/employer', '/profile'];
     expect(new Set(paths.map(titleForPath)).size).toBe(paths.length);
   });
 });

@@ -209,7 +209,7 @@ export default function Dashboard() {
                     <span className="text-muted-foreground">Progress</span>
                     <span className="font-medium">{completedCount} / {totalSections} modules</span>
                   </div>
-                  <Progress value={progressPercent} className="h-2" />
+                  <Progress value={progressPercent} className="h-2" aria-label={`${completedCount} of ${totalSections} modules done`} />
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">

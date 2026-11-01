@@ -437,7 +437,7 @@ describe('EmployerDashboard', () => {
       await waitFor(() => {
         expect(screen.getByText('Alice Smith')).toBeInTheDocument();
       });
-      const table = screen.getByRole('table');
+      const table = screen.getByRole('table', { name: 'Employees' });
       expect(within(table).getByText('alice@test.com')).toBeInTheDocument();
       expect(within(table).getByText('Bob Jones')).toBeInTheDocument();
       expect(within(table).getByText('bob@test.com')).toBeInTheDocument();
@@ -466,10 +466,9 @@ describe('EmployerDashboard', () => {
     it('shows risk level badges', async () => {
       renderDashboard();
 
-      await waitFor(() => {
-        expect(screen.getByText('Low')).toBeInTheDocument();
-      });
-      expect(screen.getByText('High')).toBeInTheDocument();
+      const table = await screen.findByRole('table', { name: 'Employees' });
+      expect(within(table).getByText('Low')).toBeInTheDocument();
+      expect(within(table).getByText('High')).toBeInTheDocument();
     });
 
     it('formats completed date in en-GB locale', async () => {
@@ -537,7 +536,7 @@ describe('EmployerDashboard', () => {
       expect(alert).toHaveTextContent('Bob Jones (Cyber fraud)');
 
       await user.click(within(alert).getByRole('button', { name: /show high-risk employees/i }));
-      const table = screen.getByRole('table');
+      const table = screen.getByRole('table', { name: 'Employees' });
       expect(within(table).queryByText('Alice Smith')).not.toBeInTheDocument();
       expect(within(table).getByText('Bob Jones')).toBeInTheDocument();
     });
@@ -545,7 +544,7 @@ describe('EmployerDashboard', () => {
     it('does not show the alert when nobody is high risk', async () => {
       mockedApi.get.mockResolvedValue([makeEmployee({ riskLevel: 'low', status: 'completed' })]);
       renderDashboard();
-      await screen.findByRole('table');
+      await screen.findByRole('table', { name: 'Employees' });
       expect(screen.queryByText(/reported high fraud risk/)).not.toBeInTheDocument();
     });
   });

@@ -28,6 +28,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { ChartFigure } from '@/components/ChartFigure';
 import {
   AlertTriangle,
   Download,
@@ -52,6 +53,15 @@ const SEVERITY_IMPACT: Record<AssessmentResultsData['topRisks'][number]['severit
   Medium: 'medium',
   Low: 'low',
 };
+
+/** Text alternative for the module chart: names the riskiest module so screen reader users get the main point. */
+function moduleChartSummary(modules: AssessmentResultsData['modules']): string {
+  if (modules.length === 0) return 'Bar chart of risk score by module. No module scores yet.';
+  const top = modules.reduce((a, b) => (b.score > a.score ? b : a));
+  const atRisk = modules.filter(m => m.score >= 60).length;
+  return `Bar chart of risk score by module, out of 100, for ${modules.length} modules. ` +
+    `The highest is ${top.title} at ${top.score}. ${atRisk} of ${modules.length} score 60 or more and need attention.`;
+}
 
 export default function AssessmentResults() {
   const { assessmentId } = useParams();
@@ -151,9 +161,10 @@ export default function AssessmentResults() {
 
   const getRiskColor = (rating: string) => {
     switch (rating.toLowerCase()) {
-      case 'low': return 'text-success';
-      case 'medium': return 'text-warning';
-      case 'high': return 'text-orange-500';
+      // Darker shades so the score and rating text reach 4.5:1 contrast (WCAG 1.4.3)
+      case 'low': return 'text-green-800';
+      case 'medium': return 'text-amber-800';
+      case 'high': return 'text-orange-800';
       case 'critical': return 'text-destructive';
       default: return 'text-primary';
     }
@@ -194,7 +205,7 @@ export default function AssessmentResults() {
         >
           <Card className={`border-2 ${getRiskBgColor(rating)}`}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <Shield className="h-6 w-6" />
                 Overall Risk Rating
               </CardTitle>
@@ -204,7 +215,7 @@ export default function AssessmentResults() {
                 {/* Score circle */}
                 <div className="flex flex-col items-center justify-center">
                   <div className="relative h-48 w-48">
-                    <svg className="h-full w-full transform -rotate-90">
+                    <svg className="h-full w-full transform -rotate-90" aria-hidden="true">
                       <circle
                         cx="96"
                         cy="96"
@@ -323,7 +334,7 @@ export default function AssessmentResults() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <TrendingUp className="h-5 w-5" />
                 Risk by Module
               </CardTitle>
@@ -332,40 +343,48 @@ export default function AssessmentResults() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={results.modules}
-                  margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="title"
-                    angle={-45}
-                    textAnchor="end"
-                    height={100}
-                    interval={0}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis label={{ value: 'Risk Score', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                      border: 'none',
-                      borderRadius: '4px',
-                      color: '#fff',
-                    }}
-                  />
-                  <Bar
-                    dataKey="score"
-                    fill="hsl(var(--primary))"
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartFigure
+                summary={moduleChartSummary(results.modules)}
+                caption="Risk score by module, out of 100"
+                columns={['Module', 'Risk score (out of 100)', 'Risk level']}
+                rows={results.modules.map(m => [m.title, m.score, m.level])}
+              >
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    accessibilityLayer={false}
+                    data={results.modules}
+                    margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="title"
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis label={{ value: 'Risk Score', angle: -90, position: 'insideLeft' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        color: '#fff',
+                      }}
+                    />
+                    <Bar
+                      dataKey="score"
+                      fill="hsl(var(--primary))"
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartFigure>
 
               {/* High-risk modules */}
               <div className="mt-6 space-y-2">
-                <h4 className="font-semibold text-sm">Areas requiring attention:</h4>
+                <h3 className="font-semibold text-sm">Areas requiring attention:</h3>
                 <div className="space-y-2">
                   {results.modules
                     .filter(m => m.score >= 60)
@@ -395,7 +414,7 @@ export default function AssessmentResults() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-3">
+              <CardTitle level={2} className="flex items-center gap-3">
                 <AlertCircle className="h-5 w-5" />
                 Key Risk Factors
               </CardTitle>
@@ -436,7 +455,7 @@ export default function AssessmentResults() {
                           factor.impact === 'high'
                             ? 'border-destructive text-destructive'
                             : factor.impact === 'medium'
-                            ? 'border-warning text-warning'
+                            ? 'border-warning text-amber-800'
                             : 'border-info text-info'
                         }`}
                       >

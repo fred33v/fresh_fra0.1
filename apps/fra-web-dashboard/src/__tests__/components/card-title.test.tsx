@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { CardTitle } from '@/components/ui/card';
 
 describe('CardTitle', () => {
-  it('is a level 3 heading by default, as before', () => {
+  it('is a level 2 heading by default, the level under the page h1', () => {
     render(<CardTitle>Title</CardTitle>);
-    expect(screen.getByRole('heading', { level: 3, name: 'Title' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Title' })).toBeInTheDocument();
   });
 
   it('can sit at another level so a page outline has no gaps', () => {

@@ -16,7 +16,9 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/hooks/useAuth');
 
 vi.mock('@/components/layout/Layout', () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
+  Layout: ({ children, header, footer }: { children: React.ReactNode; header?: React.ReactNode; footer?: React.ReactNode }) => (
+    <div data-testid="layout">{header}<main>{children}</main>{footer}</div>
+  ),
 }));
 
 vi.mock('framer-motion', () => ({
@@ -302,7 +304,7 @@ describe('Index', () => {
       renderIndex();
 
       expect(screen.getByText('Free fraud prevention guides')).toBeInTheDocument();
-      const link = screen.getByRole('link', { name: 'Download Fraud Risk Self-Assessment Checklist as a PDF' });
+      const link = screen.getByRole('link', { name: 'Download PDF: Fraud Risk Self-Assessment Checklist' });
       expect(link).toHaveAttribute('href', '/resources/fraud-risk-self-assessment-checklist.pdf');
     });
   });

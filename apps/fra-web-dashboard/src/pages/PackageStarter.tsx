@@ -81,7 +81,7 @@ export default function PackageStarter() {
 
               <div className="flex items-center gap-3 mb-8 justify-center lg:justify-start">
                 <p className="text-2xl font-bold text-accent">
-                  {formatPrice(PKG)}<span className="text-base font-medium text-primary-foreground/60"> + VAT, one-time</span>
+                  {formatPrice(PKG)}<span className="text-base font-medium text-primary-foreground/60"> one-time</span>
                 </p>
               </div>
 
@@ -265,7 +265,7 @@ export default function PackageStarter() {
                 One-time comprehensive assessment across 13 key fraud risk areas.
               </p>
               <p className="text-2xl font-bold text-accent mb-8">
-                {formatPrice(PKG)} + VAT (one-time)
+                {formatPrice(PKG)} (one-time)
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>

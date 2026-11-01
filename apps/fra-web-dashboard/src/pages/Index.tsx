@@ -71,67 +71,154 @@ export default function Index() {
   ];
 
   return (
-    <Layout showHeader={false}>
-      {/* ===== GOV.UK-style top bar ===== */}
-      <div className="bg-[#0b0c0c]">
-        <div className="container flex h-10 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 text-white no-underline">
-            <Shield className="h-5 w-5 text-white" aria-hidden="true" />
-            <span className="text-sm font-bold tracking-wide">FRAUD-RISK.CO.UK</span>
-          </Link>
-          <nav aria-label="Main navigation" className="flex items-center gap-3">
-            <div className="hidden items-center gap-5 md:flex">
-              <Link to="/#how-it-works" className="text-xs text-white/80 hover:text-white no-underline">How it works</Link>
-              <Link to={PACKAGE_CHOOSER_PATH} className="text-xs text-white/80 hover:text-white no-underline">Packages</Link>
-              <Link to="/#free-guides" className="text-xs text-white/80 hover:text-white no-underline">Free guides</Link>
-              <Link to="/#faq-heading" className="text-xs text-white/80 hover:text-white no-underline">FAQs</Link>
-            </div>
-            {user ? (
-              <Link to="/dashboard" className="text-xs text-white/80 hover:text-white no-underline">
-                Dashboard
+    <Layout
+      showHeader={false}
+      showFooter={false}
+      // The home page draws its own header and footer, kept outside <main> so "Skip to main content" skips them
+      header={
+        <header>
+          {/* ===== GOV.UK-style top bar ===== */}
+          <div className="bg-[#0b0c0c]">
+            <div className="container flex h-10 items-center justify-between">
+              <Link to="/" className="flex items-center gap-2 text-white no-underline">
+                <Shield className="h-5 w-5 text-white" aria-hidden="true" />
+                <span className="text-sm font-bold tracking-wide">FRAUD-RISK.CO.UK</span>
               </Link>
-            ) : (
-              <>
-                <Link to="/auth" className="text-xs text-white/80 hover:text-white no-underline">
-                  Sign in
-                </Link>
-                <Link
-                  to="/auth?mode=signup"
-                  className="rounded bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20 no-underline"
-                >
-                  Register
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </div>
+              <nav aria-label="Main navigation" className="flex items-center gap-3">
+                <div className="hidden items-center gap-5 md:flex">
+                  <Link to="/#how-it-works" className="text-xs text-white/80 hover:text-white no-underline">How it works</Link>
+                  <Link to={PACKAGE_CHOOSER_PATH} className="text-xs text-white/80 hover:text-white no-underline">Packages</Link>
+                  <Link to="/#free-guides" className="text-xs text-white/80 hover:text-white no-underline">Free guides</Link>
+                  <Link to="/#faq-heading" className="text-xs text-white/80 hover:text-white no-underline">FAQs</Link>
+                </div>
+                {user ? (
+                  <Link to="/dashboard" className="text-xs text-white/80 hover:text-white no-underline">
+                    Dashboard
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/auth" className="text-xs text-white/80 hover:text-white no-underline">
+                      Sign in
+                    </Link>
+                    <Link
+                      to="/auth?mode=signup"
+                      className="rounded bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20 no-underline"
+                    >
+                      Register
+                    </Link>
+                  </>
+                )}
+              </nav>
+            </div>
+          </div>
 
-      {/* ===== Blue service bar ===== */}
-      <div className="border-b-[4px] border-[#1d70b8] bg-[#f3f2f1]">
-        <div className="container flex h-12 items-center">
-          <Link to="/" className="text-lg font-bold text-[#0b0c0c] no-underline hover:text-[#1d70b8]">
-            Fraud Risk Assessment Service
-          </Link>
-        </div>
-      </div>
+          {/* ===== Blue service bar ===== */}
+          <div className="border-b-[4px] border-[#1d70b8] bg-[#f3f2f1]">
+            <div className="container flex h-12 items-center">
+              <Link to="/" className="text-lg font-bold text-[#0b0c0c] no-underline hover:text-[#1d70b8]">
+                Fraud Risk Assessment Service
+              </Link>
+            </div>
+          </div>
 
-      {/* ===== Phase banner ===== */}
-      <div className="border-b border-[#b1b4b6] bg-white">
-        <div className="container flex items-center gap-3 py-2.5">
-          <span className="inline-block rounded bg-[#1d70b8] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
-            Beta
-          </span>
-          <span className="text-sm text-[#0b0c0c]">
-            This is a new service — your{' '}
-            <a href="mailto:help@fraud-risk.co.uk" className="text-[#1d70b8] underline hover:text-[#003078]">
-              feedback
-            </a>{' '}
-            will help us improve it.
-          </span>
-        </div>
-      </div>
+          {/* ===== Phase banner ===== */}
+          <div className="border-b border-[#b1b4b6] bg-white">
+            <div className="container flex items-center gap-3 py-2.5">
+              <span className="inline-block rounded bg-[#1d70b8] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+                Beta
+              </span>
+              <span className="text-sm text-[#0b0c0c]">
+                This is a new service — your{' '}
+                <a href="mailto:help@fraud-risk.co.uk" className="text-[#1d70b8] underline hover:text-[#003078]">
+                  feedback
+                </a>{' '}
+                will help us improve it.
+              </span>
+            </div>
+          </div>
+        </header>
+      }
+      footer={
+        <>
+          {/* ===== Footer ===== */}
+          <footer className="bg-[#0b0c0c] pt-10 pb-8" aria-label="Site footer">
+            <div className="container">
+              <div className="grid gap-8 md:grid-cols-3 mb-10">
+                {/* Column 1: About */}
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">About</h3>
+                  <ul className="space-y-2">
+                    <li>
+                      <Link to="/#free-guides" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        Free guides
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to={user ? '/workshop' : '/package/professional'} className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        Workshop
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to={user ? '/action-plan' : '/package/professional'} className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        Action Plans
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
+                {/* Column 2: Compliance */}
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Standards and limitations</h3>
+                  <ul className="space-y-2">
+                    <li className="text-sm text-[#b1b4b6]">Informed by UK counter-fraud guidance, including GovS 013</li>
+                    <li className="text-sm text-[#b1b4b6]">Self-assessment indicators, not legal advice or formal assurance</li>
+                    <li><Link to="/privacy" className="text-sm text-[#b1b4b6] hover:text-white">How we handle personal data</Link></li>
+                  </ul>
+                </div>
+                {/* Column 3: Contact */}
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Contact</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
+                      <a href="mailto:assessment@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        assessment@fraud-risk.co.uk
+                      </a>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
+                      <a href="mailto:help@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        help@fraud-risk.co.uk
+                      </a>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
+                      <a href="mailto:recruitment@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
+                        recruitment@fraud-risk.co.uk
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
 
+              <div className="border-t border-[#505a5f] pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-white" aria-hidden="true" />
+                  <span className="font-bold text-white">FRAUD-RISK.CO.UK</span>
+                </div>
+                <nav aria-label="Legal" className="flex gap-4 text-sm">
+                  <Link to="/privacy" className="text-[#b1b4b6] hover:text-white">Privacy notice</Link>
+                  <Link to="/terms" className="text-[#b1b4b6] hover:text-white">Terms of service</Link>
+                  <Link to="/accessibility" className="text-[#b1b4b6] hover:text-white">Accessibility statement</Link>
+                </nav>
+                <p className="text-sm text-[#b1b4b6]">
+                  © {new Date().getFullYear()} FRAUD-RISK.CO.UK. All rights reserved.
+                </p>
+              </div>
+            </div>
+          </footer>
+        </>
+      }
+    >
       {/* ===== Hero Section ===== */}
       <section className="bg-[#1d70b8] py-16 lg:py-24" aria-label="Hero">
         <div className="container">
@@ -184,7 +271,7 @@ export default function Index() {
             <div>
               <Card className="border-2 border-white/20 shadow-xl bg-white">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-xl text-[#0b0c0c]">Join a Live Session</CardTitle>
+                  <CardTitle level={2} className="text-xl text-[#0b0c0c]">Join a Live Session</CardTitle>
                   <CardDescription className="text-[#505a5f]">
                     Enter the six-character code from your facilitator. Workshop access requires sign-in and a training package.
                   </CardDescription>
@@ -544,7 +631,7 @@ export default function Index() {
                       href={`/resources/${resource.filename}`}
                       download
                       className="inline-flex items-center gap-2 font-bold text-[#1d70b8] underline underline-offset-4 hover:text-[#003078] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2"
-                      aria-label={`Download ${resource.title} as a PDF`}
+                      aria-label={`Download PDF: ${resource.title}`}
                     >
                       Download PDF
                       <Download className="h-4 w-4" aria-hidden="true" />
@@ -642,82 +729,6 @@ export default function Index() {
           </div>
         </div>
       </section>
-
-      {/* ===== Footer ===== */}
-      <footer className="bg-[#0b0c0c] pt-10 pb-8" aria-label="Site footer">
-        <div className="container">
-          <div className="grid gap-8 md:grid-cols-3 mb-10">
-            {/* Column 1: About */}
-            <div>
-              <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">About</h3>
-              <ul className="space-y-2">
-                <li>
-                  <Link to="/#free-guides" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    Free guides
-                  </Link>
-                </li>
-                <li>
-                  <Link to={user ? '/workshop' : '/package/professional'} className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    Workshop
-                  </Link>
-                </li>
-                <li>
-                  <Link to={user ? '/action-plan' : '/package/professional'} className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    Action Plans
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            {/* Column 2: Compliance */}
-            <div>
-              <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Standards and limitations</h3>
-              <ul className="space-y-2">
-                <li className="text-sm text-[#b1b4b6]">Informed by UK counter-fraud guidance, including GovS 013</li>
-                <li className="text-sm text-[#b1b4b6]">Self-assessment indicators, not legal advice or formal assurance</li>
-                <li><Link to="/privacy" className="text-sm text-[#b1b4b6] hover:text-white">How we handle personal data</Link></li>
-              </ul>
-            </div>
-            {/* Column 3: Contact */}
-            <div>
-              <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Contact</h3>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
-                  <a href="mailto:assessment@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    assessment@fraud-risk.co.uk
-                  </a>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
-                  <a href="mailto:help@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    help@fraud-risk.co.uk
-                  </a>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-[#b1b4b6]" aria-hidden="true" />
-                  <a href="mailto:recruitment@fraud-risk.co.uk" className="text-sm text-[#b1b4b6] hover:text-white no-underline">
-                    recruitment@fraud-risk.co.uk
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-[#505a5f] pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-white" aria-hidden="true" />
-              <span className="font-bold text-white">FRAUD-RISK.CO.UK</span>
-            </div>
-            <nav aria-label="Legal" className="flex gap-4 text-sm">
-              <Link to="/privacy" className="text-[#b1b4b6] hover:text-white">Privacy notice</Link>
-              <Link to="/terms" className="text-[#b1b4b6] hover:text-white">Terms of service</Link>
-            </nav>
-            <p className="text-sm text-[#b1b4b6]">
-              © {new Date().getFullYear()} FRAUD-RISK.CO.UK. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
     </Layout>
   );
 }
