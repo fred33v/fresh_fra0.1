@@ -89,4 +89,13 @@ describe('Layout: skip link and footer', () => {
     renderLayout({ showFooter: false });
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
   });
+
+  it("puts a page's own header and footer outside <main>, so the skip link jumps past them", () => {
+    renderLayout({ showHeader: false, showFooter: false, header: <header>Own header</header>, footer: <footer>Own footer</footer> });
+    const main = screen.getByRole('main');
+    expect(within(main).queryByText('Own header')).not.toBeInTheDocument();
+    expect(within(main).queryByText('Own footer')).not.toBeInTheDocument();
+    expect(screen.getByRole('banner')).toHaveTextContent('Own header');
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('Own footer');
+  });
 });

@@ -79,7 +79,7 @@ const sections: LegalSection[] = [
       <ul>
         <li>
           The website as a whole with a screen reader or speech recognition software. Our checks so far are automated tools and
-          keyboard-only use. We plan to test it with VoiceOver, NVDA and Voice Control by 31 March 2027.
+          keyboard-only use. We plan to test it with VoiceOver, NVDA and Voice Control by 3 November 2026.
         </li>
         <li>
           PDF documents, including the workshop resources and the training and assessment certificates. They are generated with tags and

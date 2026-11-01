@@ -16,7 +16,9 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/hooks/useAuth');
 
 vi.mock('@/components/layout/Layout', () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
+  Layout: ({ children, header, footer }: { children: React.ReactNode; header?: React.ReactNode; footer?: React.ReactNode }) => (
+    <div data-testid="layout">{header}<main>{children}</main>{footer}</div>
+  ),
 }));
 
 vi.mock('framer-motion', () => ({

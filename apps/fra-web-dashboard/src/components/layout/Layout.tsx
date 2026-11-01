@@ -8,6 +8,10 @@ interface LayoutProps {
   showHeader?: boolean;
   /** The home page draws its own, larger footer */
   showFooter?: boolean;
+  /** A page's own header, drawn before <main> (used with showHeader={false}) */
+  header?: ReactNode;
+  /** A page's own footer, drawn after <main> (used with showFooter={false}) */
+  footer?: ReactNode;
 }
 
 /** First thing a keyboard user reaches: jumps past the header to the page content (WCAG 2.4.1). */
@@ -39,15 +43,17 @@ function SiteFooter() {
   );
 }
 
-export function Layout({ children, showHeader = true, showFooter = true }: LayoutProps) {
+export function Layout({ children, showHeader = true, showFooter = true, header, footer }: LayoutProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <SkipLink />
       {showHeader && <Header />}
+      {header}
       <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         {children}
       </main>
       {showFooter && <SiteFooter />}
+      {footer}
     </div>
   );
 }
