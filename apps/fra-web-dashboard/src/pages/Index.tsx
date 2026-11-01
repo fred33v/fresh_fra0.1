@@ -288,19 +288,19 @@ export default function Index() {
               {
                 title: 'Fraud risk assessment',
                 description: 'Open the fraud risk assessment app and review the organisation’s key risk areas.',
-                href: '/mobile/',
+                href: '/assessment',
                 action: 'Open assessment',
               },
               {
                 title: 'Staff training',
                 description: 'Explore workshop sections, scenarios, quizzes, and training resources.',
-                href: '/training/',
+                href: '/workshop',
                 action: 'Open training',
               },
               {
                 title: 'Budget holder guide',
                 description: 'Read practical guidance for budget-holders and explore fraud prevention topics.',
-                href: '/budget/',
+                href: '/budget-holder',
                 action: 'Open budget guide',
               },
             ].map((tool) => (

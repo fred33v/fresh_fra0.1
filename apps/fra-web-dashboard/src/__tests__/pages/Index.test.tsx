@@ -287,6 +287,16 @@ describe('Index', () => {
 
   // ── CTA section ─────────────────────────────────
 
+  describe('ways to continue section', () => {
+    it('links each tool to its web page', () => {
+      renderIndex();
+
+      expect(screen.getByRole('link', { name: /Open assessment/ })).toHaveAttribute('href', '/assessment');
+      expect(screen.getByRole('link', { name: /Open training/ })).toHaveAttribute('href', '/workshop');
+      expect(screen.getByRole('link', { name: /Open budget guide/ })).toHaveAttribute('href', '/budget-holder');
+    });
+  });
+
   describe('free guides section', () => {
     it('lists each public PDF with a download link', () => {
       renderIndex();
