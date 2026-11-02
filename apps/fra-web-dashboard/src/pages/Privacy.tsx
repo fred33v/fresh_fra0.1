@@ -72,7 +72,7 @@ const sections: LegalSection[] = [
       <p>We use these service providers (processors) under contracts that require them to protect the data:</p>
       <ul>
         <li><strong>Amazon Web Services</strong>: application hosting and file storage, Stockholm, Sweden (eu-north-1).</li>
-        <li><strong>Neon</strong>: managed PostgreSQL database, encrypted at rest. [Region to be confirmed.]</li>
+        <li><strong>Neon</strong>: managed PostgreSQL database, encrypted at rest, London (eu-west-2).</li>
         <li><strong>Stripe</strong>: card payments. Stripe is the controller for the card details you give it.</li>
         <li><strong>Upstash</strong>: short-lived security data such as rate limits and password reset links.</li>
         <li><strong>[Email provider]</strong>: sending service emails.</li>
