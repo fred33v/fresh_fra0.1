@@ -117,7 +117,7 @@ a Content-Security-Policy, HSTS and the other security headers.
 
 ## Infrastructure (`infra/`)
 
-Terraform builds it in `eu-west-2`:
+Terraform builds it in `eu-north-1` (Stockholm):
 
 - A VPC, an Application Load Balancer, and one EC2 instance running the API under systemd.
   `infra/nginx` holds an example config for setups that add a second proxy.
