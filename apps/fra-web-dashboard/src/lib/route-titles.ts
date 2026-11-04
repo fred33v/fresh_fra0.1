@@ -1,4 +1,4 @@
-const SITE = 'Risk Aware';
+const SITE = 'fraud-risk.co.uk';
 
 // First match wins, so list the specific paths before the general ones
 const TITLES: [RegExp, string][] = [
@@ -33,9 +33,9 @@ const TITLES: [RegExp, string][] = [
   [/^\/speak-up\b/, 'Speak up'],
 ];
 
-/** The tab title for a path: "Checkout — Risk Aware". The home page and unknown pages keep a plain title. */
+/** The tab title for a path: "Checkout — fraud-risk.co.uk". The home page and unknown pages keep a plain title. */
 export function titleForPath(pathname: string): string {
-  if (pathname === '/') return `${SITE} — Fraud Risk Assessment Platform`;
+  if (pathname === '/') return `Fraud risk assessment and training for UK organisations — ${SITE}`;
   const match = TITLES.find(([re]) => re.test(pathname));
   return match ? `${match[1]} — ${SITE}` : `Page not found — ${SITE}`;
 }
