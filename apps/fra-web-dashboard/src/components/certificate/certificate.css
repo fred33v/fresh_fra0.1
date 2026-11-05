@@ -1,0 +1,131 @@
+/*
+ * Certificate design (training and assessment).
+ *
+ * The same rules are used for the PDF the server makes, in
+ * apps/fra-backend/backend/src/certificates.ts (CERTIFICATE_CSS): change both together.
+ * Every size is in cqw (1% of the certificate's width), so the certificate looks
+ * the same at any size, on screen and on an A4 landscape page.
+ */
+.cert {
+  container-type: inline-size;
+  width: 100%;
+}
+.cert-sheet {
+  --cert-paper: #fbf8f1;
+  --cert-ink: #3b2a1a;
+  --cert-title: #6b4a2b;
+  --cert-muted: #6f6253;
+  --cert-line: #c8b48a;
+  position: relative;
+  aspect-ratio: 297 / 210;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--cert-paper);
+  /* Faint guilloche-style curves, like security paper */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 297 210' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23c8b48a' stroke-opacity='0.22' stroke-width='0.25'%3E%3Cpath d='M0 40 C60 10 120 70 180 40 S260 10 297 30'/%3E%3Cpath d='M0 46 C60 16 120 76 180 46 S260 16 297 36'/%3E%3Cpath d='M0 52 C60 22 120 82 180 52 S260 22 297 42'/%3E%3Cpath d='M0 150 C70 120 130 180 200 150 S270 125 297 140'/%3E%3Cpath d='M0 156 C70 126 130 186 200 156 S270 131 297 146'/%3E%3Cpath d='M0 162 C70 132 130 192 200 162 S270 137 297 152'/%3E%3Cpath d='M0 168 C70 138 130 198 200 168 S270 143 297 158'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  color: var(--cert-ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 1.25cqw;
+  line-height: 1.45;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Double gold frame: the horizontal lines run past the vertical ones at each corner */
+.cert-frame-h,
+.cert-frame-v {
+  position: absolute;
+  pointer-events: none;
+  border-color: var(--cert-line);
+  border-style: double;
+  border-width: 0;
+}
+.cert-frame-h { top: 3.2cqw; bottom: 3.2cqw; left: 1.8cqw; right: 1.8cqw; border-top-width: 0.45cqw; border-bottom-width: 0.45cqw; }
+.cert-frame-v { top: 1.8cqw; bottom: 1.8cqw; left: 3.2cqw; right: 3.2cqw; border-left-width: 0.45cqw; border-right-width: 0.45cqw; }
+
+.cert-body {
+  position: absolute;
+  inset: 5cqw 7cqw 4.6cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cert-brand { display: flex; align-items: center; gap: 0.8cqw; color: var(--cert-title); }
+.cert-brand svg { width: 3.4cqw; height: 3.4cqw; flex: none; }
+.cert-brand-name { font-size: 1.15cqw; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; text-align: left; line-height: 1.2; }
+.cert-brand-name small { display: block; font-size: 0.8cqw; font-weight: 400; letter-spacing: 0.08em; color: var(--cert-muted); }
+
+.cert-title {
+  margin: 2.4cqw 0 0;
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-size: 4.8cqw;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cert-title);
+  max-width: 70cqw;
+}
+
+.cert-lead { margin: 2.4cqw 0 0; font-size: 1.35cqw; color: var(--cert-muted); }
+.cert-holder {
+  margin: 0.6cqw 0 0;
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-size: 4cqw;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cert-ink);
+}
+.cert-org { margin: 0.3cqw 0 0; font-size: 1.4cqw; color: var(--cert-muted); }
+.cert-rule { width: 44cqw; height: 0; margin: 1.2cqw auto 0; border-top: 0.12cqw solid var(--cert-line); }
+
+.cert-completed { margin: 2cqw 0 0; font-size: 1.35cqw; color: var(--cert-muted); }
+.cert-course { margin: 0.4cqw 0 0; font-size: 1.7cqw; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cert-ink); }
+.cert-description { margin: 1.8cqw auto 0; max-width: 66cqw; font-size: 1.3cqw; line-height: 1.5; color: var(--cert-ink); }
+
+.cert-footer {
+  margin-top: auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
+  align-items: end;
+  gap: 3cqw;
+  font-size: 1.15cqw;
+}
+.cert-facts { margin: 0; line-height: 1.6; }
+.cert-facts div { display: flex; gap: 0.4cqw; }
+.cert-facts dt { font-weight: 700; color: var(--cert-ink); }
+.cert-facts dt::after { content: ':'; }
+.cert-facts dd { margin: 0; color: var(--cert-ink); }
+.cert-facts-left { text-align: left; justify-self: start; }
+.cert-facts-right { text-align: right; justify-self: end; }
+.cert-facts-right div { justify-content: flex-end; }
+.cert-mono { font-family: 'Courier New', Courier, monospace; font-weight: 700; letter-spacing: 0.02em; }
+
+.cert-qr { display: flex; flex-direction: column; align-items: center; gap: 0.4cqw; color: var(--cert-muted); font-size: 0.8cqw; line-height: 1.25; }
+.cert-qr-code { width: 7cqw; height: 7cqw; background: #fff; padding: 0.4cqw; }
+.cert-qr-code svg { display: block; width: 100%; height: 100%; }
+
+.cert-issuer { display: flex; flex-direction: column; align-items: center; gap: 0.3cqw; }
+.cert-seal { width: 6.4cqw; height: 6.4cqw; color: var(--cert-title); }
+.cert-issuer-name { padding-top: 0.4cqw; border-top: 0.12cqw solid var(--cert-line); min-width: 14cqw; font-weight: 700; color: var(--cert-ink); }
+.cert-issuer-role { font-size: 0.9cqw; color: var(--cert-muted); }
+
+.cert-sample {
+  position: absolute;
+  top: 6.4cqw;
+  right: 7cqw;
+  padding: 0.2cqw 0.9cqw;
+  border: 0.12cqw solid var(--cert-title);
+  border-radius: 0.4cqw;
+  font-size: 0.95cqw;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cert-title);
+}

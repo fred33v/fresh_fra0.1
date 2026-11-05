@@ -12,9 +12,11 @@ import {
   ClipboardCheck,
   FileText,
 } from 'lucide-react';
+import { CertificateDocument } from '@/components/certificate/CertificateDocument';
 import { getPackage, checkoutPath, signupPath, formatPrice, PACKAGE_CHOOSER_PATH } from '@/data/packages';
 
 const PKG = getPackage('pkg_basic')!;
+
 
 export default function PackageStarter() {
   const { user } = useAuth();
@@ -107,9 +109,24 @@ export default function PackageStarter() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="relative"
             >
-              <div className="aspect-square rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center">
-                <CheckCircle2 className="h-32 w-32 text-accent opacity-50" />
-              </div>
+              {/* An example of the certificate every package gets when the assessment is submitted */}
+              <figure className="m-0">
+                <div className="rounded-sm shadow-2xl ring-1 ring-black/10">
+                  <CertificateDocument
+                    kind="assessment"
+                    sample
+                    holderName="Your Organisation Ltd"
+                    assessmentTitle="Organisation-wide fraud risk assessment"
+                    certificateNumber="FRA-0000-0000-0000"
+                    issuedAt={new Date().toISOString()}
+                    areasAssessed={assessmentModules.length}
+                    verifyUrl={`${window.location.origin}/certificate/verify`}
+                  />
+                </div>
+                <figcaption className="mt-3 text-center text-sm text-primary-foreground/70">
+                  Example: your assessment certificate, with a QR code anyone can scan to check it is genuine.
+                </figcaption>
+              </figure>
             </motion.div>
           </div>
         </div>
