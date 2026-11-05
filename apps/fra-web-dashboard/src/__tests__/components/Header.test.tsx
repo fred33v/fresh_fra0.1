@@ -262,7 +262,7 @@ describe('Header', () => {
     it('shows brand name linking to /', () => {
       renderHeader();
 
-      const link = screen.getByRole('link', { name: /Fraud Risk Awareness/ });
+      const link = screen.getByRole('link', { name: /FRAUD-RISK\.CO\.UK/ });
       expect(link).toHaveAttribute('href', '/');
     });
   });
