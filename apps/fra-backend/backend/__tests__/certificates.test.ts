@@ -128,7 +128,8 @@ describe('the certificate document', () => {
     expect(html).toContain('Analytical Trust');
     expect(html).toContain('31 October 2026');
     expect(html).toContain('FRA-1A2B-3C4D-5E6F');
-    expect(html).toContain('quiz score of 100%');
+    expect(html).toContain('<dt>Quiz score</dt><dd>100%</dd>');
+    expect(html).toContain('Certificate of Training Completion');
     expect(html).toContain('<svg');
     expect(html).toContain(verifyUrl('FRA-1A2B-3C4D-5E6F').replace(/^https?:\/\//, '').split('?')[0]);
   });

@@ -9,6 +9,7 @@ const logger = createLogger('Certificate');
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CertificateDocument } from '@/components/certificate/CertificateDocument';
 import { Certificate as CertificateType } from '@/types/workshop';
 import {
   Award,
@@ -177,83 +178,32 @@ export default function Certificate() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-4xl mx-auto"
+          className="max-w-5xl mx-auto"
         >
           {certificate ? (
             <>
-              {/* Certificate Display */}
-              <Card id="certificate-printable" ref={certificateRef} className="overflow-hidden mb-6" role="article" aria-label="Certificate of Completion">
-                <div className="gradient-hero p-8 lg:p-12 text-center">
-                  <div className="flex justify-center mb-6">
-                    <div className="h-20 w-20 rounded-full bg-accent flex items-center justify-center">
-                      <Award className="h-10 w-10 text-accent-foreground" aria-hidden="true" />
-                    </div>
-                  </div>
-                  <h1 className="text-3xl lg:text-4xl font-bold text-primary-foreground mb-2">
-                    Certificate of Completion
-                  </h1>
-                  <p className="text-primary-foreground/80 text-lg">
-                    Fraud Risk Awareness Workshop
-                  </p>
-                </div>
+              <h1 className="sr-only">Your certificate</h1>
+              {/* Certificate Display: the same design as the PDF */}
+              <div id="certificate-printable" ref={certificateRef} className="mb-6 shadow-elegant">
+                <CertificateDocument
+                  kind="training"
+                  holderName={profile.full_name}
+                  organisationName={profile.organization_name}
+                  certificateNumber={certificate.certificate_number}
+                  issuedAt={certificate.issued_at}
+                  quizScore={typeof certificate.quiz_score === 'number' ? certificate.quiz_score : null}
+                  verifyUrl={verifyLink}
+                />
+              </div>
 
-                <CardContent className="p-8 lg:p-12">
-                  <div className="text-center mb-8">
-                    <p className="text-muted-foreground mb-2">This is to certify that</p>
-                    <h2 className="text-2xl font-bold mb-2">{profile.full_name}</h2>
-                    <p className="text-muted-foreground">{profile.organization_name}</p>
-                  </div>
-
-                  <div className="text-center mb-8">
-                    <p className="text-muted-foreground">
-                      has successfully completed the Fraud Risk Awareness Workshop
-                      for trustees, executive leadership, and budget-holders.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap justify-center gap-8 text-sm">
-                    <div className="text-center">
-                      <p className="text-muted-foreground">Certificate Number</p>
-                      <p className="font-mono font-medium">{certificate.certificate_number}</p>
-                    </div>
-                    {typeof certificate.quiz_score === 'number' && (
-                      <div className="text-center">
-                        <p className="text-muted-foreground">Quiz Score</p>
-                        <p className="font-medium">{certificate.quiz_score}%</p>
-                      </div>
-                    )}
-                    <div className="text-center">
-                      <p className="text-muted-foreground">Date Issued</p>
-                      <p className="font-medium">
-                        {new Date(certificate.issued_at).toLocaleDateString('en-GB', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 pt-8 border-t flex flex-wrap justify-center gap-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-                      <span>Regulatory Landscape</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-                      <span>Fraud Types & Risks</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-                      <span>Defence Strategies</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-                      <span>Case Studies</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <ul className="mb-8 flex flex-wrap justify-center gap-4" aria-label="Workshop sections completed">
+                {['Regulatory Landscape', 'Fraud Types & Risks', 'Defence Strategies', 'Case Studies'].map((section) => (
+                  <li key={section} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+                    <span>{section}</span>
+                  </li>
+                ))}
+              </ul>
 
               {/* Actions */}
               <div className="flex flex-wrap gap-4 justify-center">

@@ -247,7 +247,7 @@ describe('Certificate', () => {
 
       expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/workshop/certificates', {});
       await waitFor(() => {
-        expect(screen.getByText('Certificate of Completion')).toBeInTheDocument();
+        expect(screen.getByText('Certificate of Training Completion')).toBeInTheDocument();
       });
     });
 
@@ -308,7 +308,8 @@ describe('Certificate', () => {
       renderCertificate();
 
       await waitFor(() => {
-        expect(screen.getByText('1 June 2025')).toBeInTheDocument();
+        // Completion date and issue date
+        expect(screen.getAllByText('1 June 2025')).toHaveLength(2);
       });
     });
 
