@@ -42,7 +42,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
+    "@babel/core": "^7.29.6",
     "@expo/ngrok": "^4.1.0",
     "@testing-library/react-native": "^12.4.3",
     "@types/jest": "^29.5.12",
