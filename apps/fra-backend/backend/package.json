@@ -24,7 +24,7 @@
     "dotenv": "^16.4.5",
     "hono": "^4.13.13",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^10.0.14",
+    "nodemailer": "^10.1.4",
     "pg": "^8.13.1",
     "puppeteer": "^24.43.1",
     "qrcode": "^1.5.4",
