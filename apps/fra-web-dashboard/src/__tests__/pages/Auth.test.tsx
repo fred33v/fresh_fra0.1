@@ -472,7 +472,7 @@ describe('Auth', () => {
     it('displays branding text', () => {
       renderAuth();
 
-      expect(screen.getByText('Fraud Risk Awareness')).toBeInTheDocument();
+      expect(screen.getByText('FRAUD-RISK.CO.UK')).toBeInTheDocument();
     });
   });
 

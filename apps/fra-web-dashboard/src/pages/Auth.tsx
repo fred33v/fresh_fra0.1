@@ -260,8 +260,8 @@ export default function Auth() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
               <Shield className="h-7 w-7 text-accent-foreground" aria-hidden="true" />
             </div>
-            <h1 className="text-3xl font-bold text-primary-foreground">
-              Fraud Risk Awareness
+            <h1 className="text-3xl font-bold tracking-wide text-primary-foreground">
+              FRAUD-RISK.CO.UK
             </h1>
           </div>
           <p className="text-lg text-primary-foreground/80 max-w-md">
