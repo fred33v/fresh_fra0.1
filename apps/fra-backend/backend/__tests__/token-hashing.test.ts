@@ -5,11 +5,15 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 // (jest.mock is hoisted; factory variables must start with "mock")
 const mockQuery = jest.fn<(sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number }>>();
-jest.mock('../src/db', () => ({ getDbPool: () => ({ query: mockQuery }) }));
+jest.unstable_mockModule('../src/db.js', () => ({
+  getDbPool: () => ({ query: mockQuery }),
+}));
 
-import { dbDeleteRefreshToken, dbHasRefreshToken, dbUpsertRefreshToken, hashToken } from '../src/db/tokens';
-import { deletePasswordResetToken, getPasswordResetUserId, setPasswordResetToken } from '../src/db/password-reset';
-import { passwordResetTokens } from '../src/stores';
+const { dbDeleteRefreshToken, dbHasRefreshToken, dbUpsertRefreshToken, hashToken } =
+  await import('../src/db/tokens.js');
+const { deletePasswordResetToken, getPasswordResetUserId, setPasswordResetToken } =
+  await import('../src/db/password-reset.js');
+const { passwordResetTokens } = await import('../src/stores.js');
 
 const RAW = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.signature';
 const HASH = crypto.createHash('sha256').update(RAW).digest('hex');

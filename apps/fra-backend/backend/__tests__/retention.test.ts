@@ -8,11 +8,11 @@ const mockQuery = jest.fn<(sql: string, params?: unknown[]) => Promise<{ rows: a
 const mockAuditLog = jest.fn<(event: Record<string, unknown>) => Promise<void>>();
 const mockDb = { configured: true };
 
-jest.mock('../src/db', () => ({ getDbPool: () => ({ query: mockQuery }) }));
-jest.mock('../src/helpers', () => ({ hasDatabase: () => mockDb.configured }));
-jest.mock('../src/db/audit', () => ({ auditLog: mockAuditLog }));
+jest.unstable_mockModule('../src/db.js', () => ({ getDbPool: () => ({ query: mockQuery }) }));
+jest.unstable_mockModule('../src/helpers.js', () => ({ hasDatabase: () => mockDb.configured }));
+jest.unstable_mockModule('../src/db/audit.js', () => ({ auditLog: mockAuditLog }));
 
-import { runRetention, msUntilNextRun, RETENTION_RULES } from '../src/retention';
+const { runRetention, msUntilNextRun, RETENTION_RULES } = await import('../src/retention.js');
 
 const query = mockQuery;
 const auditLog = mockAuditLog;

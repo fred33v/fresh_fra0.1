@@ -75,9 +75,13 @@
       "minimatch@9": "^9.0.7",
       "minimatch@10": "^10.2.3",
       "ws@6": "^6.2.4",
-      "node-forge": "^1.4.0",
+      "node-forge": "^1.4.3",
       "basic-ftp@5": "^5.3.1",
-      "handlebars": "4.7.10"
+      "handlebars": "4.7.10",
+      "@react-navigation/core@7": "7.24.0",
+      "postcss-selector-parser@6": "^6.1.5",
+      "yaml@2": "^2.8.3",
+      "@babel/core@7": "^7.29.6"
     }
   }
 }

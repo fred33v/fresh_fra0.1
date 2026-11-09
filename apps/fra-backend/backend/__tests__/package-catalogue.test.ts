@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 /// <reference types="jest" />
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -23,7 +24,7 @@ describe('Package definitions stay in sync', () => {
   });
 
   it('the latest database seed matches the backend packages', () => {
-    const migrationsDir = join(__dirname, '..', 'migrations');
+    const migrationsDir = fileURLToPath(new URL('../migrations/', import.meta.url));
     const seed = readFileSync(join(migrationsDir, '018_sync_package_features.sql'), 'utf8');
     // Later migrations may update a package's features again: the last one wins
     const latestFeatures = new Map<string, string>();

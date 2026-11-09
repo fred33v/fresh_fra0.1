@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 /// <reference types="jest" />
 
 import { describe, expect, it } from '@jest/globals';
@@ -15,7 +16,7 @@ const call = (method: string, path: string, token: string | null, body?: unknown
 const json = async (res: Response) => ((await res.json()) as any).data;
 
 // The content lives in packages/shared, which the backend does not depend on, so it is read as text
-const SHARED = readFileSync(join(__dirname, '../../../../packages/shared/src/data/budgetHolder.ts'), 'utf8');
+const SHARED = readFileSync(fileURLToPath(new URL('../../../../packages/shared/src/data/budgetHolder.ts', import.meta.url)), 'utf8');
 const between = (start: string) => {
   const s = SHARED.slice(SHARED.indexOf(start));
   return s.slice(0, s.indexOf('\n];'));
