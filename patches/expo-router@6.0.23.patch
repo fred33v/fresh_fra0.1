@@ -1,0 +1,107 @@
+diff --git a/build/fork/getPathFromState-forks.js b/build/fork/getPathFromState-forks.js
+index e6692ab808568f46299b5e35e3ad83ff53bb6a83..a7f5982f1c775f1d538fac9f0eb56f71a9b0c1e4 100644
+--- a/build/fork/getPathFromState-forks.js
++++ b/build/fork/getPathFromState-forks.js
+@@ -41,7 +41,7 @@ exports.appendBaseUrl = appendBaseUrl;
+ exports.getPathWithConventionsCollapsed = getPathWithConventionsCollapsed;
+ exports.isDynamicPart = isDynamicPart;
+ const native_1 = require("@react-navigation/native");
+-const queryString = __importStar(require("query-string"));
++const queryString = require("./safeQueryString");
+ const matchers_1 = require("../matchers");
+ function validatePathConfig({ preserveDynamicRoutes, preserveGroups, shouldEncodeURISegment, ...options }) {
+     (0, native_1.validatePathConfig)(options);
+diff --git a/build/fork/getPathFromState.js b/build/fork/getPathFromState.js
+index a20305ac945eae66aa99e7b429aa440b0e5e38d1..148b6cceaf7235273fc8d43c008c40f22cc8e077 100644
+--- a/build/fork/getPathFromState.js
++++ b/build/fork/getPathFromState.js
+@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getPathFromState = getPathFromState;
+ exports.getPathDataFromState = getPathDataFromState;
+ exports.appendBaseUrl = appendBaseUrl;
+-const queryString = __importStar(require("query-string"));
++const queryString = require("./safeQueryString");
+ const expo = __importStar(require("./getPathFromState-forks"));
+ const navigationParams_1 = require("../navigationParams");
+ // END FORK
+diff --git a/build/fork/safeQueryString.js b/build/fork/safeQueryString.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e3564b6063dceb8e99bf309a4c3c5690e6dc92c0
+--- /dev/null
++++ b/build/fork/safeQueryString.js
+@@ -0,0 +1,63 @@
++"use strict";
++
++// Compatible with query-string 7's default stringify behaviour,
++// including the { sort: false } option used by Expo Router.
++function stringify(object, options = {}) {
++  if (!object) return "";
++
++  const settings = {
++    encode: true,
++    strict: true,
++    skipNull: false,
++    skipEmptyString: false,
++    sort: true,
++    ...options
++  };
++
++  const encode = value => {
++    const text = String(value);
++    if (!settings.encode) return text;
++
++    const encoded = encodeURIComponent(text);
++    return settings.strict
++      ? encoded.replace(/[!'()*]/g, character =>
++          "%" + character.charCodeAt(0).toString(16).toUpperCase()
++        )
++      : encoded;
++  };
++
++  const keys = Object.keys(object).filter(key =>
++    !(settings.skipNull && object[key] == null) &&
++    !(settings.skipEmptyString && object[key] === "")
++  );
++
++  if (settings.sort !== false) keys.sort(settings.sort);
++
++  const parts = [];
++
++  for (const key of keys) {
++    const value = object[key];
++    if (value === undefined) continue;
++
++    const encodedKey = encode(key);
++
++    if (value === null) {
++      parts.push(encodedKey);
++    } else if (Array.isArray(value)) {
++      for (const item of value) {
++        if (item === undefined || (settings.skipNull && item === null) ||
++            (settings.skipEmptyString && item === "")) continue;
++
++        parts.push(item === null
++          ? encodedKey
++          : encodedKey + "=" + encode(item));
++      }
++    } else {
++      parts.push(encodedKey + "=" + encode(value));
++    }
++  }
++
++  return parts.join("&");
++}
++
++module.exports = { stringify };
+diff --git a/package.json b/package.json
+index d62d2cd593fd1657d96df71ba7247296ad160836..fb4f78b93c61b42221805e37477fecc2aa1d0458 100644
+--- a/package.json
++++ b/package.json
+@@ -142,7 +142,6 @@
+     "fast-deep-equal": "^3.1.3",
+     "invariant": "^2.2.4",
+     "nanoid": "^3.3.8",
+-    "query-string": "^7.1.3",
+     "react-fast-compare": "^3.2.2",
+     "react-native-is-edge-to-edge": "^1.1.6",
+     "semver": "~7.6.3",
