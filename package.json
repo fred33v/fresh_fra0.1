@@ -81,10 +81,12 @@
       "@react-navigation/core@7": "7.24.0",
       "postcss-selector-parser@6": "^6.1.5",
       "yaml@2": "^2.8.3",
-      "@babel/core@7": "^7.29.6"
+      "@babel/core@7": "^7.29.6",
+      "metro@0.83.3>image-size": "-"
     },
     "patchedDependencies": {
-      "expo-router@6.0.23": "patches/expo-router@6.0.23.patch"
+      "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
+      "metro@0.83.3": "patches/metro@0.83.3.patch"
     }
   }
 }

@@ -38,6 +38,7 @@ overrides:
   postcss-selector-parser@6: ^6.1.5
   yaml@2: ^2.8.3
   '@babel/core@7': ^7.29.6
+  metro@0.83.3>image-size: '-'
 
 pnpmfileChecksum: 7bktlt3uhianngdi7i3uhde5la
 
@@ -45,6 +46,9 @@ patchedDependencies:
   expo-router@6.0.23:
     hash: 2pow6m3h5poz7bc34v35adtbg4
     path: patches/expo-router@6.0.23.patch
+  metro@0.83.3:
+    hash: hbvtoejxeh6r4tkt3ig527cxcq
+    path: patches/metro@0.83.3.patch
 
 importers:
 
@@ -6203,11 +6207,6 @@ packages:
     resolution: {integrity: sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg==}
     engines: {node: '>= 4'}
 
-  image-size@1.2.1:
-    resolution: {integrity: sha512-rH+46sQJ2dlwfjfhCyNx5thzrv+dtmBIhPHk0zgRUukHzZ/kRueTJXoYYsclBaKcSMBWuGbOFXtioLpzTb5euw==}
-    engines: {node: '>=16.x'}
-    hasBin: true
-
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
     engines: {node: '>=6'}
@@ -7597,9 +7596,6 @@ packages:
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
-
-  queue@6.0.2:
-    resolution: {integrity: sha512-iHZWu+q3IdFZFX36ro/lKBkSvfkztY5Y7HMiPlOUjhupPcG2JMfst2KKEpu5XndviX/3UhFbRngUPNKtgvtZiA==}
 
   quick-lru@5.1.1:
     resolution: {integrity: sha512-WuyALRjWPDGtt/wzJiadO5AXY+8hZ80hVpe6MyivgraREW751X3SbhRvG3eLKOYN+8VEvqLcf3wdnt44Z4S4SA==}
@@ -11006,7 +11002,7 @@ snapshots:
 
   '@expo/metro@54.2.0':
     dependencies:
-      metro: 0.83.3
+      metro: 0.83.3(patch_hash=hbvtoejxeh6r4tkt3ig527cxcq)
       metro-babel-transformer: 0.83.3
       metro-cache: 0.83.3
       metro-cache-key: 0.83.3
@@ -12331,7 +12327,7 @@ snapshots:
       '@react-native/dev-middleware': 0.81.5
       debug: 4.4.3
       invariant: 2.2.4
-      metro: 0.83.3
+      metro: 0.83.3(patch_hash=hbvtoejxeh6r4tkt3ig527cxcq)
       metro-config: 0.83.3
       metro-core: 0.83.3
       semver: 7.7.3
@@ -15249,10 +15245,6 @@ snapshots:
 
   ignore@7.0.5: {}
 
-  image-size@1.2.1:
-    dependencies:
-      queue: 6.0.2
-
   import-fresh@3.3.1:
     dependencies:
       parent-module: 1.0.1
@@ -16287,7 +16279,7 @@ snapshots:
       connect: 3.7.0
       flow-enums-runtime: 0.0.6
       jest-validate: 29.7.0
-      metro: 0.83.3
+      metro: 0.83.3(patch_hash=hbvtoejxeh6r4tkt3ig527cxcq)
       metro-cache: 0.83.3
       metro-core: 0.83.3
       metro-runtime: 0.83.3
@@ -16375,7 +16367,7 @@ snapshots:
       '@babel/parser': 7.29.13
       '@babel/types': 7.29.11
       flow-enums-runtime: 0.0.6
-      metro: 0.83.3
+      metro: 0.83.3(patch_hash=hbvtoejxeh6r4tkt3ig527cxcq)
       metro-babel-transformer: 0.83.3
       metro-cache: 0.83.3
       metro-cache-key: 0.83.3
@@ -16388,7 +16380,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  metro@0.83.3:
+  metro@0.83.3(patch_hash=hbvtoejxeh6r4tkt3ig527cxcq):
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.13
@@ -16406,7 +16398,6 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.32.0
-      image-size: 1.2.1
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
@@ -16968,10 +16959,6 @@ snapshots:
   querystringify@2.2.0: {}
 
   queue-microtask@1.2.3: {}
-
-  queue@6.0.2:
-    dependencies:
-      inherits: 2.0.4
 
   quick-lru@5.1.1: {}
 
