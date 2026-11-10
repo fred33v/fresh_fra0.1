@@ -88,7 +88,9 @@
       "@expo/config>glob": "14.0.2",
       "@expo/config-plugins>glob": "14.0.2",
       "@expo/metro-config>glob": "14.0.2",
-      "@expo/fingerprint>glob": "14.0.2"
+      "@expo/fingerprint>glob": "14.0.2",
+      "@expo/cli>minimatch": "11.0.5",
+      "@expo/fingerprint>minimatch": "11.0.5"
     },
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
