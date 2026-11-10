@@ -45,6 +45,8 @@ overrides:
   '@expo/config-plugins>glob': 14.0.2
   '@expo/metro-config>glob': 14.0.2
   '@expo/fingerprint>glob': 14.0.2
+  '@expo/cli>minimatch': 11.0.5
+  '@expo/fingerprint>minimatch': 11.0.5
 
 pnpmfileChecksum: 7bktlt3uhianngdi7i3uhde5la
 
@@ -7066,10 +7068,6 @@ packages:
     resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
     engines: {node: '>=4'}
 
-  minimatch@10.2.6:
-    resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
-    engines: {node: 18 || 20 || >=22}
-
   minimatch@11.0.5:
     resolution: {integrity: sha512-snPlVppFcYWfLLFQGhDxUyBcHNtMlWmn3jtj7pEaO+DP8pqL0IvAzXhMYmn1z9ASNtgmwLBdFxSf4tMUB0OTKA==}
     engines: {node: 20 || >=22}
@@ -10775,7 +10773,7 @@ snapshots:
       getenv: 2.0.0
       glob: 14.0.2
       lan-network: 0.2.1
-      minimatch: 9.0.9
+      minimatch: 11.0.5
       node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
@@ -10933,7 +10931,7 @@ snapshots:
       getenv: 2.0.0
       glob: 14.0.2
       ignore: 5.3.2
-      minimatch: 10.2.6
+      minimatch: 11.0.5
       p-limit: 3.1.0
       resolve-from: 5.0.0
       semver: 7.8.5
@@ -16471,10 +16469,6 @@ snapshots:
   mimic-response@3.1.0: {}
 
   min-indent@1.0.1: {}
-
-  minimatch@10.2.6:
-    dependencies:
-      brace-expansion: 5.0.12
 
   minimatch@11.0.5:
     dependencies:
