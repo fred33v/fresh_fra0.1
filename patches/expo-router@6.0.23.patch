@@ -63,7 +63,7 @@ index 0000000000000000000000000000000000000000..e3564b6063dceb8e99bf309a4c3c5690
 +    !(settings.skipEmptyString && object[key] === "")
 +  );
 +
-+  if (settings.sort !== false) keys.sort(settings.sort);
++  if (settings.sort !== false) keys.sort(typeof settings.sort === "function" ? settings.sort : undefined);
 +
 +  const parts = [];
 +
