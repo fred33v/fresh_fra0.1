@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, phase-0/test-expo-minimatch-security]
+    branches: [main]
   pull_request:
     branches: [main]
 
