@@ -83,7 +83,12 @@
       "yaml@2": "^2.8.3",
       "@babel/core@7": "^7.29.6",
       "metro@0.83.3>image-size": "-",
-      "@expo/config-plugins>xcode": "4.0.0"
+      "@expo/config-plugins>xcode": "4.0.0",
+      "@expo/cli>glob": "14.0.2",
+      "@expo/config>glob": "14.0.2",
+      "@expo/config-plugins>glob": "14.0.2",
+      "@expo/metro-config>glob": "14.0.2",
+      "@expo/fingerprint>glob": "14.0.2"
     },
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
