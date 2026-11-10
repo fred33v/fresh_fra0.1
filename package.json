@@ -87,7 +87,8 @@
     },
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
-      "metro@0.83.3": "patches/metro@0.83.3.patch"
+      "metro@0.83.3": "patches/metro@0.83.3.patch",
+      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
     }
   }
 }

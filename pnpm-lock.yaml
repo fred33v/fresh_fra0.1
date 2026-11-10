@@ -44,6 +44,9 @@ overrides:
 pnpmfileChecksum: 7bktlt3uhianngdi7i3uhde5la
 
 patchedDependencies:
+  deepmerge@4.3.1:
+    hash: iu7dgamfzznfy2bi3t7akns6p4
+    path: patches/deepmerge@4.3.1.patch
   expo-router@6.0.23:
     hash: 2q4v6t5lmpcs5qqoy3feni74a4
     path: patches/expo-router@6.0.23.patch
@@ -10841,7 +10844,7 @@ snapshots:
       '@expo/config-plugins': 54.0.4
       '@expo/config-types': 54.0.10
       '@expo/json-file': 10.0.8
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=iu7dgamfzznfy2bi3t7akns6p4)
       getenv: 2.0.0
       glob: 13.0.0
       require-from-string: 2.0.2
@@ -10859,7 +10862,7 @@ snapshots:
       '@expo/config-plugins': 54.0.5
       '@expo/config-types': 54.0.10
       '@expo/json-file': 10.2.0
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=iu7dgamfzznfy2bi3t7akns6p4)
       getenv: 2.0.0
       glob: 13.0.0
       require-from-string: 2.0.2
@@ -14014,7 +14017,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  deepmerge@4.3.1: {}
+  deepmerge@4.3.1(patch_hash=iu7dgamfzznfy2bi3t7akns6p4): {}
 
   defaults@1.0.4:
     dependencies:
@@ -15549,7 +15552,7 @@ snapshots:
       babel-jest: 29.7.0(@babel/core@7.29.13)
       chalk: 4.1.2
       ci-info: 3.9.0
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=iu7dgamfzznfy2bi3t7akns6p4)
       glob: 7.2.3
       graceful-fs: 4.2.11
       jest-circus: 29.7.0
