@@ -82,7 +82,8 @@
       "postcss-selector-parser@6": "^6.1.5",
       "yaml@2": "^2.8.3",
       "@babel/core@7": "^7.29.6",
-      "metro@0.83.3>image-size": "-"
+      "metro@0.83.3>image-size": "-",
+      "@expo/config-plugins>xcode": "4.0.0"
     },
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
