@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase-0/test-expo-glob-security]
   pull_request:
     branches: [main]
 
