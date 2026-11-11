@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { randomBytes, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -210,7 +211,7 @@ try {
 
   assert(byId.get(ids[2])?.result === null, 'Draft remains unscored');
   assert(
-    JSON.stringify(byId.get(ids[3])?.result) === JSON.stringify(originalResult),
+    isDeepStrictEqual(byId.get(ids[3])?.result, originalResult),
     'Existing result remains unchanged',
   );
 
@@ -231,7 +232,7 @@ try {
   );
   assert(
     repeatedRows.rows.every(row =>
-      JSON.stringify(row.result) === JSON.stringify(savedResults.get(row.id))
+      isDeepStrictEqual(row.result, savedResults.get(row.id))
     ),
     'Historical results remain unchanged on second run',
   );
