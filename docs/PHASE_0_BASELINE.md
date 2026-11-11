@@ -156,3 +156,49 @@ These results do not establish that all GitHub Dependabot alerts are resolved. D
 - [ ] Obtain independent review, resolve material findings and record explicit Phase 0 acceptance.
 
 **Phase 1 remains blocked. PR #69 must remain Draft until the outstanding requirements are satisfied or formally risk-accepted through the documented review process.**
+
+## 10. Phase 0 scope decision — 11 November 2026
+
+### Web-first development scope
+
+Development of native mobile applications is suspended indefinitely
+by project-owner decision.
+
+Active Phase 0 work is limited to:
+
+- React/Vite web dashboard and existing browser-facing workflows.
+- Node.js/Hono backend APIs and authentication.
+- PostgreSQL database migrations and data integrity.
+- Security remediation, dependency validation and CI/CD.
+- Web application functionality, accessibility and compatibility.
+- Infrastructure supporting web and backend services.
+
+### Mobile preservation policy
+
+- Preserve all existing mobile applications, source files and functionality.
+- Do not delete or rewrite mobile application code.
+- Do not perform new native iOS or Android development.
+- Suspend native compilation, simulator and mobile deep-link testing.
+- Do not require completion of mobile-only validation to accept
+  the web/backend Phase 0 scope.
+- Any future mobile reactivation requires an explicit owner decision.
+- Shared dependencies must remain compatible with preserved mobile code;
+  unresolved mobile-specific risks must be documented separately.
+
+### Remaining web/backend acceptance requirements
+
+- Reconcile database migrations and applicable migration history.
+- Reconcile applicable security advisories and Dependabot alerts.
+- Remediate or formally risk-accept outstanding security findings.
+- Verify preservation of existing web/backend functionality.
+- Address intermittent test-worker failures or document a reliable CI configuration.
+- Verify required CI checks on the final pull request commit.
+- Confirm main branch protection and security controls.
+- Obtain independent review and record explicit Phase 0 acceptance.
+
+This scope decision supersedes the mobile-only validation requirement
+in section 9 for the web/backend Phase 0 acceptance gate.
+All other applicable protection and security requirements remain in force.
+
+PR #69 must not be merged without explicit approval.
+Phase 1 remains blocked until web/backend Phase 0 acceptance.
