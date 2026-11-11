@@ -151,6 +151,10 @@ jobs:
         working-directory: apps/fra-backend/backend
         run: pnpm migrate
 
+      - name: Migration integration safety tests
+        working-directory: apps/fra-backend/backend
+        run: node scripts/migration-integration.mjs
+
       - name: Start backend
         working-directory: apps/fra-backend/backend
         run: |
