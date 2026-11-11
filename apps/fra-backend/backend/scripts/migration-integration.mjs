@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -91,6 +91,7 @@ try {
       id uuid PRIMARY KEY,
       answers jsonb,
       submitted_at timestamptz,
+      updated_at timestamptz,
       status text,
       result jsonb
     );
@@ -161,6 +162,79 @@ try {
   assert(count.rows[0].count === 1,
     'Concurrent migration is recorded exactly once');
 
+
+  // Historical assessment backfill: preserve previously stored results.
+  const historicalAnswers = {
+    'procurement.dueDiligenceLevel': 1,
+    'procurement.monthlySpend': 750000,
+    'procurement.recentFraud': 'yes',
+    'procurement.controlMaturity': 2,
+  };
+  const historicalDate = '2025-01-15T12:00:00.000Z';
+  const ids = Array.from({ length: 4 }, () => randomUUID());
+  const originalResult = { methodVersion: 999, preserved: true };
+
+  for (const [index, status] of ['submitted', 'completed', 'draft', 'submitted'].entries()) {
+    await testDb.query(
+      `INSERT INTO public.assessments (id, answers, submitted_at, updated_at, status, result)
+       VALUES ($1, $2::jsonb, $3::timestamptz, $4::timestamptz, $5, $6::jsonb)`,
+      [
+        ids[index],
+        JSON.stringify(historicalAnswers),
+        status === 'draft' ? null : historicalDate,
+        historicalDate,
+        status,
+        index === 3 ? JSON.stringify(originalResult) : null,
+      ],
+    );
+  }
+
+  const historicalRun = await runMigration();
+  assert(historicalRun.code === 0, 'Historical assessment backfill succeeds');
+
+  const historicalRows = await testDb.query(
+    `SELECT id, result, updated_at FROM public.assessments WHERE id = ANY($1::uuid[])`,
+    [ids],
+  );
+  const byId = new Map(historicalRows.rows.map(row => [row.id, row]));
+
+  for (const id of ids.slice(0, 2)) {
+    const result = byId.get(id)?.result;
+    assert(result?.methodVersion === 1, 'Historical scoring version is 1');
+    assert(result?.risk?.level === 'high', 'Historical risk level is high');
+    assert(
+      result?.results?.modules?.find(module => module.id === 'procurement')?.score === 95,
+      'Historical procurement score is 95',
+    );
+  }
+
+  assert(byId.get(ids[2])?.result === null, 'Draft remains unscored');
+  assert(
+    JSON.stringify(byId.get(ids[3])?.result) === JSON.stringify(originalResult),
+    'Existing result remains unchanged',
+  );
+
+  for (const id of ids) {
+    assert(
+      byId.get(id)?.updated_at?.toISOString() === historicalDate,
+      'Assessment updated_at is preserved',
+    );
+  }
+
+  const savedResults = new Map(historicalRows.rows.map(row => [row.id, row.result]));
+  const repeatedRun = await runMigration();
+  assert(repeatedRun.code === 0, 'Historical backfill can run twice');
+
+  const repeatedRows = await testDb.query(
+    `SELECT id, result FROM public.assessments WHERE id = ANY($1::uuid[])`,
+    [ids],
+  );
+  assert(
+    repeatedRows.rows.every(row =>
+      JSON.stringify(row.result) === JSON.stringify(savedResults.get(row.id))
+    ),
+    'Historical results remain unchanged on second run',
+  );
   console.log('MIGRATION_INTEGRATION=PASS');
 } catch (error) {
   console.error('MIGRATION_INTEGRATION=FAIL');
