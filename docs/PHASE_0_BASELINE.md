@@ -202,3 +202,78 @@ All other applicable protection and security requirements remain in force.
 
 PR #69 must not be merged without explicit approval.
 Phase 1 remains blocked until web/backend Phase 0 acceptance.
+
+## 11. Phase 0 final verification evidence — 11 November 2026
+
+This section supplements the historical evidence above. It does not
+retroactively change earlier audit results or acceptance decisions.
+
+### Latest CI verification
+
+PR #69 commit `7c5b2c5` passed all five GitHub Actions checks:
+
+- Lint & Typecheck: passed.
+- Test: passed.
+- Build: passed.
+- Database (PostgreSQL): passed.
+- Terraform validate: passed.
+
+Evidence:
+https://github.com/fred33v/fresh_fra0.1/actions/runs/43092122776
+
+The PostgreSQL integration tests cover historical assessment-result
+backfill, preservation of existing results, draft exclusion, and
+repeat execution without changing previously stored results.
+
+These tests do not prove compatibility with every historical
+production database state.
+
+### Latest production dependency audit
+
+The locally reported `pnpm audit --prod` result was:
+
+- Critical: 0.
+- High: 0.
+- Moderate: 0.
+- Low: 1.
+
+Remaining advisory:
+`GHSA-gcqx-w48m-w2h4`, affecting `deepmerge@4.3.1`.
+
+The audit reported no patched version.
+
+The `pnpm why -r deepmerge --depth 12` inspection identified
+production dependency paths through Expo in the budget-guide,
+mobile-app and training-app workspaces. Backend paths were
+through development-only Jest dependencies. No dashboard
+dependency path appeared in that inspection.
+
+This is a proposed low-severity residual risk acceptance,
+not an approved acceptance decision. Exposure must be
+reassessed before mobile reactivation or deployment.
+
+The previously reported 79 Dependabot alerts on the default
+branch remain subject to separate reconciliation. The local
+pnpm audit and GitHub Dependabot counts are not equivalent.
+
+### Remaining acceptance gates
+
+- [x] Verify five CI checks on PR #69 commit `7c5b2c5`.
+- [x] Record the latest local production dependency audit.
+- [x] Identify the reported deepmerge dependency paths.
+- [ ] Reconcile migration inventory and applicable database history.
+- [ ] Reconcile applicable Dependabot security alerts.
+- [ ] Obtain explicit approval or remediation of residual risks.
+- [ ] Document web/backend backward-compatibility conclusions.
+- [ ] Resolve or document intermittent parallel test failures.
+- [ ] Reconfirm effective main branch protection.
+- [ ] Obtain independent review and record final Phase 0 acceptance.
+
+Mobile-only validation remains suspended under section 10.
+All existing mobile functionality must be preserved.
+
+PR #69 remains Draft and must not be merged without
+explicit project-owner approval.
+
+Phase 1 remains blocked until the active web/backend
+Phase 0 acceptance requirements have been satisfied.
