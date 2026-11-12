@@ -24,9 +24,19 @@ export function NextActions({ showEmployerNote = false }: { showEmployerNote?: b
   const [plan, setPlan] = useState<ActionPlan | null | undefined>(undefined);
 
   useEffect(() => {
+    let active = true;
+
     api.get<ActionPlan | null>('/api/v1/workshop/action-plans')
-      .then((p) => setPlan(p ?? null))
-      .catch(() => setPlan(null));
+      .then((p) => {
+        if (active) setPlan(p ?? null);
+      })
+      .catch(() => {
+        if (active) setPlan(null);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (plan === undefined) return null;

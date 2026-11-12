@@ -642,7 +642,7 @@ workshop.patch('/progress/:id', async (c) => {
     // Scores sent by the client are ignored, so they cannot be faked.
     quizAnswers: z.record(z.string().regex(/^\d{1,3}$/), z.number().int().min(0).max(20))
       .refine((v) => Object.keys(v).length <= 50, 'Too many quiz answers').optional(),
-    scenarioChoices: z.record(z.string().max(2000)).refine(
+    scenarioChoices: z.record(z.string(), z.string().max(2000)).refine(
       (v) => JSON.stringify(v).length <= 100_000,
       'scenarioChoices payload too large (max 100KB)'
     ).optional(),

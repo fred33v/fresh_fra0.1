@@ -17,17 +17,18 @@
     "lint:fix": "turbo run lint -- --fix",
     "test": "turbo run test --concurrency=1",
     "test:e2e": "pnpm --filter @stopfra/web-dashboard test:e2e",
+    "test:security": "node --test tests/security/*.test.cjs",
     "test:backend": "pnpm --filter @stopfra/backend test",
     "db:migrate": "pnpm --filter @stopfra/backend migrate",
     "clean": "rm -rf node_modules apps/*/node_modules apps/fra-backend/backend/node_modules",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "prettier": "^3.2.0",
-    "turbo": "^2.3.0",
+    "turbo": "^2.11.11",
     "typescript": "^5.7.0"
   },
   "engines": {
@@ -75,9 +76,37 @@
       "minimatch@9": "^9.0.7",
       "minimatch@10": "^10.2.3",
       "ws@6": "^6.2.4",
-      "node-forge": "^1.4.0",
+      "node-forge": "^1.4.3",
       "basic-ftp@5": "^5.3.1",
-      "handlebars": "4.7.10"
+      "handlebars": "4.7.10",
+      "@react-navigation/core@7": "7.24.0",
+      "postcss-selector-parser@6": "^6.1.5",
+      "yaml@2": "^2.8.3",
+      "@babel/core@7": "^7.29.6",
+      "metro@0.83.3>image-size": "-",
+      "@expo/config-plugins>xcode": "4.0.0",
+      "@expo/cli>glob": "14.0.2",
+      "@expo/config>glob": "14.0.2",
+      "@expo/config-plugins>glob": "14.0.2",
+      "@expo/metro-config>glob": "14.0.2",
+      "@expo/fingerprint>glob": "14.0.2",
+      "@expo/cli>minimatch": "11.0.5",
+      "@expo/fingerprint>minimatch": "11.0.5",
+      "@typescript-eslint/typescript-estree>minimatch": "11.0.5",
+      "@expo/ngrok>uuid": "^11.1.1",
+      "undici@7": "^7.30.1",
+      "flatted@3": "^3.4.2",
+      "form-data@4": "^4.0.6",
+      "ajv@6": "^6.14.0",
+      "yaml@1": "^1.10.3",
+      "@tootallnate/once@2": "^2.0.1",
+      "@humanfs/node@0.16": "^0.16.8",
+      "@babel/plugin-transform-modules-systemjs@7": "^7.29.4"
+    },
+    "patchedDependencies": {
+      "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
+      "metro@0.83.3": "patches/metro@0.83.3.patch",
+      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
     }
   }
 }

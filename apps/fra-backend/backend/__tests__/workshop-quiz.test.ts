@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 /// <reference types="jest" />
 
 import { describe, expect, it } from '@jest/globals';
@@ -8,7 +9,7 @@ import { QUIZ_ANSWER_KEY, WORKSHOP_SECTION_IDS, mergeQuizScores, missingForCompl
 
 // The workshop content lives in packages/shared, which the backend does not depend on,
 // so it is read as text here rather than imported
-const SHARED_DATA = join(__dirname, '../../../../packages/shared/src/data');
+const SHARED_DATA = join(fileURLToPath(new URL('.', import.meta.url)), '../../../../packages/shared/src/data');
 
 function sharedSectionIds(): number[] {
   const source = readFileSync(join(SHARED_DATA, 'workshopContent.ts'), 'utf8');
