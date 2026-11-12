@@ -658,3 +658,19 @@ Given by the project owner on 12 November 2026:
 | Final acceptance | **Not recorded.** Waits for the two open gates or an owner decision to waive them. |
 
 PR #69 remains Draft. Phase 1 remains blocked.
+
+## 17. Independent review waived — 12 November 2026
+
+The project owner waived independent review for Phase 0 on
+12 November 2026. The assistant's review in section 16 is the only
+review on record.
+
+This supersedes the "Independent review" row in section 16.
+
+| Gate | Status |
+| --- | --- |
+| Independent review | Waived by the owner |
+| Migration history of the deployed database | **Open.** The owner will supply the `schema_migrations` listing. |
+| Final acceptance | **Not recorded.** Waits for the database gate. |
+
+PR #69 remains Draft. Phase 1 remains blocked.
