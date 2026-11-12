@@ -569,3 +569,92 @@ described in sections 12 to 14. The commit that adds this section
 changes this document only. GitHub runs the five checks again on it;
 confirm they are green on the pull request's head commit before
 merging.
+
+## 16. Browser check, review and owner decisions — 12 November 2026
+
+### CI on the head commit
+
+Commit `01c2241` passed all five checks:
+https://github.com/fred33v/fresh_fra0.1/actions/runs/43230420882
+
+### Browser check
+
+No test deployment exists: `api.fraud-risk.co.uk` has no DNS record
+and `fraud-risk.co.uk` serves an empty index. The check was therefore
+run in a browser against the backend and dashboard started locally
+from this branch, with in-memory data, simulated payment and
+made-up accounts.
+
+| Step | Result |
+| --- | --- |
+| Sign-up form submitted empty | Field messages shown for name, organisation, email and password |
+| Sign-up, then the emailed confirmation link | Account confirmed and signed in |
+| Checkout of the Professional package (simulated) | "Payment Successful", package active |
+| 13-module assessment completed and submitted | Results page shown, score 35 of 100 |
+| Download Report | HTTP 200, `application/pdf`, 126,833 bytes, 2 pages |
+| Download certificate | HTTP 200, `application/pdf`, 85,558 bytes, 1 page |
+| Key-pass created on the organisation page | Listed as Available |
+| Join form submitted empty | Field messages shown for key-pass, email and password |
+| Join with the key-pass typed in lower case with dashes | Employee account created and signed in to the organisation |
+| Sign-in with a wrong password | "Invalid email or password", stays on the page |
+| Sign-in with the right password | Dashboard shown |
+
+This covers `@hookform/resolvers` 5 (forms), `@hono/node-server` 2
+(every request) and `puppeteer` 25 (both PDFs).
+
+Not covered: PostgreSQL (data was in memory; the CI database job
+covers it), real Stripe payment, real email delivery, and a deployed
+environment behind nginx.
+
+### Review of the change
+
+The non-lockfile diff against `main` was read in full, except the
+Expo Router and Metro patches, which are in the suspended mobile
+scope and are covered by their regression tests. The review was
+done by the assistant that also wrote the commits of 12 November,
+so it is not an independent review.
+
+Findings:
+
+1. **Migration lock needs a direct database connection.** The runner
+   uses a session-level advisory lock. Through a pooled Neon address
+   (`-pooler` in the host) such locks are unreliable. `infra/LAUNCH.md`
+   now says to use the direct connection string. Fixed in this commit.
+2. **A second migration runner can time out while waiting.** The
+   lock wait counts against `DB_STATEMENT_TIMEOUT_MS` (30 s by
+   default). If one runner takes longer, a second one started at the
+   same time fails with a timeout. It fails safely and can be re-run.
+   Not changed.
+3. **`migration-safety.test.ts` checks the source text** of
+   `migrate.ts` rather than its behaviour. The behaviour is tested by
+   `scripts/migration-integration.mjs` in the CI database job. Not
+   changed.
+
+No finding blocks acceptance of the web/backend scope.
+
+### Owner decisions
+
+Given by the project owner on 12 November 2026:
+
+- **`deepmerge` (GHSA-gcqx-w48m-w2h4):** residual risk accepted, with
+  the local patch and its regression test as mitigation. Alert #104
+  stays open so that an upstream fix is noticed.
+- **Approving reviews:** the `main` ruleset stays at 0 required
+  approvals. Pull requests and the five CI checks remain required.
+
+### Phase 0 status
+
+| Gate | Status |
+| --- | --- |
+| Migration inventory (repository) | Done |
+| Migration history of the deployed database | **Open.** The owner will supply the `schema_migrations` listing. |
+| Dependabot alerts | Done |
+| Residual risks | Done: two removed, one accepted by the owner |
+| Backward compatibility | Done, with the local browser check above |
+| Parallel test failures | Done |
+| `main` branch protection | Done; owner decision recorded |
+| Five CI checks | Passed on `01c2241`; re-run on the commit adding this section |
+| Independent review | **Open.** Only the assistant's review above exists. |
+| Final acceptance | **Not recorded.** Waits for the two open gates or an owner decision to waive them. |
+
+PR #69 remains Draft. Phase 1 remains blocked.
