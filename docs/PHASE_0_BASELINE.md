@@ -550,3 +550,22 @@ A real tunnel session was run in `apps/fra-training-app` with
 
 Not verified: opening the app on a phone or simulator through the
 tunnel. Mobile validation is suspended under section 10.
+
+## 15. CI verification — 12 November 2026
+
+Commit `6641dbd` passed all five GitHub Actions checks:
+
+- Lint & Typecheck: passed.
+- Test: passed, including the new "Security regression tests" step.
+- Database (PostgreSQL): passed.
+- Terraform validate: passed.
+- Build: passed.
+
+Evidence:
+https://github.com/fred33v/fresh_fra0.1/actions/runs/43228976643
+
+`6641dbd` contains every code, dependency and workflow change
+described in sections 12 to 14. The commit that adds this section
+changes this document only. GitHub runs the five checks again on it;
+confirm they are green on the pull request's head commit before
+merging.
