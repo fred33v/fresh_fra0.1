@@ -1,7 +1,8 @@
 /// <reference types="jest" />
 
 import app from '../src/index';
-import { purchasesById } from '../src/stores';
+import { purchasesById, usersByEmail } from '../src/stores';
+import { issueTokens } from '../src/auth-utils';
 
 export { app };
 
@@ -72,4 +73,12 @@ export async function createPaidUser(
   const user = await createAuthenticatedUser(overrides);
   seedPurchase(user.organisationId, user.userId, packageId);
   return user;
+}
+
+/** In-memory delivery tests use a server-seeded admin, never a client-assigned role. */
+export async function createWorkshopAdmin() {
+  const account = await createPaidUser();
+  const user = usersByEmail.get(account.email)!;
+  user.role = 'admin';
+  return { ...account, ...issueTokens(user) };
 }

@@ -281,6 +281,16 @@ workshop.post('/sessions', async (c) => {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Title is required');
 
+  // Delivery authority is server-assigned; a paid package alone does not grant it.
+  if (auth.role !== 'admin') {
+    if (!hasDatabase()) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
+    const roles = await getDbPool().query(
+      "SELECT 1 FROM workshop_roles WHERE user_id = $1 AND role = 'facilitator' LIMIT 1",
+      [auth.userId],
+    );
+    if (!roles.rowCount) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
+  }
+
   const sessionCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
 
   let res: { rows: SessionRow[] };

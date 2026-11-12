@@ -15,7 +15,7 @@ import { usersByEmail, refreshTokenAllowlist, organisationsById, accountLockouts
 import { getClientIp, rateLimit } from '../middleware.js';
 import {
   dbGetUserByEmail, dbGetUserById, dbUpdateUserPasswordHash, dbUpdateUserProfile,
-  dbUpsertRefreshToken, dbHasRefreshToken, dbDeleteRefreshToken, dbDeleteAllRefreshTokensForUser,
+  dbUpsertRefreshToken, dbRotateRefreshToken, dbDeleteRefreshToken, dbDeleteAllRefreshTokensForUser,
   dbGetOrganisationById,
   auditLog,
   setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken,
@@ -407,50 +407,30 @@ auth.post('/auth/refresh', async (c) => {
   }
 
   const { refreshToken } = parsed.data;
-  if (hasDatabase()) {
-    const exists = await dbHasRefreshToken(refreshToken);
-    if (!exists) return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
-  } else {
-    if (!refreshTokenAllowlist.has(refreshToken)) {
-      return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
-    }
-  }
-
+  let payload: jwt.JwtPayload;
   try {
-    const payload = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
-    if (payload.type !== 'refresh' || typeof payload.sub !== 'string') {
-      return jsonError(c, 401, 'INVALID_REFRESH', 'Invalid refresh token');
-    }
-
-    const user = hasDatabase() ? await dbGetUserById(payload.sub) : Array.from(usersByEmail.values()).find((u) => u.id === payload.sub) ?? null;
-    if (!user) return jsonError(c, 401, 'INVALID_REFRESH', 'Invalid refresh token');
-
-    if (hasDatabase()) {
-      await dbDeleteRefreshToken(refreshToken);
-    } else {
-      refreshTokenAllowlist.delete(refreshToken);
-    }
-    const tokens = issueTokens(user);
-    if (hasDatabase()) {
-      await dbUpsertRefreshToken(tokens.refreshToken, user.id);
-    }
-
-    return c.json({
-      success: true,
-      data: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      },
-    });
+    payload = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch (err: unknown) {
     logger.warn('Refresh token verification failed', { error: String(err) });
-    if (hasDatabase()) {
-      await dbDeleteRefreshToken(refreshToken).catch((e) => logger.warn('Failed to delete refresh token during cleanup', { error: String(e) }));
-    } else {
-      refreshTokenAllowlist.delete(refreshToken);
-    }
     return jsonError(c, 401, 'INVALID_REFRESH', 'Invalid refresh token');
   }
+  if (payload.type !== 'refresh' || typeof payload.sub !== 'string') {
+    return jsonError(c, 401, 'INVALID_REFRESH', 'Invalid refresh token');
+  }
+  const user = hasDatabase() ? await dbGetUserById(payload.sub)
+    : Array.from(usersByEmail.values()).find((u) => u.id === payload.sub) ?? null;
+  if (!user) return jsonError(c, 401, 'INVALID_REFRESH', 'Invalid refresh token');
+
+  // No await between the in-memory claim and replacement. PostgreSQL consumes and
+  // replaces inside one transaction; an insert failure restores the original token.
+  if (!hasDatabase() && !refreshTokenAllowlist.delete(refreshToken)) {
+    return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
+  }
+  const tokens = issueTokens(user);
+  if (hasDatabase() && !(await dbRotateRefreshToken(refreshToken, tokens.refreshToken, user.id))) {
+    return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
+  }
+  return c.json({ success: true, data: tokens });
 });
 
 auth.post('/auth/forgot-password', async (c) => {

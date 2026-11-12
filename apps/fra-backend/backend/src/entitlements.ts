@@ -1,3 +1,4 @@
+import type { DbExecutor } from './db/transaction.js';
 // ============================================================
 // Package entitlements — what each paid package unlocks
 // Pure date/tier logic lives in helpers.ts; this module adds data access.
@@ -22,9 +23,9 @@ const PACKAGE_NAMES: Record<string, string> = {
   pkg_full: 'Enterprise',
 };
 
-export async function listOrgPurchases(orgId: string): Promise<Purchase[]> {
+export async function listOrgPurchases(orgId: string, db?: DbExecutor): Promise<Purchase[]> {
   return hasDatabase()
-    ? dbListPurchasesByOrganisation(orgId)
+    ? dbListPurchasesByOrganisation(orgId, db)
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === orgId);
 }
 
@@ -49,11 +50,11 @@ export async function requireAnyPaidPurchase(c: Context, auth: AuthContext): Pro
 }
 
 /** Key-pass allowance from the org's active packages; -1 means unlimited, 0 means none. */
-export async function getActiveKeypassAllowance(purchases: Purchase[]): Promise<number> {
+export async function getActiveKeypassAllowance(purchases: Purchase[], db?: DbExecutor): Promise<number> {
   let allowance = 0;
   for (const w of getActiveWindows(purchases)) {
     const pkg = hasDatabase()
-      ? await dbGetPackageById(w.purchase.packageId)
+      ? await dbGetPackageById(w.purchase.packageId, db)
       : FALLBACK_PACKAGES.find((fp) => fp.id === w.purchase.packageId) ?? null;
     if (!pkg) continue;
     if (pkg.keypassAllowance < 0) return -1;

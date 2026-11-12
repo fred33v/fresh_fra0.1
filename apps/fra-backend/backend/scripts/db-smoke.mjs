@@ -195,6 +195,12 @@ if (check('assessment certificate', s, 200, p)) {
 [s, p] = await call('POST', '/workshop/action-plans', { actionItems: [{ text: 'Review supplier changes', done: false }], commitments: ['Brief board'] }, ent);
 check('action plan create', s, 201, p);
 [s, p] = await call('PATCH', `/workshop/action-plans/${data(p)?.id}`, { commitments: ['Brief board', 'Quarterly review'] }, ent); check('action plan update', s, 200, p);
+// Fixture-only role setup: delivery authority cannot be self-assigned through the API.
+const { Pool } = await import('pg');
+const rolePool = new Pool({ connectionString: process.env.DATABASE_URL });
+try {
+  await rolePool.query("INSERT INTO public.workshop_roles (user_id, role) VALUES ($1, 'facilitator') ON CONFLICT DO NOTHING", [userId]);
+} finally { await rolePool.end(); }
 [s, p] = await call('POST', '/workshop/sessions', { title: 'Board briefing' }, ent); check('live session create', s, 201, p);
 [s, p] = await call('PUT', '/workshop/profile', { fullName: 'Smoke Enterprise', organizationName: 'Smoke Enterprise Ltd', sector: 'private' }, ent); check('workshop profile', s, 200, p);
 

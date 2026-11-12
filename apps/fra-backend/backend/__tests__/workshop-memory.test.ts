@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { describe, expect, it } from '@jest/globals';
-import { app, authHeaders, createPaidUser } from './helpers';
+import { app, authHeaders, createPaidUser, createWorkshopAdmin } from './helpers';
 
 const API = 'http://localhost/api/v1';
 const get = (path: string, token: string) => app.request(`${API}${path}`, { headers: authHeaders(token) });
@@ -82,7 +82,7 @@ describe('Workshop without a database', () => {
   });
 
   it('runs a live session: join by code, polls, and questions with upvotes', async () => {
-    const facilitator = await createPaidUser('pkg_full');
+    const facilitator = await createWorkshopAdmin();
     const attendee = await createPaidUser('pkg_training');
     const outsider = await createPaidUser('pkg_training');
 

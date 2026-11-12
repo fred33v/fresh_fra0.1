@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { Purchase, Package, PurchaseStatus } from '../types.js';
 
@@ -53,8 +54,8 @@ export async function dbMarkPurchasePaid(id: string, confirmedAt: string, paymen
   return res.rowCount ?? 0;
 }
 
-export async function dbListPurchasesByOrganisation(orgId: string): Promise<Purchase[]> {
-  const pool = getDbPool();
+export async function dbListPurchasesByOrganisation(orgId: string, db?: DbExecutor): Promise<Purchase[]> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<{
     id: string; organisation_id: string; user_id: string; package_id: string; status: string;
     payment_intent_id: string | null; client_secret: string | null; checkout_session_id: string | null; amount_cents: number;
@@ -85,8 +86,8 @@ export async function dbListPackages(): Promise<Package[]> {
   }));
 }
 
-export async function dbGetPackageById(id: string): Promise<Package | null> {
-  const pool = getDbPool();
+export async function dbGetPackageById(id: string, db?: DbExecutor): Promise<Package | null> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<{
     id: string; name: string; description: string | null; price_cents: number; currency: string;
     keypass_allowance: number; features: string[]; is_active: boolean; sort_order: number;

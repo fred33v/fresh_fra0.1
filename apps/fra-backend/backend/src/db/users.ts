@@ -1,8 +1,9 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { User, DbUserRow, EmployeeDashboardRow, DbEmployeeDashboardRow } from '../types.js';
 
-export async function dbGetUserByEmail(email: string): Promise<User | null> {
-  const pool = getDbPool();
+export async function dbGetUserByEmail(email: string, db?: DbExecutor): Promise<User | null> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<DbUserRow>(
     'select id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at from public.users where email = $1 limit 1',
     [email.toLowerCase()]
@@ -43,8 +44,8 @@ export async function dbGetUserById(id: string): Promise<User | null> {
   };
 }
 
-export async function dbInsertUser(user: User): Promise<void> {
-  const pool = getDbPool();
+export async function dbInsertUser(user: User, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query(
     'insert into public.users (id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
     [

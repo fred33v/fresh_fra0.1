@@ -176,6 +176,12 @@ jobs:
           SMOKE_SKIP_PDF: '1'
         run: node scripts/db-smoke.mjs
 
+      - name: Transaction concurrency and permissions (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          TRANSACTION_TEST_DATABASE: '1'
+        run: node scripts/transaction-integration.mjs
+
       - name: Backend log on failure
         if: failure()
         working-directory: apps/fra-backend/backend
