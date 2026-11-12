@@ -121,11 +121,11 @@ describe('the certificate document', () => {
   it('has the name, date, number and a QR code that opens the verification page', async () => {
     const html = await certificateHtml({
       kind: 'training', certificateNumber: 'FRA-1A2B-3C4D-5E6F', issuedAt: '2026-10-31T10:00:00.000Z',
-      holderName: 'Ada <b>Lovelace</b>', organisationName: 'Analytical Trust', title: 'Fraud Risk Awareness Workshop',
+      holderName: 'Ada <b>Lovelace</b>', organisationName: 'Analytical &copy; Trust', title: 'Fraud Risk Awareness Workshop',
       quizScore: 100, areasAssessed: null,
     });
     expect(html).toContain('Ada &lt;b&gt;Lovelace&lt;/b&gt;');
-    expect(html).toContain('Analytical Trust');
+    expect(html).toContain('Analytical &amp;copy; Trust');
     expect(html).toContain('31 October 2026');
     expect(html).toContain('FRA-1A2B-3C4D-5E6F');
     expect(html).toContain('quiz score of 100%');

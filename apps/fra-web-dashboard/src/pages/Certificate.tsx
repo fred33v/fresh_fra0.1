@@ -71,7 +71,7 @@ export default function Certificate() {
 
   /** The PDF is made by the server, with a QR code that opens the public verification page */
   const handleDownloadPDF = async () => {
-    if (!certificate) return;
+    if (!certificate || certificate.status === 'revoked') return;
     setIsDownloading(true);
     try {
       await api.download(
@@ -90,9 +90,9 @@ export default function Certificate() {
     : '';
 
   const handleShareCertificate = async () => {
-    if (!certificate || !profile) return;
+    if (!certificate || !profile || certificate.status === 'revoked') return;
 
-    const safeName = profile.full_name.replace(/[\n\r\t]/g, ' ').trim();
+    const safeName = (certificate.issued_details?.holderName ?? profile.full_name).replace(/[\n\r\t]/g, ' ').trim();
     // The verification link works for anyone, without signing in
     const shareData = {
       title: 'Fraud Risk Awareness Certificate',
@@ -182,6 +182,7 @@ export default function Certificate() {
           {certificate ? (
             <>
               {/* Certificate Display */}
+              {certificate.status === 'revoked' && <p role="alert" className="mb-5 text-destructive">This certificate has been revoked and is no longer valid.</p>}
               <Card id="certificate-printable" ref={certificateRef} className="overflow-hidden mb-6" role="article" aria-label="Certificate of Completion">
                 <div className="gradient-hero p-8 lg:p-12 text-center">
                   <div className="flex justify-center mb-6">
@@ -200,8 +201,8 @@ export default function Certificate() {
                 <CardContent className="p-8 lg:p-12">
                   <div className="text-center mb-8">
                     <p className="text-muted-foreground mb-2">This is to certify that</p>
-                    <h2 className="text-2xl font-bold mb-2">{profile.full_name}</h2>
-                    <p className="text-muted-foreground">{profile.organization_name}</p>
+                    <h2 className="text-2xl font-bold mb-2">{certificate.issued_details?.holderName ?? profile.full_name}</h2>
+                    <p className="text-muted-foreground">{certificate.issued_details?.organisationName ?? profile.organization_name}</p>
                   </div>
 
                   <div className="text-center mb-8">
@@ -222,6 +223,8 @@ export default function Certificate() {
                         <p className="font-medium">{certificate.quiz_score}%</p>
                       </div>
                     )}
+                    {certificate.completed_at && <div className="text-center"><p className="text-muted-foreground">Date Completed</p>
+                      <p className="font-medium">{new Date(certificate.completed_at).toLocaleDateString('en-GB')}</p></div>}
                     <div className="text-center">
                       <p className="text-muted-foreground">Date Issued</p>
                       <p className="font-medium">
@@ -257,13 +260,13 @@ export default function Certificate() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-4 justify-center">
-                <Button size="lg" onClick={handleDownloadPDF} disabled={isDownloading} aria-busy={isDownloading}>
+                <Button size="lg" onClick={handleDownloadPDF} disabled={isDownloading || certificate.status === 'revoked'} aria-busy={isDownloading}>
                   {isDownloading
                     ? <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
                     : <Download className="mr-2 h-5 w-5" aria-hidden="true" />}
                   Download PDF
                 </Button>
-                <Button size="lg" variant="outline" onClick={handleShareCertificate}>
+                <Button size="lg" variant="outline" onClick={handleShareCertificate} disabled={certificate.status === 'revoked'}>
                   <Share2 className="mr-2 h-5 w-5" aria-hidden="true" />
                   Share Certificate
                 </Button>

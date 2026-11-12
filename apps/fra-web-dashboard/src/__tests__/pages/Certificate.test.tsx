@@ -435,3 +435,16 @@ describe('Certificate', () => {
     });
   });
 });
+
+ it('previews the issued identity instead of later profile changes', async () => {
+  mockedApi.get.mockResolvedValue(makeCertificate({issued_details:{holderName:'Original Recipient',organisationName:'Original Organisation'}}));
+  renderCertificate();
+  expect(await screen.findByText('Original Recipient')).toBeInTheDocument();
+  expect(screen.getByText('Original Organisation')).toBeInTheDocument();
+ });
+ it('marks a revoked certificate and disables download/share', async () => {
+  mockedApi.get.mockResolvedValue(makeCertificate({status:'revoked'}));renderCertificate();
+  expect(await screen.findByRole('alert')).toHaveTextContent('revoked');
+  expect(screen.getByRole('button',{name:/Download/})).toBeDisabled();
+  expect(screen.getByRole('button',{name:/Share/})).toBeDisabled();
+ });

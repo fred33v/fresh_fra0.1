@@ -1,3 +1,4 @@
+import { z } from 'zod';
 // ============================================================
 // Certificate routes
 //   GET /certificates/verify/:number   public: is this certificate genuine, and what does it certify
@@ -14,7 +15,7 @@ import { auditLog, dbGetAssessmentById } from '../db/index.js';
 import { createLogger } from '../logger.js';
 import {
   canDownload, certificatePdf, findCertificate, issueAssessmentCertificate, normaliseCertificateNumber,
-  publicDetails, verifyUrl,
+  publicDetails, revokeCertificate, verifyUrl,
 } from '../certificates.js';
 
 const logger = createLogger('certificates');
@@ -25,6 +26,7 @@ certificatesRoutes.get('/certificates/verify/:number', async (c) => {
   const limited = await rateLimit('certificates:verify', { windowMs: 60_000, max: 30 })(c);
   if (limited instanceof Response) return limited;
 
+  c.header('Cache-Control', 'no-store');
   const number = normaliseCertificateNumber(c.req.param('number'));
   if (!number) return jsonError(c, 400, 'INVALID_NUMBER', 'That is not a certificate number');
 
@@ -32,7 +34,7 @@ certificatesRoutes.get('/certificates/verify/:number', async (c) => {
   if (!record) return jsonError(c, 404, 'NOT_FOUND', 'No certificate has this number');
 
   c.header('Cache-Control', 'no-store');
-  return c.json({ success: true, data: { valid: true, ...publicDetails(record), verifyUrl: verifyUrl(record.certificateNumber) } });
+  return c.json({ success: true, data: { valid: record.status === 'valid', status: record.status, ...publicDetails(record), verifyUrl: verifyUrl(record.certificateNumber) } });
 });
 
 certificatesRoutes.get('/certificates/:number/pdf', async (c) => {
@@ -48,6 +50,8 @@ certificatesRoutes.get('/certificates/:number/pdf', async (c) => {
   const record = await findCertificate(number);
   // Someone else's certificate looks the same as no certificate
   if (!record || !canDownload(record, auth)) return jsonError(c, 404, 'NOT_FOUND', 'Certificate not found');
+
+  if (record.status === 'revoked') return jsonError(c, 409, 'CERTIFICATE_REVOKED', 'This certificate has been revoked');
 
   try {
     const pdf = await certificatePdf(publicDetails(record));
@@ -90,13 +94,32 @@ certificatesRoutes.get('/assessments/:id/certificate', async (c) => {
 
   // Normally issued on submission; issuing here as well covers a submission whose issue failed
   const row = await issueAssessmentCertificate(assessment);
-  return c.json({
-    success: true,
-    data: {
-      kind: 'assessment', certificateNumber: row.certificate_number, issuedAt: new Date(row.issued_at).toISOString(),
-      assessmentId: assessment.id, title: assessment.title, verifyUrl: verifyUrl(row.certificate_number),
-    },
+  const record = await findCertificate(row.certificate_number);
+  if (!record) return jsonError(c, 500, 'CERTIFICATE_UNAVAILABLE', 'Certificate is temporarily unavailable');
+  return c.json({ success: true, data: {
+    ...publicDetails(record), status: record.status, assessmentId: assessment.id,
+    verifyUrl: verifyUrl(row.certificate_number),
+  } });
+});
+
+// Admins act only within their own organisation. Private reasons stay in the audit.
+certificatesRoutes.post('/certificates/:number/revoke', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const limited = await rateLimit('certificates:revoke', { windowMs: 60_000, max: 20 })(c);
+  if (limited instanceof Response) return limited;
+  const auth = requireAuth(c);
+  if (auth instanceof Response) return auth;
+  if (auth.role !== 'admin') return jsonError(c, 403, 'FORBIDDEN', 'Requires admin role');
+  const number = normaliseCertificateNumber(c.req.param('number'));
+  if (!number) return jsonError(c, 400, 'INVALID_NUMBER', 'That is not a certificate number');
+  const parsed = z.object({ reason: z.string().trim().min(1).max(1000) }).safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Enter a reason of 1 to 1000 characters');
+  const result = await revokeCertificate(number, auth, parsed.data.reason, {
+    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
   });
+  if (!result) return jsonError(c, 404, 'NOT_FOUND', 'Certificate not found');
+  return c.json({ success: true, data: { certificateNumber: number, status: 'revoked',
+    revokedAt: result.record.revokedAt, changed: result.changed } });
 });
 
 export default certificatesRoutes;
