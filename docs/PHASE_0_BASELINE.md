@@ -402,3 +402,84 @@ they run in GitHub CI.
 
 PR #69 remains Draft and must not be merged without
 explicit project-owner approval. Phase 1 remains blocked.
+
+## 13. Web/backend backward-compatibility conclusions — 12 November 2026
+
+This section records what was compared between `main` and this
+branch for the web dashboard and backend. It is evidence for the
+owner's decision, not an acceptance decision.
+
+### What this branch changes in web/backend code
+
+- No API route, request field, response field or migration file is
+  added, removed or renamed.
+- `src/workshop.ts`: one schema rewritten for Zod 4
+  (`z.record(z.string(), …)`); it accepts the same input.
+- `src/migrate.ts`: migrations now run one at a time under a database
+  lock, each file in its own transaction. Order, tracking table and
+  the assessment-result backfill are unchanged.
+- Dashboard `NextActions.tsx`: ignores a response that arrives after
+  the component has closed. No visible change.
+- Major dependency upgrades: `zod` 3 → 4, `@hono/node-server` 1 → 2,
+  `puppeteer` 24 → 25, `@hookform/resolvers` 3 → 5.
+
+### Zod 3 → 4 behaviour comparison
+
+The kinds of schema the backend uses were run under `zod@3.25.76`
+and the installed `zod@4` with 38 sample inputs. Accept/reject
+results matched except in two cases:
+
+| Input | Zod 3 | Zod 4 | Effect here |
+| --- | --- | --- | --- |
+| UUID with an invalid variant digit | Accepted | Rejected | None expected: IDs come from `gen_random_uuid()` and `randomUUID()`, which are valid. The all-zero UUID is still accepted. |
+| Date-time without seconds (`2026-11-12T10:00Z`) | Accepted | Rejected | None for our clients: the dashboard and training app send `toISOString()`, which includes seconds. A third-party API client sending the short form to `completedAt` or `reportedAt` would now get a 400. |
+
+Other differences:
+
+- **Validation message wording changed.** Example: a missing field
+  was `Required` and is now `Invalid input: expected string, received
+  undefined`. The HTTP status (400) and error code
+  (`VALIDATION_ERROR`) are unchanged. Routes that pass Zod's message
+  to the client (budget-holder, speak-up, counter-fraud) show the new
+  wording. No dashboard or shared-package code matches on this text.
+- **Defaults inside optional fields.** Zod 4 fills in a default where
+  Zod 3 left the field out. The two schemas built with `.partial()`
+  (risk-register update, senior-management update) contain no
+  defaults, so updates do not overwrite stored values.
+
+### Evidence that existing behaviour is preserved
+
+- Backend: 643 tests in 46 suites pass.
+- Dashboard: 716 tests in 61 files pass.
+- Lint, typecheck and the dashboard and backend builds pass.
+- The PostgreSQL CI job applies all 31 migrations, runs the migration
+  integration checks and smoke-tests the running API.
+
+### Not verified
+
+- PDF generation in a real browser under `puppeteer` 25.
+- The backend running under `@hono/node-server` 2 against production
+  traffic; only the CI smoke test and the test suite cover it.
+- The dashboard sign-in and join forms in a browser under
+  `@hookform/resolvers` 5; unit tests cover them.
+- Third-party API clients, if any exist.
+
+### Conclusion
+
+No breaking change was found for the web dashboard or the backend API
+as used by this repository's own clients. Two input-validation
+tightenings and the changed message wording are the known
+differences. A browser check of sign-in, join and a PDF download on a
+deployed test environment is recommended before acceptance.
+
+### Gate status after sections 12 and 13
+
+| Gate | Status |
+| --- | --- |
+| Migration inventory | Done for the repository. Deployed database history still needs database access. |
+| Dependabot alerts | Done. 76 of 79 cleared on this branch; 3 listed in section 12. |
+| Residual risks | Waiting for the owner: `uuid`, `minimatch`, `deepmerge`. |
+| Backward compatibility | Documented above. Browser check recommended. |
+| Parallel test failures | Documented in section 12. |
+| `main` branch protection | Reconfirmed. Requires 0 approving reviews. |
+| Independent review and acceptance | Waiting for the owner and a reviewer. |
