@@ -7,7 +7,7 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 
 | What | Where to get it |
 |------|-----------------|
-| Neon connection string | Neon console, the production branch, "Connection string" with `?sslmode=require` |
+| Neon connection string | Neon console, the production branch, "Connection string" with `?sslmode=require`. Turn **Connection pooling off** so the host has no `-pooler` in it: the migration runner holds a database lock that needs a direct connection |
 | Upstash Redis REST URL and token | Upstash console, the database, "REST API" |
 | Two JWT secrets | Run `openssl rand -hex 32` twice. The two values must be different |
 | Stripe live secret key (`sk_live_…`) | Stripe dashboard, Developers > API keys |

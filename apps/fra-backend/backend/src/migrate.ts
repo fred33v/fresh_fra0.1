@@ -1,11 +1,15 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDbPool } from './db.js';
+import { getDbPool, closeDbPool } from './db.js';
 import { createLogger } from './logger.js';
 import { computeResult } from './assessment-result.js';
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 
 const logger = createLogger('migrate');
+
+// A stable, application-specific advisory lock, shared by migration runners.
+const MIGRATION_LOCK = 'SELECT pg_advisory_lock(193477, 1)';
+const MIGRATION_UNLOCK = 'SELECT pg_advisory_unlock(193477, 1)';
 
 async function main() {
   const migrationsDir = join(process.cwd(), 'migrations');
@@ -19,50 +23,112 @@ async function main() {
   }
 
   const pool = getDbPool();
+  let client: PoolClient | undefined;
+  let locked = false;
 
-  // Create schema_migrations tracking table if it does not exist
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS public.schema_migrations (
-      version text PRIMARY KEY,
-      applied_at timestamptz DEFAULT now()
-    )
-  `);
+  try {
+    client = await pool.connect();
 
-  // Query already-applied migrations
-  const applied = await pool.query('SELECT version FROM public.schema_migrations');
-  const appliedSet = new Set(applied.rows.map((r: { version: string }) => r.version));
+    // Serialize migration runners before checking the migration history.
+    await client.query(MIGRATION_LOCK);
+    locked = true;
 
-  for (const file of files) {
-    if (appliedSet.has(file)) {
-      logger.info(`Skipping already-applied migration ${file}`);
-      continue;
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.schema_migrations (
+        version text PRIMARY KEY,
+        applied_at timestamptz DEFAULT now()
+      )
+    `);
+
+    const applied = await client.query(
+      'SELECT version FROM public.schema_migrations',
+    );
+    const appliedSet = new Set(
+      applied.rows.map((r: { version: string }) => r.version),
+    );
+
+    for (const file of files) {
+      if (appliedSet.has(file)) {
+        logger.info(`Skipping already-applied migration ${file}`);
+        continue;
+      }
+
+      const sql = readFileSync(join(migrationsDir, file), 'utf8');
+      logger.info(`Applying migration ${file}`);
+
+      await client.query('BEGIN');
+
+      try {
+        await client.query(sql);
+        await client.query(
+          'INSERT INTO public.schema_migrations (version) VALUES ($1)',
+          [file],
+        );
+        await client.query('COMMIT');
+        appliedSet.add(file);
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          logger.error('Migration rollback failed', {
+            error: String(rollbackError),
+          });
+        }
+        throw error;
+      }
     }
 
-    const fullPath = join(migrationsDir, file);
-    const sql = readFileSync(fullPath, 'utf8');
-    logger.info(`Applying migration ${file}`);
-    await pool.query(sql);
-    await pool.query('INSERT INTO public.schema_migrations (version) VALUES ($1)', [file]);
-  }
+    logger.info('Migrations applied');
 
-  logger.info('Migrations applied');
-  await backfillAssessmentResults(pool);
-  await pool.end();
+    // Preserve the existing historical assessment results backfill.
+    await backfillAssessmentResults(client);
+  } finally {
+    try {
+      if (client) {
+        try {
+          if (locked) {
+            await client.query(MIGRATION_UNLOCK);
+          }
+        } finally {
+          client.release();
+        }
+      }
+    } finally {
+      await closeDbPool();
+    }
+  }
 }
 
 /**
  * Assessments submitted before results were saved (031) get their result once,
  * computed from their answers with today's method. updated_at is left alone.
  */
-async function backfillAssessmentResults(pool: Pool) {
-  const { rows } = await pool.query<{ id: string; answers: Record<string, unknown>; submitted_at: Date | null }>(
+async function backfillAssessmentResults(client: PoolClient) {
+  const { rows } = await client.query<{
+    id: string;
+    answers: Record<string, unknown>;
+    submitted_at: Date | null;
+  }>(
     "SELECT id, answers, submitted_at FROM public.assessments WHERE status IN ('submitted', 'completed') AND result IS NULL",
   );
+
   for (const r of rows) {
-    const result = computeResult({ id: r.id, answers: r.answers ?? {} });
-    await pool.query('UPDATE public.assessments SET result = $1 WHERE id = $2 AND result IS NULL', [JSON.stringify(result), r.id]);
+    const result = computeResult({
+      id: r.id,
+      answers: r.answers ?? {},
+    });
+
+    await client.query(
+      'UPDATE public.assessments SET result = $1 WHERE id = $2 AND result IS NULL',
+      [JSON.stringify(result), r.id],
+    );
   }
-  if (rows.length) logger.info(`Saved the result of ${rows.length} assessment(s) submitted before results were kept`);
+
+  if (rows.length) {
+    logger.info(
+      `Saved the result of ${rows.length} assessment(s) submitted before results were kept`,
+    );
+  }
 }
 
 main().catch((err) => {
