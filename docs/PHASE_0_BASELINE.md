@@ -277,3 +277,128 @@ explicit project-owner approval.
 
 Phase 1 remains blocked until the active web/backend
 Phase 0 acceptance requirements have been satisfied.
+
+## 12. Phase 0 reconciliation evidence — 12 November 2026
+
+This section supplements the evidence above. It records checks made
+on branch `phase-0/zod-security-migration` and does not record any
+acceptance decision.
+
+### Migration inventory
+
+- The `migrations` directory holds 31 files, `001_init.sql` to
+  `031_assessment_results.sql`, with no gaps and no duplicate numbers.
+- The file names match the table in section 3 exactly.
+- The migration files on this branch are identical to those on `main`.
+- No migration uses `CREATE INDEX CONCURRENTLY` or its own
+  `BEGIN`/`COMMIT`, so each file can run inside the per-file
+  transaction the runner now uses.
+
+Not checked: the `schema_migrations` history of any deployed
+database. That needs read access to the database and remains open.
+
+### `main` ruleset and security settings
+
+Read from the GitHub API on 12 November 2026:
+
+- One ruleset, `main`, is active on the default branch with no bypass actors.
+- It blocks branch deletion and non-fast-forward updates.
+- It requires a pull request and the five CI checks (Lint & Typecheck,
+  Test, Database (PostgreSQL), Terraform validate, Build), with the
+  branch up to date before merging.
+- **The required number of approving reviews is 0.** The ruleset does
+  not enforce the independent review that Phase 0 acceptance calls for.
+- Classic branch protection is not in use.
+- Secret scanning, push protection, Dependabot alerts and Dependabot
+  security updates are enabled. The repository is public.
+
+### Development dependency remediation
+
+Section 11 covered production dependencies only. The full audit
+(`pnpm audit`, development dependencies included) reported 62 findings
+on this branch: 17 high, 35 moderate, 10 low. They were in test,
+lint and build tools.
+
+Changes made, all within the major version already in use:
+
+- `vitest` and `@vitest/coverage-v8` 4.1.0 → 4.1.12.
+- `vite` 6.4.5 → 6.4.6 in the dashboard. The three shared packages now
+  declare `vite@^6.4.6`, so their tests no longer pull in `vite@7.3.1`.
+- `turbo` 2.8.0 → 2.11.11.
+- Overrides for `undici@7`, `flatted@3`, `form-data@4`, `ajv@6`,
+  `yaml@1`, `@tootallnate/once@2`, `@humanfs/node@0.16` and
+  `@babel/plugin-transform-modules-systemjs@7`.
+
+Result:
+
+| Audit | Before | After |
+| --- | --- | --- |
+| `pnpm audit` (all dependencies) | 17 high, 35 moderate, 10 low | 0 high, 2 moderate, 1 low |
+| `pnpm audit --prod` | 1 low | 1 low |
+
+### Dependabot alert reconciliation
+
+The 79 open Dependabot alerts on `main` (28 high, 37 medium, 14 low)
+were compared, by advisory ID, with the full audit of this branch.
+76 are no longer present on this branch. Three remain:
+
+| Alert | Package | Severity | Path | Why it remains |
+| --- | --- | --- | --- | --- |
+| #40 | `uuid@3.4.0` | Medium | `@expo/ngrok` in the three Expo apps (development tunnel) | Fixed only in `uuid` 11, which is not compatible with `@expo/ngrok` |
+| #119 | `minimatch@9.0.9` | Medium | `eslint-config-expo` → `typescript-eslint` (lint tooling) | Fixed only in `minimatch` 11, outside the range `typescript-eslint` supports |
+| #104 | `deepmerge@4.3.1` | Low | Expo (production), Jest (development) | No patched version; local patch in `patches/` |
+
+None of the three is in the web dashboard or in backend production
+code. They are proposed residual risks and need an owner decision.
+GitHub will close the 76 alerts only after this branch reaches `main`.
+
+### Parallel test failures
+
+Cause found: CPU oversubscription. `turbo run test` without a
+concurrency limit starts every package's test runner at once, each
+with its own pool of workers. On an 8-core machine the load average
+reached 190 and tests failed only by exceeding their time limits
+(213 timeout messages, no assertion failures).
+
+| Run | Result |
+| --- | --- |
+| `turbo run test --force` (parallel) | Failed: 31 dashboard tests, all timeouts; the backend run was cut short |
+| `turbo run test --concurrency=1 --force` | Passed: 11 of 11 tasks, 0 timeouts |
+| Backend alone, default workers | Passed: 643 tests in 67 s |
+
+One sequential run also failed (23 backend tests, all timeouts) while
+the machine was under other load (load average above 40); the same
+suite then passed three times.
+
+The reliable configuration is the one already in use: the root `test`
+script and CI both run `turbo run test --concurrency=1`. No test
+needed changing.
+
+### Local validation of this change
+
+- `pnpm install --frozen-lockfile`: passed.
+- `pnpm run lint`: passed.
+- `pnpm run typecheck`: passed.
+- `turbo run test --concurrency=1 --force`: 11 of 11 tasks passed —
+  backend 643, dashboard 716, mobile-app 279, ui-core 230, shared 155,
+  budget-guide 74, training-app 68, types 46.
+- Dashboard and backend builds: passed.
+
+The Expo web exports and the PostgreSQL job were not run locally;
+they run in GitHub CI.
+
+### Remaining acceptance gates
+
+- [x] Reconcile the migration inventory against the repository tree.
+- [ ] Reconcile the migration history of deployed databases.
+- [x] Reconcile applicable Dependabot security alerts.
+- [ ] Obtain explicit approval or remediation of the three residual risks.
+- [ ] Document web/backend backward-compatibility conclusions.
+- [x] Document the cause of the parallel test failures and a reliable configuration.
+- [x] Reconfirm effective `main` branch protection.
+- [ ] Decide whether the ruleset should require an approving review.
+- [ ] Verify the five CI checks on the final pull request commit.
+- [ ] Obtain independent review and record final Phase 0 acceptance.
+
+PR #69 remains Draft and must not be merged without
+explicit project-owner approval. Phase 1 remains blocked.

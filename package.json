@@ -23,11 +23,11 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "prettier": "^3.2.0",
-    "turbo": "^2.3.0",
+    "turbo": "^2.11.11",
     "typescript": "^5.7.0"
   },
   "engines": {
@@ -90,7 +90,15 @@
       "@expo/metro-config>glob": "14.0.2",
       "@expo/fingerprint>glob": "14.0.2",
       "@expo/cli>minimatch": "11.0.5",
-      "@expo/fingerprint>minimatch": "11.0.5"
+      "@expo/fingerprint>minimatch": "11.0.5",
+      "undici@7": "^7.30.1",
+      "flatted@3": "^3.4.2",
+      "form-data@4": "^4.0.6",
+      "ajv@6": "^6.14.0",
+      "yaml@1": "^1.10.3",
+      "@tootallnate/once@2": "^2.0.1",
+      "@humanfs/node@0.16": "^0.16.8",
+      "@babel/plugin-transform-modules-systemjs@7": "^7.29.4"
     },
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
