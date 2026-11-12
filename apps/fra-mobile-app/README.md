@@ -23,7 +23,7 @@ Whenever you make a change in your local code editor and push it to GitHub, it w
 
 This app lives in the Stop FRA pnpm monorepo and uses the shared `@stopfra/shared` and `@stopfra/ui-core` packages from `packages/`. Install from the repository root with pnpm, not from this folder: installing here (for example with `bun i` or `npm i`) does not link those packages.
 
-You need Node.js 20 or later and pnpm 9 (`corepack enable` sets up the version the repo pins). The shared packages are read from source, so there is no build step before starting the app, and the Rork toolkit is optional: the Metro config uses it only when it is installed.
+You need Node.js 22 or later and pnpm 9 (`corepack enable` sets up the version the repo pins). The shared packages are read from source, so there is no build step before starting the app, and the Rork toolkit is optional: the Metro config uses it only when it is installed.
 
 ```bash
 # Step 1: Clone the repository and install everything from the root
