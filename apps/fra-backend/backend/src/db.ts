@@ -6,12 +6,16 @@ const logger = createLogger('db');
 
 let pool: Pool | null = null;
 
-export function getDbPool(): Pool {
+/**
+ * The first call creates the pool. `direct` picks DATABASE_URL_UNPOOLED when it is set
+ * (Neon's direct connection, for migrations); everything else uses the pooled DATABASE_URL.
+ */
+export function getDbPool({ direct = false }: { direct?: boolean } = {}): Pool {
   if (pool) return pool;
 
   dns.setDefaultResultOrder('ipv4first');
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = (direct && process.env.DATABASE_URL_UNPOOLED) || process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }

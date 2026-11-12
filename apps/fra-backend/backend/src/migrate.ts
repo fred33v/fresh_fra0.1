@@ -1,3 +1,5 @@
+// Must stay the first import: modules below read process.env when they load
+import './env.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getDbPool } from './db.js';
@@ -18,7 +20,8 @@ async function main() {
     return;
   }
 
-  const pool = getDbPool();
+  // Migrations run over the direct connection: a pooled one drops session state
+  const pool = getDbPool({ direct: true });
 
   // Create schema_migrations tracking table if it does not exist
   await pool.query(`
