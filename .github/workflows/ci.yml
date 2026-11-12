@@ -68,6 +68,9 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Security regression tests
+        run: pnpm run test:security
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -483,3 +483,56 @@ deployed test environment is recommended before acceptance.
 | Parallel test failures | Documented in section 12. |
 | `main` branch protection | Reconfirmed. Requires 0 approving reviews. |
 | Independent review and acceptance | Waiting for the owner and a reviewer. |
+
+## 14. Residual risk remediation — 12 November 2026
+
+This section supersedes the "three remain" table in section 12 and
+the "Residual risks" row in section 13.
+
+| Package | Advisory | Action | Result |
+| --- | --- | --- | --- |
+| `uuid@3.4.0` | GHSA-w5hq-g745-h8pq | Override `@expo/ngrok>uuid` to `^11.1.1` | Removed. `@expo/ngrok` only calls `uuid.v4()`, which 11.1.1 provides; the module loads and returns a valid ID. |
+| `minimatch@9.0.9` | GHSA-g3hv-75wg-m249 | Override `@typescript-eslint/typescript-estree>minimatch` to `11.0.5` | Removed. Lint passes in every workspace with the new version. |
+| `deepmerge@4.3.1` | GHSA-gcqx-w48m-w2h4 | No fixed release exists. The existing patch in `patches/` is now proven by a regression test. | Mitigated, still reported by scanners. |
+
+### deepmerge
+
+`tests/security/deepmerge-prototype.test.cjs` checks every installed
+copy of `deepmerge`. It feeds hostile `__proto__` input as source and
+as target, through `merge`, `merge.all` and `clone: false`, and
+confirms the result keeps the normal prototype.
+
+- With the patch applied: 13 of 13 tests pass.
+- Against an unpatched `deepmerge@4.3.1`: 2 tests fail, which shows
+  the test detects the vulnerability and the patch closes it.
+- The test also fails if the installed version changes, so the patch
+  cannot silently stop applying.
+
+`pnpm audit` and Dependabot match on the version number and cannot
+see the patch. They will keep reporting this advisory (alert #104)
+until upstream publishes a fix. It was not added to an audit ignore
+list; dismissing alert #104 on GitHub is an owner decision.
+
+### Security tests now run in CI
+
+The three files in `tests/security/` were not run by any script.
+A root script `test:security` and a step in the CI **Test** job now
+run them (26 tests).
+
+### Audit after this change
+
+| Audit | Result |
+| --- | --- |
+| `pnpm audit` (all dependencies) | 1 low (`deepmerge`, patched locally) |
+| `pnpm audit --prod` | 1 low (`deepmerge`, patched locally) |
+
+Of the 79 Dependabot alerts on `main`, 78 are no longer present on
+this branch.
+
+### Local validation
+
+Frozen-lockfile install, lint, typecheck and
+`turbo run test --concurrency=1 --force` (11 of 11 tasks) passed.
+
+Not verified: an actual `expo start --tunnel` session through
+`@expo/ngrok`. Mobile validation is suspended under section 10.
