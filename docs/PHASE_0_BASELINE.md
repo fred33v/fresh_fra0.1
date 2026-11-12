@@ -534,5 +534,19 @@ this branch.
 Frozen-lockfile install, lint, typecheck and
 `turbo run test --concurrency=1 --force` (11 of 11 tasks) passed.
 
-Not verified: an actual `expo start --tunnel` session through
-`@expo/ngrok`. Mobile validation is suspended under section 10.
+### Tunnel session test
+
+A real tunnel session was run in `apps/fra-training-app` with
+`npx expo start --tunnel`, using `@expo/ngrok` with `uuid@11.1.1`:
+
+- Expo reported "Tunnel connected" and "Tunnel ready", and ngrok
+  listed a public `exp.direct` address forwarding to the dev server.
+- The app manifest was fetched through the public address (HTTP 200,
+  app name "FRA Training").
+- The iOS JavaScript bundle was fetched through the public address
+  (HTTP 200, 13.7 MB, 3386 modules bundled by Metro).
+- The server and tunnel were then stopped; the public address
+  returned 404 afterwards.
+
+Not verified: opening the app on a phone or simulator through the
+tunnel. Mobile validation is suspended under section 10.
