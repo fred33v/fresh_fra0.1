@@ -721,6 +721,9 @@ importers:
       '@stopfra/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@stopfra/ui-core':
+        specifier: workspace:*
+        version: link:../../packages/ui-core
       '@tanstack/react-query':
         specifier: ^5.83.0
         version: 5.90.20(react@19.1.0)

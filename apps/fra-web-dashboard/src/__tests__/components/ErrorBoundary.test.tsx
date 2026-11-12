@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-function ProblemChild() {
+function ProblemChild(): never {
   throw new Error('Test error');
 }
 

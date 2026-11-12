@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ChartFigure } from '@/components/ChartFigure';
@@ -45,8 +45,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   culture: '#10B981',      // Green
 };
 
-// Risk levels for reference (not currently used in render but available for future enhancement)
-const _RISK_LEVELS = [
+// Risk levels shared by the mitigation form.
+const RISK_LEVELS = [
   { value: 'low', label: 'Low', color: '#10B981' },
   { value: 'medium', label: 'Medium', color: '#F59E0B' },
   { value: 'high', label: 'High', color: '#EF4444' },
@@ -77,7 +77,7 @@ function comparisonSummary(recommended: Slice[], actual: Slice[]): string {
 
 export function BudgetGuidePage() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
-  const _navigate = useNavigate();
+
 
   // The score of the assessment in the link, as its results page shows it
   const [riskScore, setRiskScore] = useState<number | null>(null);
@@ -594,10 +594,9 @@ export function BudgetGuidePage() {
                     }
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
+                    {RISK_LEVELS.map(({ value, label }) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
               </div>

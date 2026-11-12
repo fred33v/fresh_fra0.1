@@ -12,12 +12,11 @@ import {
   checkFormLabels,
   checkImageAltText,
   checkAriaAttributes,
-  checkKeyboardNavigation,
   runAccessibilityAudit,
 } from './accessibility-audit';
 
 test.describe('WCAG AA Accessibility Audit', () => {
-  test('Home page should be accessible', async ({ authenticatedPage: page, testData }) => {
+  test('Home page should be accessible', async ({ authenticatedPage: page }) => {
     // Home page should be accessible without auth
     await page.goto('/');
     
@@ -29,7 +28,7 @@ test.describe('WCAG AA Accessibility Audit', () => {
     expect(headingAudit.headings.length).toBeGreaterThanOrEqual(0); // 0 or more is OK
   });
 
-  test('Assessment page should meet WCAG AA standards', async ({ authenticatedPage: page, testData }) => {
+  test('Assessment page should meet WCAG AA standards', async ({ authenticatedPage: page }) => {
     // Navigate to assessment with proper path
     await navigateToPage(page, '/assessment', 8000);
 
@@ -270,7 +269,7 @@ test.describe('Mobile Accessibility', () => {
         const minSize = Math.min(buttons.width, buttons.height);
         // If too small, that's OK - some buttons may be intentionally small
         // Just verify we can detect the size
-        expect(buttons.width > 0 && buttons.height > 0).toBeTruthy();
+        expect(minSize).toBeGreaterThan(0);
       } else {
         test.skip();
       }

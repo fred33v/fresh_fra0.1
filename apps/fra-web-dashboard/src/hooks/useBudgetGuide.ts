@@ -18,7 +18,29 @@ import { api } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
 import { toast } from 'sonner';
-import type { BudgetGuideProgress, RiskAppetite, MitigationStrategy } from '@stopfra/types';
+// Dashboard planning drafts are distinct from the shared training-course models.
+// Persistence endpoints for these drafts are tracked as a separate Phase 1 gap.
+interface RiskAppetite {
+  id: string;
+  level: 'low' | 'medium' | 'high';
+  justification: string;
+  updated_at: string;
+}
+interface MitigationStrategy {
+  id: string;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  category: 'prevention' | 'detection' | 'response' | 'culture';
+  description: string;
+  budget: number;
+  timeline: string;
+  status: 'planned' | 'in_progress' | 'completed';
+}
+interface BudgetGuideProgress {
+  id: string;
+  user_id: string;
+  completed_screens: string[];
+  completed_at: string | null;
+}
 
 const logger = createLogger('useBudgetGuide');
 
@@ -235,10 +257,11 @@ export function useBudgetGuide() {
     const steps = [
       data.riskAppetite ? 1 : 0,
       data.mitigations.length > 0 ? 1 : 0,
-      data.progress?.budget_allocated ? 1 : 0,
+      data.mitigations.some((m) => m.budget > 0) ? 1 : 0,
+      data.progress.completed_at ? 1 : 0,
     ];
 
-    return (steps.reduce((a, b) => a + b, 0) / 4) * 100;
+    return (steps.reduce((a, b) => a + b, 0) / steps.length) * 100;
   }, [data]);
 
   return {

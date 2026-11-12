@@ -1,3 +1,4 @@
+import type { QuizQuestion } from '@stopfra/types';
 export type OrgSector = 'public' | 'charity' | 'private';
 export type AppRole = 'admin' | 'facilitator' | 'participant';
 
