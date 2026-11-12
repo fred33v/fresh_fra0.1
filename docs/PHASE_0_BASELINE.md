@@ -674,3 +674,61 @@ This supersedes the "Independent review" row in section 16.
 | Final acceptance | **Not recorded.** Waits for the database gate. |
 
 PR #69 remains Draft. Phase 1 remains blocked.
+
+## 18. Deployed database history and final acceptance — 12 November 2026
+
+### Migration history of the deployed database
+
+The only deployed database is the Neon project "fraud risk", branch
+`production`, database `neondb`, created 31 October 2026.
+
+The project owner ran
+`SELECT version FROM schema_migrations ORDER BY 1;` against it and
+reported that the table does not exist. The migration runner creates
+that table before applying anything, so no migration has been
+applied to this database through the runner. There is no applied
+history to reconcile with the 31 files.
+
+On the first deploy the runner will create `schema_migrations` and
+apply `001_init.sql` to `031_assessment_results.sql` in order, each
+in its own transaction.
+
+Limits of this evidence:
+
+- The result was reported by the owner. The assistant could not read
+  the production database, and the exact error text was not recorded.
+- Whether the `public` schema holds tables created some other way was
+  not checked. If it does, `001_init.sql` could fail on first deploy.
+  Check with
+  `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
+  before deploying, and follow the snapshot step in `infra/LAUNCH.md`.
+
+### Final gate status
+
+| Gate | Status |
+| --- | --- |
+| Migration inventory (repository) | Done |
+| Migration history of the deployed database | Done: none applied, as reported by the owner |
+| Dependabot alerts | Done: 78 of 79 cleared on this branch |
+| Residual risks | Done: two removed, `deepmerge` accepted by the owner |
+| Backward compatibility | Done, with a local browser check |
+| Parallel test failures | Done: cause documented, CI runs sequentially |
+| `main` branch protection | Done: owner keeps 0 required approvals |
+| Five CI checks | Passed on `e8747f8`; re-run on the commit adding this section |
+| Independent review | Waived by the owner |
+
+### Phase 0 acceptance
+
+The project owner accepted Phase 0 for the web dashboard and backend
+scope on 12 November 2026, with these recorded conditions:
+
+- `deepmerge` (GHSA-gcqx-w48m-w2h4) is an accepted residual risk,
+  mitigated by a local patch and its regression test.
+- Independent review was waived.
+- The browser check was local, not on a deployed environment.
+- Mobile validation stays suspended under section 10. Native builds
+  and on-device behaviour must be checked before any mobile release.
+
+Acceptance does not merge anything. PR #69 still needs the owner's
+explicit approval to leave Draft and merge. The Phase 1 gate in
+sections 7 to 11 is satisfied once PR #69 is merged into `main`.
