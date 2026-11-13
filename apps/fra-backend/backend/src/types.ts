@@ -49,7 +49,7 @@ export type Organisation = {
   updatedAt: string;
 };
 
-export type PurchaseStatus = 'requires_confirmation' | 'succeeded' | 'failed' | 'refunded';
+export type PurchaseStatus = 'requires_confirmation' | 'succeeded' | 'failed' | 'refunded' | 'disputed';
 
 export type Purchase = {
   id: string;
@@ -59,6 +59,9 @@ export type Purchase = {
   status: PurchaseStatus;
   paymentIntentId?: string;
   clientSecret?: string;
+  refundedAmountCents?: number;
+  paymentReconciledAt?: string;
+  disputeStatus?: string;
   /** Stripe Checkout Session paying for this purchase (when Stripe is configured). */
   checkoutSessionId?: string;
   amountCents: number;

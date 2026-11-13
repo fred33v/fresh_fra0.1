@@ -182,6 +182,12 @@ jobs:
           TRANSACTION_TEST_DATABASE: '1'
         run: node scripts/transaction-integration.mjs
 
+      - name: Payment lifecycle and durable receipts (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          PAYMENT_TEST_DATABASE: '1'
+        run: node --import tsx scripts/payment-integration.mjs
+
       - name: Ensure Chrome for certificate PDF tests
         working-directory: apps/fra-backend/backend
         run: pnpm exec puppeteer browsers install chrome
