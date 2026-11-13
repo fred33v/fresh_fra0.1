@@ -59,3 +59,28 @@ Both test processes were stopped. No migration, application data write, external
 - Finish the rest of the production configuration, including Redis, before claiming production readiness. Rotate the database password shared in chat.
 
 The build and HTTPS read-only query passed. A working application-to-PostgreSQL end-to-end flow has **not** been demonstrated.
+
+## Authenticated deployment follow-up — 13 November 2026
+
+This supersedes the earlier API-authentication and project-identity blockers. The user supplied a Neon API credential, kept out of Git and tool output. The CLI verified that `br-long-sunset-za8gukq9` is the ready/default `production` branch of project `patient-surf-03013684`.
+
+`neon config plan` reported no changes and only Postgres in use. `neon deploy` then completed successfully:
+
+```text
+Applying to branch production (br-long-sunset-za8gukq9)
+No changes — branch production already matches the policy.
+Utilized services: Postgres
+Pulled 5 Neon variables into .env.local
+```
+
+The five names are `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_BRANCH`, `NEON_BRANCH_ID` and `NEON_FUNCTION_HOST_SUFFIX`. Branch metadata matches production and the supplied branch ID. The environment file was restricted to mode 0600 after the pull. The direct URL is now the official CLI-provided value, replacing the earlier derived value.
+
+Using the freshly pulled values:
+
+- `npm run build`: **5 successful, 5 total**, **23.611s**.
+- HTTPS read-only diagnostic: probe 1, read-only true, public table count 0, no users table or migration history.
+- Native pooled and direct PostgreSQL probes: **ECONNREFUSED**.
+- Built backend `/health`: **503**, database error; Redis not configured.
+- Built dashboard: **200**.
+
+Both local startup test processes were stopped. No production migration or application-data write was performed. Neon API authentication and config deployment are now confirmed. Native database reachability, schema initialization and full application end-to-end validation remain unresolved; the successful HTTPS diagnostic does not substitute for the native `pg` connection used by this app. Shared credentials must be rotated after configuration.
