@@ -96,9 +96,6 @@ importers:
 
   apps/fra-backend/backend:
     dependencies:
-      '@stopfra/types':
-        specifier: workspace:*
-        version: link:../../../packages/types
       '@aws-sdk/client-cloudwatch':
         specifier: ^3.1152.0
         version: 3.1161.0
@@ -111,6 +108,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.3
         version: 2.1.3(hono@4.13.13)
+      '@stopfra/types':
+        specifier: workspace:*
+        version: link:../../../packages/types
       '@upstash/redis':
         specifier: ^1.34.9
         version: 1.36.1
@@ -635,8 +635,8 @@ importers:
   apps/fra-web-dashboard:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^5.9.2
-        version: 5.9.2(@sinclair/typebox@0.34.48)(@standard-schema/spec@1.1.0)(react-hook-form@7.71.1(react@19.1.0))(zod@4.6.7)
+        specifier: ^7.0.5
+        version: 7.0.5(@standard-schema/spec@1.1.0)(react-hook-form@7.71.1(react@19.1.0))(zod@4.6.7)
       '@radix-ui/react-accordion':
         specifier: ^1.2.11
         version: 1.2.12(@types/react-dom@19.1.11(@types/react@19.1.17))(@types/react@19.1.17)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -2526,22 +2526,20 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@hookform/resolvers@5.9.2':
-    resolution: {integrity: sha512-RtjTnZqsC38s4NKp2XO3fD8IA5uyN4tB7McQ5C6uiMPcV+WWO8F+wVa3e+BXUpH2ScgxghAlwFRMVqjT9WChAQ==}
+  '@hookform/resolvers@7.0.5':
+    resolution: {integrity: sha512-E7ca3tpIJxHPGhFOfXLlCCZh7up6EcnUTbgTt0SRUENXagq8DJnob9rK+VqsNCsfUuO6mMU5NYNm6BaL18flgQ==}
     peerDependencies:
-      '@sinclair/typebox': '>=0.25.24'
       '@standard-schema/spec': ^1.0.0
-      '@typeschema/main': '>=0.13.7'
       '@vinejs/vine': ^2.0.0 || ^3.0.0 || ^4.0.0
       ajv: ^8.12.0
       ajv-errors: ^3.0.0
-      ajv-formats: ^2.1.1
+      ajv-formats: ^2.1.1 || ^3.0.0
       arktype: ^2.0.0
       ata-validator: ^1.23.0
       class-transformer: '>=0.4.0'
       class-validator: '>=0.12.0'
       computed-types: ^1.0.0
-      effect: ^3.10.3
+      effect: ^4.0.0
       fluentvalidation-ts: ^3.0.0
       fp-ts: ^2.7.0
       io-ts: ^2.0.0
@@ -2550,16 +2548,13 @@ packages:
       react-hook-form: ^7.55.0
       superstruct: '>=0.12.0'
       typanion: ^3.3.2
+      typebox: ^1.0.0
       valibot: '>=0.31.0 || ^1.0.0-beta.4 || ^1.0.0-rc'
       vest: '>=6.0.0'
       yup: ^1.0.0
       zod: ^3.25.0 || ^4.0.0
     peerDependenciesMeta:
-      '@sinclair/typebox':
-        optional: true
       '@standard-schema/spec':
-        optional: true
-      '@typeschema/main':
         optional: true
       '@vinejs/vine':
         optional: true
@@ -2594,6 +2589,8 @@ packages:
       superstruct:
         optional: true
       typanion:
+        optional: true
+      typebox:
         optional: true
       valibot:
         optional: true
@@ -11013,12 +11010,11 @@ snapshots:
     dependencies:
       hono: 4.13.13
 
-  '@hookform/resolvers@5.9.2(@sinclair/typebox@0.34.48)(@standard-schema/spec@1.1.0)(react-hook-form@7.71.1(react@19.1.0))(zod@4.6.7)':
+  '@hookform/resolvers@7.0.5(@standard-schema/spec@1.1.0)(react-hook-form@7.71.1(react@19.1.0))(zod@4.6.7)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.71.1(react@19.1.0)
     optionalDependencies:
-      '@sinclair/typebox': 0.34.48
       '@standard-schema/spec': 1.1.0
       zod: 4.6.7
 
