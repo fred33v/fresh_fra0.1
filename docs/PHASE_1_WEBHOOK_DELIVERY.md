@@ -1,5 +1,7 @@
 # Phase 1 — Durable outgoing webhook delivery
 
+> Follow-up: [atomic publication and assessment budget planning](PHASE_1_DOMAIN_PUBLICATION_AND_BUDGET.md) now implements the publication/planning gaps described below locally. Earlier validation counts remain historical.
+
 Prepared on 13 November 2026. This addresses the outgoing retry/restart portion of F10. All work is local; no real receiver was contacted, no application was deployed and no GitHub write/merge was performed.
 
 ## Behavior and compatibility

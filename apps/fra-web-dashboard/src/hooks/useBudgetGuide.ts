@@ -1,175 +1,162 @@
-/**
- * useBudgetGuide Hook
- * 
- * Manages the budget guide workflow:
- * - Track risk appetite setting
- * - Save mitigation strategies
- * - Monitor progress through budget allocation
- * - Generate recommendations based on risks
- * 
- * Backend endpoints used:
- * - GET /api/v1/budget-guide/progress
- * - PATCH /api/v1/budget-guide/risk-appetite
- * - POST /api/v1/budget-guide/mitigation
- */
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { createLogger } from '@/lib/logger';
 import { toast } from 'sonner';
-// Dashboard planning drafts are distinct from the shared training-course models.
-// Persistence endpoints for these drafts are tracked as a separate Phase 1 gap.
-interface RiskAppetite {
-  id: string;
-  level: 'low' | 'medium' | 'high';
-  justification: string;
-  updated_at: string;
-}
-interface MitigationStrategy {
-  id: string;
-  risk_level: 'low' | 'medium' | 'high' | 'critical';
-  category: 'prevention' | 'detection' | 'response' | 'culture';
-  description: string;
-  budget: number;
-  timeline: string;
-  status: 'planned' | 'in_progress' | 'completed';
-}
-interface BudgetGuideProgress {
-  id: string;
-  user_id: string;
-  completed_screens: string[];
-  completed_at: string | null;
-}
-
+import type { BudgetPlanningPlan, BudgetPlanningMitigationInput } from '@stopfra/types';
 const logger = createLogger('useBudgetGuide');
-
-interface BudgetGuideData {
-  progress: BudgetGuideProgress | null;
-  riskAppetite: RiskAppetite | null;
-  mitigations: MitigationStrategy[];
-}
-
-export function useBudgetGuide() {
+export function useBudgetGuide(assessmentId?: string) {
   const { user } = useAuth();
-  const [data, setData] = useState<BudgetGuideData>({
-    progress: null,
-    riskAppetite: null,
-    mitigations: [],
+  const identity = `${user?.userId ?? ''}:${assessmentId ?? ''}`;
+  const active = useRef(identity);
+  active.current = identity;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [stored, setStored] = useState<{ identity: string; plan: BudgetPlanningPlan | null }>({
+    identity,
+    plan: null,
   });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * Fetch budget guide progress
-   */
+  const current = useRef(stored);
+  current.current = stored;
+  const [isLoading, setLoading] = useState(false),
+    [isSaving, setSaving] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  const busy = useRef(false),
+    sequence = useRef(0);
+  const valid = useCallback((key: string) => mounted.current && active.current === key, []);
+  const plan = stored.identity === identity ? stored.plan : null;
+  const data = useMemo(
+    () => ({
+      progress: plan,
+      riskAppetite: plan?.riskAppetite ?? null,
+      mitigations: plan?.mitigations ?? [],
+    }),
+    [plan]
+  );
   const fetchProgress = useCallback(async () => {
-    if (!user) return;
-
-    setIsLoading(true);
+    const key = identity;
+    if (!user?.userId || !assessmentId) return;
+    if (busy.current) return;
+    const seq = ++sequence.current;
+    setLoading(true);
     setError(null);
-
     try {
-      const progress = await api.get<BudgetGuideProgress>(
-        '/api/v1/budget-guide/progress'
+      let next = await api.get<BudgetPlanningPlan | null>(
+        `/api/v1/budget-guide/plans/${assessmentId}`
       );
-      setData((prev) => ({
-        ...prev,
-        progress,
-      }));
-    } catch (err: unknown) {
-      const errorMsg = (err instanceof Error ? err.message : 'Failed to fetch progress');
-      logger.error('Error fetching progress', err);
-      setError(errorMsg);
-      toast.error(errorMsg);
+      if (!valid(key) || seq !== sequence.current) return;
+      if (!next)
+        next = await api.post<BudgetPlanningPlan>(`/api/v1/budget-guide/plans/${assessmentId}`, {});
+      if (valid(key) && seq === sequence.current) {
+        const state = { identity: key, plan: next };
+        current.current = state;
+        setStored(state);
+      }
+    } catch (err) {
+      if (valid(key) && seq === sequence.current) {
+        const message = err instanceof Error ? err.message : 'Could not load budget plan';
+        setError(message);
+        logger.error('Budget load failed', err);
+      }
     } finally {
-      setIsLoading(false);
+      if (valid(key) && seq === sequence.current) setLoading(false);
     }
-  }, [user]);
-
-  /**
-   * Set or update risk appetite
-   */
+  }, [identity, user?.userId, assessmentId, valid]);
+  const mutate = useCallback(
+    async (
+      path: string,
+      method: 'post' | 'patch' | 'delete',
+      payload: Record<string, unknown> = {}
+    ) => {
+      const key = identity;
+      const saved = current.current.identity === key ? current.current.plan : null;
+      if (!saved || !assessmentId) throw new Error('Load the saved plan before editing');
+      if (busy.current) throw new Error('Wait for the current save to finish');
+      busy.current = true;
+      ++sequence.current;
+      setSaving(true);
+      setLoading(false);
+      setError(null);
+      const base = `/api/v1/budget-guide/plans/${assessmentId}${path}`;
+      try {
+        const next =
+          method === 'delete'
+            ? await api.delete<BudgetPlanningPlan>(`${base}?expectedVersion=${saved.version}`)
+            : await api[method]<BudgetPlanningPlan>(base, {
+                ...payload,
+                expectedVersion: saved.version,
+              });
+        if (!valid(key)) throw new Error('The active account or assessment changed');
+        const state = { identity: key, plan: next };
+        current.current = state;
+        setStored(state);
+        return next;
+      } catch (err) {
+        if (valid(key)) {
+          const message = err instanceof Error ? err.message : 'Could not save the budget plan';
+          setError(message);
+          logger.error('Budget save failed', err);
+          toast.error(message);
+        }
+        throw err;
+      } finally {
+        busy.current = false;
+        if (valid(key)) setSaving(false);
+      }
+    },
+    [identity, assessmentId, valid]
+  );
   const setRiskAppetite = useCallback(
-    async (appetite: RiskAppetite) => {
-      if (!user) return;
-
-      try {
-        const updated = await api.patch<RiskAppetite>(
-          '/api/v1/budget-guide/risk-appetite',
-          appetite
-        );
-        setData((prev) => ({
-          ...prev,
-          riskAppetite: updated,
-        }));
-        toast.success('Risk appetite updated');
-      } catch (err: unknown) {
-        const errorMsg = (err instanceof Error ? err.message : 'Failed to update risk appetite');
-        logger.error('Error setting risk appetite', err);
-        setError(errorMsg);
-        toast.error(errorMsg);
-      }
+    async (input: { level: 'low' | 'medium' | 'high'; justification: string }) => {
+      await mutate('/risk-appetite', 'patch', input);
+      toast.success('Risk appetite saved');
     },
-    [user]
+    [mutate]
   );
-
-  /**
-   * Add or update mitigation strategy
-   */
   const addMitigation = useCallback(
-    async (strategy: MitigationStrategy) => {
-      if (!user) return;
-
-      try {
-        const created = await api.post<MitigationStrategy>(
-          '/api/v1/budget-guide/mitigation',
-          strategy
-        );
-        setData((prev) => ({
-          ...prev,
-          mitigations: [...prev.mitigations, created],
-        }));
-        toast.success('Mitigation strategy added');
-      } catch (err: unknown) {
-        const errorMsg = (err instanceof Error ? err.message : 'Failed to add mitigation');
-        logger.error('Error adding mitigation', err);
-        setError(errorMsg);
-        toast.error(errorMsg);
-      }
+    async (input: BudgetPlanningMitigationInput) => {
+      await mutate('/mitigations', 'post', input);
+      toast.success('Strategy saved');
     },
-    [user]
+    [mutate]
   );
-
-  /**
-   * Update existing mitigation strategy
-   */
   const updateMitigation = useCallback(
-    async (id: string, strategy: Partial<MitigationStrategy>) => {
-      if (!user) return;
-
-      try {
-        const updated = await api.patch<MitigationStrategy>(
-          `/api/v1/budget-guide/mitigation/${id}`,
-          strategy
-        );
-        setData((prev) => ({
-          ...prev,
-          mitigations: prev.mitigations.map((m) =>
-            m.id === id ? updated : m
-          ),
-        }));
-        toast.success('Mitigation strategy updated');
-      } catch (err: unknown) {
-        const errorMsg = (err instanceof Error ? err.message : 'Failed to update mitigation');
-        logger.error('Error updating mitigation', err);
-        setError(errorMsg);
-        toast.error(errorMsg);
-      }
+    async (id: string, input: Partial<BudgetPlanningMitigationInput>) => {
+      await mutate(`/mitigations/${id}`, 'patch', input);
+      toast.success('Strategy updated');
     },
-    [user]
+    [mutate]
   );
-
+  const removeMitigation = useCallback(
+    async (id: string) => {
+      await mutate(`/mitigations/${id}`, 'delete');
+      toast.success('Strategy removed');
+    },
+    [mutate]
+  );
+  const completePlan = useCallback(async () => {
+    await mutate('/complete', 'post');
+    toast.success('Budget plan completed');
+  }, [mutate]);
+  const downloadReport = useCallback(async () => {
+    if (!assessmentId) throw new Error('Select an assessment');
+    try {
+      await api.download(
+        `/api/v1/budget-guide/plans/${assessmentId}/report`,
+        'budget-implementation-plan.html'
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not download report';
+      setError(message);
+      toast.error(message);
+      throw err;
+    }
+  }, [assessmentId]);
   /**
    * Calculate recommended allocation based on risk score
    */
@@ -272,11 +259,15 @@ export function useBudgetGuide() {
     isLoading,
     error,
 
+    isSaving,
     // Actions
     fetchProgress,
     setRiskAppetite,
     addMitigation,
     updateMitigation,
+    removeMitigation,
+    completePlan,
+    downloadReport,
     calculateRecommendedAllocation,
     calculateActualAllocation,
     getProgressPercentage,

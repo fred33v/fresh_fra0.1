@@ -1,9 +1,9 @@
 /**
  * Budget Guide Page
- * 
+ *
  * Guides employers through creating a fraud prevention budget plan
  * based on their assessed fraud risks.
- * 
+ *
  * Flow:
  * 1. View recommended budget based on assessment
  * 2. Set risk appetite level
@@ -15,16 +15,36 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { ChartFigure } from '@/components/ChartFigure';
 import { AlertCircle, TrendingUp, CheckCircle2, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useBudgetGuide } from '@/hooks/useBudgetGuide';
+import { useAuth } from '@/hooks/useAuth';
+import { useConfirm } from '@/hooks/useConfirm';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { createLogger } from '@/lib/logger';
 import type { AssessmentResults } from '@/types/assessment';
 
@@ -35,14 +55,15 @@ interface FormData {
   category: 'prevention' | 'detection' | 'response' | 'culture';
   description: string;
   budget: number;
-  timeline: string;
+  timeline: '1-3 months' | '3-6 months' | '6-12 months' | '12+ months';
+  status: 'planned' | 'in_progress' | 'completed';
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  prevention: '#3B82F6',   // Blue
-  detection: '#8B5CF6',    // Purple
-  response: '#EC4899',     // Pink
-  culture: '#10B981',      // Green
+  prevention: '#3B82F6', // Blue
+  detection: '#8B5CF6', // Purple
+  response: '#EC4899', // Pink
+  culture: '#10B981', // Green
 };
 
 // Risk levels shared by the mitigation form.
@@ -53,48 +74,65 @@ const RISK_LEVELS = [
   { value: 'critical', label: 'Critical', color: '#7C2D12' },
 ];
 
-
 type Slice = { name: string; value: number };
 
 /** Text alternative for an allocation pie chart: lists every share, largest first. */
 function allocationSummary(title: string, data: Slice[]): string {
-  const shares = data.filter(d => d.value > 0).sort((a, b) => b.value - a.value);
+  const shares = data.filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
   if (shares.length === 0) return `Pie chart: ${title}. Nothing allocated yet.`;
-  return `Pie chart: ${title}. ` + shares.map(d => `${d.name} ${d.value}%`).join(', ') + '.';
+  return `Pie chart: ${title}. ` + shares.map((d) => `${d.name} ${d.value}%`).join(', ') + '.';
 }
 
 /** Text alternative for the comparison chart: names the categories furthest from the recommendation. */
 function comparisonSummary(recommended: Slice[], actual: Slice[]): string {
   const gaps = recommended
     .map((d, i) => ({ name: d.name, gap: Number(((actual[i]?.value ?? 0) - d.value).toFixed(1)) }))
-    .filter(g => g.gap !== 0)
+    .filter((g) => g.gap !== 0)
     .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
-  if (gaps.length === 0) return 'Bar chart comparing recommended and current allocation. They match in every category.';
+  if (gaps.length === 0)
+    return 'Bar chart comparing recommended and current allocation. They match in every category.';
   const g = gaps[0];
-  return 'Bar chart comparing recommended and current allocation by category. ' +
-    `The biggest difference is ${g.name}: ${Math.abs(g.gap)} points ${g.gap > 0 ? 'above' : 'below'} the recommendation.`;
+  return (
+    'Bar chart comparing recommended and current allocation by category. ' +
+    `The biggest difference is ${g.name}: ${Math.abs(g.gap)} points ${g.gap > 0 ? 'above' : 'below'} the recommendation.`
+  );
 }
 
 export function BudgetGuidePage() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
+  const { user } = useAuth();
+  return <BudgetGuideContent key={`${user?.userId}:${assessmentId}`} assessmentId={assessmentId} />;
+}
 
+function BudgetGuideContent({ assessmentId }: { assessmentId?: string }) {
+  const confirm = useConfirm();
 
   // The score of the assessment in the link, as its results page shows it
   const [riskScore, setRiskScore] = useState<number | null>(null);
 
   const {
+    progress,
+    isLoading,
+    isSaving,
     riskAppetite,
     mitigations,
     error,
     fetchProgress,
     setRiskAppetite,
     addMitigation,
+    updateMitigation,
+    removeMitigation,
+    completePlan,
+    downloadReport,
     calculateRecommendedAllocation,
     calculateActualAllocation,
     getProgressPercentage,
-  } = useBudgetGuide();
+  } = useBudgetGuide(assessmentId);
 
   const [showMitigationDialog, setShowMitigationDialog] = useState(false);
+  const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('medium');
+  const [justification, setJustification] = useState('');
+  const [scoreError, setScoreError] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     riskLevel: 'medium',
@@ -102,32 +140,48 @@ export function BudgetGuidePage() {
     description: '',
     budget: 0,
     timeline: '3-6 months',
+    status: 'planned',
   });
 
+  const savedAppetiteLevel = riskAppetite?.level,
+    savedAppetiteReason = riskAppetite?.justification,
+    savedAppetiteTime = riskAppetite?.updated_at;
+  useEffect(() => {
+    if (savedAppetiteLevel) {
+      setRiskLevel(savedAppetiteLevel);
+      setJustification(savedAppetiteReason ?? '');
+    }
+  }, [savedAppetiteLevel, savedAppetiteReason, savedAppetiteTime]);
   useEffect(() => {
     fetchProgress();
   }, [fetchProgress]);
 
   useEffect(() => {
     if (!assessmentId) return;
-    api.get<AssessmentResults>(`/api/v1/assessments/${assessmentId}/results`)
+    api
+      .get<AssessmentResults>(`/api/v1/assessments/${assessmentId}/results`)
       .then((results) => setRiskScore(results.overallScore))
-      .catch((err) => logger.error('Error loading assessment results', err));
+      .catch((err) => {
+        setScoreError(true);
+        logger.error('Error loading assessment results', err);
+      });
   }, [assessmentId]);
 
   const handleAddMitigation = async () => {
-    if (!formData.description || formData.budget === 0) return;
+    if (!formData.description.trim() || !Number.isFinite(formData.budget) || formData.budget < 0)
+      return;
 
     try {
-      await addMitigation({
-        id: editingId || `mitigation-${Date.now()}`,
+      const input = {
         risk_level: formData.riskLevel,
         category: formData.category,
         description: formData.description,
         budget: formData.budget,
         timeline: formData.timeline,
-        status: 'planned',
-      });
+        status: formData.status,
+      };
+      if (editingId) await updateMitigation(editingId, input);
+      else await addMitigation(input);
 
       setFormData({
         riskLevel: 'medium',
@@ -135,6 +189,7 @@ export function BudgetGuidePage() {
         description: '',
         budget: 0,
         timeline: '3-6 months',
+        status: 'planned',
       });
       setEditingId(null);
       setShowMitigationDialog(false);
@@ -143,20 +198,31 @@ export function BudgetGuidePage() {
     }
   };
 
-  const handleSetRiskAppetite = async (level: string) => {
+  const handleSetRiskAppetite = async () => {
     try {
-      await setRiskAppetite({
-        id: `appetite-${Date.now()}`,
-        level: level as 'low' | 'medium' | 'high',
-        justification: 'Based on assessment findings',
-        updated_at: new Date().toISOString(),
-      });
+      await setRiskAppetite({ level: riskLevel, justification });
     } catch (err) {
       logger.error('Error setting risk appetite', err);
     }
   };
+  const handleRemove = async (id: string) => {
+    if (
+      !(await confirm({
+        title: 'Remove this strategy?',
+        description:
+          'The strategy will be removed from the current plan. Its saved history is retained.',
+        confirmLabel: 'Remove strategy',
+      }))
+    )
+      return;
+    try {
+      await removeMitigation(id);
+    } catch (err) {
+      logger.error('Error removing strategy', err);
+    }
+  };
 
-  const recommended = calculateRecommendedAllocation(riskScore || 0);
+  const recommended = riskScore === null ? {} : calculateRecommendedAllocation(riskScore);
   const actual = calculateActualAllocation();
   const progress_pct = getProgressPercentage();
 
@@ -190,10 +256,24 @@ export function BudgetGuidePage() {
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {error}{' '}
+              <Button variant="link" onClick={fetchProgress} disabled={isSaving}>
+                Reload saved plan
+              </Button>
+            </AlertDescription>
           </Alert>
         )}
 
+        {isLoading && <p role="status">Loading saved budget plan…</p>}
+        {scoreError && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Assessment results could not be loaded. Refresh the page to retry; recommendations are
+              unavailable.
+            </AlertDescription>
+          </Alert>
+        )}
         {/* Progress Overview */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -203,40 +283,67 @@ export function BudgetGuidePage() {
         >
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle level={2} className="text-sm font-medium text-gray-600">Risk Score</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">
+                Risk Score
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-indigo-600">{riskScore || 0}</div>
+              <div className="text-3xl font-bold text-indigo-600">{riskScore ?? '—'}</div>
               <p className="text-xs text-gray-500 mt-1">From assessment</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle level={2} className="text-sm font-medium text-gray-600">Risk Appetite</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">
+                Risk Appetite
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-600">
                 {riskAppetite?.level?.toUpperCase() || '—'}
               </div>
-              <Button
-                variant="link"
-                size="sm"
-                onClick={() => handleSetRiskAppetite('medium')}
-                className="p-0 h-auto mt-1 text-xs"
-              >
-                Set appetite
-              </Button>
+              <div className="space-y-2 mt-3">
+                <label htmlFor="risk-appetite-level">Appetite level</label>
+                <select
+                  id="risk-appetite-level"
+                  value={riskLevel}
+                  onChange={(e) => setRiskLevel(e.target.value as typeof riskLevel)}
+                  className="w-full border rounded p-2"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <label htmlFor="risk-appetite-reason">Justification</label>
+                <textarea
+                  id="risk-appetite-reason"
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                  maxLength={2000}
+                  className="w-full border rounded p-2"
+                />
+                <Button
+                  onClick={handleSetRiskAppetite}
+                  disabled={isSaving || isLoading || !progress || !justification.trim()}
+                >
+                  Save appetite
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle level={2} className="text-sm font-medium text-gray-600">Total Budget</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">
+                Total Budget
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
-                £{(totalBudget / 1000).toFixed(0)}k
+                {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(
+                  totalBudget
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-1">{mitigations.length} strategies</p>
             </CardContent>
@@ -244,7 +351,9 @@ export function BudgetGuidePage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle level={2} className="text-sm font-medium text-gray-600">Progress</CardTitle>
+              <CardTitle level={2} className="text-sm font-medium text-gray-600">
+                Progress
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-purple-600">{Math.round(progress_pct)}%</div>
@@ -273,16 +382,14 @@ export function BudgetGuidePage() {
                 <Card>
                   <CardHeader>
                     <CardTitle level={2}>Recommended Allocation</CardTitle>
-                    <CardDescription>
-                      Based on your risk score of {riskScore}
-                    </CardDescription>
+                    <CardDescription>Based on your risk score of {riskScore}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ChartFigure
                       summary={allocationSummary('Recommended allocation', recommendedData)}
                       caption="Recommended budget allocation by category"
                       columns={['Category', 'Share of budget (%)']}
-                      rows={recommendedData.map(d => [d.name, d.value])}
+                      rows={recommendedData.map((d) => [d.name, d.value])}
                     >
                       <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
@@ -321,7 +428,7 @@ export function BudgetGuidePage() {
                       summary={allocationSummary('Your current allocation', actualData)}
                       caption="Your current budget allocation by category"
                       columns={['Category', 'Share of budget (%)']}
-                      rows={actualData.map(d => [d.name, d.value])}
+                      rows={actualData.map((d) => [d.name, d.value])}
                     >
                       <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
@@ -358,14 +465,21 @@ export function BudgetGuidePage() {
                     summary={comparisonSummary(recommendedData, actualData)}
                     caption="Recommended and current budget allocation by category"
                     columns={['Category', 'Recommended (%)', 'Current (%)']}
-                    rows={recommendedData.map((d, i) => [d.name, d.value, actualData[i]?.value ?? 0])}
+                    rows={recommendedData.map((d, i) => [
+                      d.name,
+                      d.value,
+                      actualData[i]?.value ?? 0,
+                    ])}
                   >
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart accessibilityLayer={false} data={recommendedData.map((item, idx) => ({
-                        ...item,
-                        recommended: item.value,
-                        actual: actualData[idx]?.value || 0,
-                      }))}>
+                      <BarChart
+                        accessibilityLayer={false}
+                        data={recommendedData.map((item, idx) => ({
+                          ...item,
+                          recommended: item.value,
+                          actual: actualData[idx]?.value || 0,
+                        }))}
+                      >
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis />
@@ -392,6 +506,7 @@ export function BudgetGuidePage() {
                       description: '',
                       budget: 0,
                       timeline: '3-6 months',
+                      status: 'planned',
                     });
                     setShowMitigationDialog(true);
                   }}
@@ -428,9 +543,7 @@ export function BudgetGuidePage() {
                                   className="inline-block w-3 h-3 rounded-full"
                                   style={{ backgroundColor: CATEGORY_COLORS[m.category] }}
                                 />
-                                <span className="font-semibold text-gray-900">
-                                  {m.description}
-                                </span>
+                                <span className="font-semibold text-gray-900">{m.description}</span>
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 <div>
@@ -458,22 +571,37 @@ export function BudgetGuidePage() {
                                 onClick={() => {
                                   setEditingId(m.id);
                                   setFormData({
-                                    riskLevel: m.risk_level as 'low' | 'medium' | 'high' | 'critical',
-                                    category: m.category as 'prevention' | 'detection' | 'response' | 'culture',
+                                    riskLevel: m.risk_level as
+                                      | 'low'
+                                      | 'medium'
+                                      | 'high'
+                                      | 'critical',
+                                    category: m.category as
+                                      | 'prevention'
+                                      | 'detection'
+                                      | 'response'
+                                      | 'culture',
                                     description: m.description,
                                     budget: m.budget || 0,
                                     timeline: m.timeline,
+                                    status: m.status,
                                   });
                                   setShowMitigationDialog(true);
                                 }}
                               >
+                                <span className="sr-only">Edit strategy {m.description}</span>
                                 <Edit2 className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
+                                disabled={isSaving || isLoading}
+                                onClick={() => {
+                                  void handleRemove(m.id);
+                                }}
                               >
+                                <span className="sr-only">Remove strategy {m.description}</span>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -513,13 +641,16 @@ export function BudgetGuidePage() {
                                     {m.category === 'detection' && 'Detection Control'}
                                     {m.category === 'response' && 'Response Procedure'}
                                     {m.category === 'culture' && 'Culture & Training'}
-                                    {' • £'}{m.budget?.toLocaleString()}
+                                    {' • £'}
+                                    {m.budget?.toLocaleString()}
                                   </p>
                                 </div>
                               </div>
                             ))}
                           {mitigations.filter((m) => m.timeline === timeline).length === 0 && (
-                            <p className="text-gray-400 text-sm italic">No strategies planned for this period</p>
+                            <p className="text-gray-400 text-sm italic">
+                              No strategies planned for this period
+                            </p>
                           )}
                         </div>
                       </div>
@@ -528,16 +659,45 @@ export function BudgetGuidePage() {
                 </CardContent>
               </Card>
 
-              <Button className="w-full gap-2" size="lg">
+              <Button
+                className="w-full gap-2"
+                size="lg"
+                disabled={!progress || isLoading || isSaving}
+                onClick={() => {
+                  void downloadReport().catch(() => {});
+                }}
+              >
                 <TrendingUp className="h-5 w-5" />
-                Generate Implementation Report
+                Download Implementation Report
               </Button>
             </TabsContent>
           </Tabs>
         </motion.div>
 
+        <Button
+          disabled={
+            isSaving ||
+            isLoading ||
+            !!progress?.completed_at ||
+            !riskAppetite ||
+            !mitigations.some((m) => m.budget > 0)
+          }
+          onClick={() => {
+            void completePlan().catch(() => {});
+          }}
+        >
+          {progress?.completed_at ? 'Budget plan completed' : 'Complete budget plan'}
+        </Button>
+        <p className="text-sm text-gray-600">
+          Editing a completed plan returns it to draft for review.
+        </p>
         {/* Mitigation Dialog */}
-        <Dialog open={showMitigationDialog} onOpenChange={setShowMitigationDialog}>
+        <Dialog
+          open={showMitigationDialog}
+          onOpenChange={(open) => {
+            if (!isSaving) setShowMitigationDialog(open);
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -549,14 +709,23 @@ export function BudgetGuidePage() {
             </DialogHeader>
 
             <div className="space-y-4">
+              {error && (
+                <p role="alert" className="text-red-700">
+                  {error}
+                </p>
+              )}
               <div>
-                <label className="text-sm font-medium text-gray-700">Description</label>
+                <label
+                  htmlFor="mitigation-description"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Description
+                </label>
                 <input
+                  id="mitigation-description"
                   type="text"
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="e.g., Implement vendor approval process"
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
@@ -564,13 +733,23 @@ export function BudgetGuidePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Category</label>
+                  <label
+                    htmlFor="mitigation-category"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Category
+                  </label>
                   <select
+                    id="mitigation-category"
                     value={formData.category}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        category: e.target.value as 'prevention' | 'detection' | 'response' | 'culture',
+                        category: e.target.value as
+                          | 'prevention'
+                          | 'detection'
+                          | 'response'
+                          | 'culture',
                       })
                     }
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -583,8 +762,11 @@ export function BudgetGuidePage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Risk Level</label>
+                  <label htmlFor="mitigation-risk" className="text-sm font-medium text-gray-700">
+                    Risk Level
+                  </label>
                   <select
+                    id="mitigation-risk"
                     value={formData.riskLevel}
                     onChange={(e) =>
                       setFormData({
@@ -595,7 +777,9 @@ export function BudgetGuidePage() {
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     {RISK_LEVELS.map(({ value, label }) => (
-                      <option key={value} value={value}>{label}</option>
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -603,24 +787,34 @@ export function BudgetGuidePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Budget (£)</label>
+                  <label htmlFor="mitigation-budget" className="text-sm font-medium text-gray-700">
+                    Budget (£)
+                  </label>
                   <input
+                    id="mitigation-budget"
                     type="number"
+                    min="0"
+                    max="10000000"
+                    step="0.01"
                     value={formData.budget}
-                    onChange={(e) =>
-                      setFormData({ ...formData, budget: Number(e.target.value) })
-                    }
+                    onChange={(e) => setFormData({ ...formData, budget: Number(e.target.value) })}
                     placeholder="0"
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Timeline</label>
+                  <label
+                    htmlFor="mitigation-timeline"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Timeline
+                  </label>
                   <select
+                    id="mitigation-timeline"
                     value={formData.timeline}
                     onChange={(e) =>
-                      setFormData({ ...formData, timeline: e.target.value })
+                      setFormData({ ...formData, timeline: e.target.value as FormData['timeline'] })
                     }
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
@@ -632,14 +826,40 @@ export function BudgetGuidePage() {
                 </div>
               </div>
 
+              <div>
+                <label htmlFor="mitigation-status">Implementation status</label>
+                <select
+                  id="mitigation-status"
+                  className="w-full border rounded p-2"
+                  value={formData.status}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value as FormData['status'] })
+                  }
+                >
+                  <option value="planned">Planned</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
               <div className="flex justify-end gap-3">
                 <Button
                   variant="outline"
+                  disabled={isSaving}
                   onClick={() => setShowMitigationDialog(false)}
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleAddMitigation}>
+                <Button
+                  onClick={handleAddMitigation}
+                  disabled={
+                    isSaving ||
+                    isLoading ||
+                    !progress ||
+                    !formData.description.trim() ||
+                    !Number.isFinite(formData.budget) ||
+                    formData.budget < 0
+                  }
+                >
                   {editingId ? 'Update' : 'Add'} Strategy
                 </Button>
               </div>

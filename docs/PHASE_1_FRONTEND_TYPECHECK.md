@@ -1,5 +1,7 @@
 # Phase 1 — Frontend typecheck gate
 
+> Follow-up: [atomic publication and assessment budget planning](PHASE_1_DOMAIN_PUBLICATION_AND_BUDGET.md) now implements the publication/planning gaps described below locally. Earlier validation counts remain historical.
+
 ## Problem and scope
 
 The dashboard's former `tsc --noEmit` command loaded a solution config with `files: []` and did not check its referenced projects. A successful run was therefore not evidence that application code compiled. Direct compilation exposed inherited application errors and stale test fixtures.

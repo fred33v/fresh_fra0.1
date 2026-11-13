@@ -29,15 +29,15 @@ export async function listOrgPurchases(orgId: string, db?: DbExecutor): Promise<
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === orgId);
 }
 
-async function listOrgAssessments(orgId: string): Promise<Assessment[]> {
+async function listOrgAssessments(orgId: string, db?: DbExecutor): Promise<Assessment[]> {
   return hasDatabase()
-    ? dbListAssessmentsByOrganisation(orgId)
+    ? dbListAssessmentsByOrganisation(orgId, db)
     : Array.from(assessmentsById.values()).filter((a) => a.organisationId === orgId);
 }
 
 /** Returns a 403 PACKAGE_REQUIRED response when the org lacks the package, otherwise null. */
-export async function requirePackage(c: Context, auth: AuthContext, packageId: string): Promise<Response | null> {
-  const purchases = await listOrgPurchases(auth.organisationId);
+export async function requirePackage(c: Context, auth: AuthContext, packageId: string, db?: DbExecutor): Promise<Response | null> {
+  const purchases = await listOrgPurchases(auth.organisationId, db);
   if (hasPackageEntitlement(purchases, packageId)) return null;
   return jsonError(c, 403, 'PACKAGE_REQUIRED', `${PACKAGE_NAMES[packageId] ?? packageId} package or higher required`);
 }
@@ -76,14 +76,14 @@ export type AssessmentAllowance = {
  * - Professional: 4 per person per subscription year (quarterly reassessment)
  * - Enterprise: unlimited (continuous reassessment)
  */
-export async function getAssessmentAllowance(auth: AuthContext, now: Date = new Date()): Promise<AssessmentAllowance> {
-  const purchases = await listOrgPurchases(auth.organisationId);
+export async function getAssessmentAllowance(auth: AuthContext, now: Date = new Date(), db?: DbExecutor): Promise<AssessmentAllowance> {
+  const purchases = await listOrgPurchases(auth.organisationId, db);
   const tier = getActiveTier(purchases, now);
 
   if (tier === 0) return { allowed: false, limit: 0, used: 0, reason: 'No active package' };
   if (tier >= PACKAGE_TIER.pkg_full) return { allowed: true, limit: null, used: 0 };
 
-  const assessments = await listOrgAssessments(auth.organisationId);
+  const assessments = await listOrgAssessments(auth.organisationId, db);
 
   if (tier === PACKAGE_TIER.pkg_basic) {
     const limit = purchases.filter((p) => p.status === 'succeeded' && p.packageId === 'pkg_basic').length;

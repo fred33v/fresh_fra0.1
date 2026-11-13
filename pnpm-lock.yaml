@@ -96,6 +96,9 @@ importers:
 
   apps/fra-backend/backend:
     dependencies:
+      '@stopfra/types':
+        specifier: workspace:*
+        version: link:../../../packages/types
       '@aws-sdk/client-cloudwatch':
         specifier: ^3.1152.0
         version: 3.1161.0
