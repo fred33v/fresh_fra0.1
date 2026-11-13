@@ -96,9 +96,6 @@ importers:
 
   apps/fra-backend/backend:
     dependencies:
-      '@stopfra/types':
-        specifier: workspace:*
-        version: link:../../../packages/types
       '@aws-sdk/client-cloudwatch':
         specifier: ^3.1152.0
         version: 3.1161.0
@@ -111,6 +108,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.3
         version: 2.1.3(hono@4.13.13)
+      '@stopfra/types':
+        specifier: workspace:*
+        version: link:../../../packages/types
       '@upstash/redis':
         specifier: ^1.34.9
         version: 1.36.1
@@ -402,8 +402,8 @@ importers:
         specifier: ~19.0.8
         version: 19.0.8(expo@54.0.37)
       expo-print:
-        specifier: ~15.0.8
-        version: 15.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0))
+        specifier: ~58.0.8
+        version: 58.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0))
       expo-router:
         specifier: ~6.0.23
         version: 6.0.23(patch_hash=2q4v6t5lmpcs5qqoy3feni74a4)(o6nuelqhdp2n5fndtlysmwqtjm)
@@ -5663,8 +5663,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  expo-print@15.0.8:
-    resolution: {integrity: sha512-4O0Qzm0On5AmJIl9d+BT+ieTipFp658nHI4aX7vKEFPfj3dfQxG6rDJJpca+rrc9c4Ha8ZFYGvxJG5+4lFq2Pw==}
+  expo-print@58.0.8:
+    resolution: {integrity: sha512-0flhJ0WuHDlq+H5XFBpqyb9B80PYgbPOVw2cb8hnDWWI++rhfJ2J6WvrBP/PePnOypuIQ1dO3e6u6725xMO4Lg==}
     peerDependencies:
       expo: '*'
       react-native: '*'
@@ -14545,7 +14545,7 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0)
 
-  expo-print@15.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0)):
+  expo-print@58.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0)):
     dependencies:
       expo: 54.0.37(@babel/core@7.29.13)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native: 0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0)
