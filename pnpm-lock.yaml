@@ -96,9 +96,6 @@ importers:
 
   apps/fra-backend/backend:
     dependencies:
-      '@stopfra/types':
-        specifier: workspace:*
-        version: link:../../../packages/types
       '@aws-sdk/client-cloudwatch':
         specifier: ^3.1152.0
         version: 3.1161.0
@@ -110,7 +107,10 @@ importers:
         version: 3.1152.0
       '@hono/node-server':
         specifier: ^2.1.3
-        version: 2.1.3(hono@4.13.13)
+        version: 2.1.3(hono@4.13.16)
+      '@stopfra/types':
+        specifier: workspace:*
+        version: link:../../../packages/types
       '@upstash/redis':
         specifier: ^1.34.9
         version: 1.36.1
@@ -121,8 +121,8 @@ importers:
         specifier: ^16.4.5
         version: 16.6.1
       hono:
-        specifier: ^4.13.13
-        version: 4.13.13
+        specifier: ^4.13.16
+        version: 4.13.16
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
@@ -6068,8 +6068,8 @@ packages:
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
-  hono@4.13.13:
-    resolution: {integrity: sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==}
+  hono@4.13.16:
+    resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@7.0.2:
@@ -11009,9 +11009,9 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
-  '@hono/node-server@2.1.3(hono@4.13.13)':
+  '@hono/node-server@2.1.3(hono@4.13.16)':
     dependencies:
-      hono: 4.13.13
+      hono: 4.13.16
 
   '@hookform/resolvers@5.9.2(@sinclair/typebox@0.34.48)(@standard-schema/spec@1.1.0)(react-hook-form@7.71.1(react@19.1.0))(zod@4.6.7)':
     dependencies:
@@ -14976,7 +14976,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.13.13: {}
+  hono@4.13.16: {}
 
   hosted-git-info@7.0.2:
     dependencies:
