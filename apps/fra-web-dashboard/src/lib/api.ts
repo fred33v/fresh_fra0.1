@@ -227,26 +227,37 @@ type SSEHandlers = Record<string, (data: unknown) => void>;
 export function connectSSE(path: string, handlers: SSEHandlers): () => void {
   let es: EventSource | null = null;
   let closed = false;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryDelay = 1000;
+  const session = localStorage.getItem(SESSION_KEY);
+  const active = () => !closed && localStorage.getItem(SESSION_KEY) === session && hasStoredTokens();
 
-  // Obtain a short-lived SSE token from the backend, then open EventSource
-  (async () => {
+  const reconnect = () => {
+    if (!active() || retryTimer !== undefined) return;
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      void connect();
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 30_000);
+  };
+
+  // Native EventSource reconnect reuses the URL, but its token is single-use.
+  // Close the old source and exchange a fresh token for every attempt.
+  const connect = async () => {
+    if (!active()) return;
     try {
       const { sseToken } = await api.post<{ sseToken: string }>('/api/v1/workshop/sse-token');
-      if (closed) return; // caller already called cleanup
-
+      if (!active()) return;
       const url = `${API_URL}${path}${path.includes('?') ? '&' : '?'}sse_token=${encodeURIComponent(sseToken)}`;
-      es = new EventSource(url);
-
-      // If cleanup was called while we were creating the EventSource, close immediately
-      if (closed) {
-        es.close();
-        es = null;
-        return;
-      }
-
+      const source = new EventSource(url);
+      es = source;
+      source.onopen = () => {
+        if (active()) retryDelay = 1000;
+        else source.close();
+      };
       for (const [event, handler] of Object.entries(handlers)) {
-        es.addEventListener(event, (e: MessageEvent) => {
-          if (closed) return;
+        source.addEventListener(event, (e: MessageEvent) => {
+          if (!active() || es !== source) return;
           try {
             handler(JSON.parse(e.data));
           } catch (parseErr) {
@@ -254,22 +265,25 @@ export function connectSSE(path: string, handlers: SSEHandlers): () => void {
           }
         });
       }
-
-      es.onerror = () => {
-        if (closed) return;
-        // EventSource auto-reconnects; we just log
-        logger.warn('SSE connection error, reconnecting...');
+      source.onerror = () => {
+        source.close();
+        if (es !== source) return;
+        es = null;
+        reconnect();
       };
     } catch (err: unknown) {
-      if (!closed) {
-        logger.warn('Failed to obtain SSE token', err);
-      }
+      if (!active()) return;
+      logger.warn('Failed to obtain SSE token', err);
+      if (err instanceof ApiError && ['UNAUTHORIZED', 'FORBIDDEN'].includes(err.code)) return;
+      reconnect();
     }
-  })();
+  };
 
-  // Return cleanup function
+  void connect();
   return () => {
     closed = true;
+    clearTimeout(retryTimer);
     es?.close();
+    es = null;
   };
 }

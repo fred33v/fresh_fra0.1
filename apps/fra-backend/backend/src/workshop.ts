@@ -1,3 +1,4 @@
+import { storeSseToken, consumeSseToken } from './sse-tokens.js';
 // ============================================================
 // Stop FRA - Workshop Routes (migrated from Supabase)
 // Mounted at /api/v1/workshop in index.ts
@@ -11,7 +12,6 @@ import { z } from 'zod';
 import { getDbPool } from './db.js';
 import { type AuthContext, hasDatabase, jsonError, getAuth as getAuthBase, requireAuth } from './helpers.js';
 import { createLogger } from './logger.js';
-import { getRedis } from './redis.js';
 import { rateLimit, getClientIp } from './middleware.js';
 import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
@@ -61,57 +61,6 @@ export function broadcastToSession(sessionId: string, event: string, data: unkno
 }
 
 // ── SSE token store (short-lived, single-use tokens for SSE auth) ──
-
-const SSE_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const SSE_TOKEN_PREFIX = 'sse_token:';
-
-type SseTokenEntry = {
-  auth: AuthContext;
-  expiresAt: number;
-};
-
-// In-memory fallback when Redis is not available
-const sseTokenStore = new Map<string, SseTokenEntry>();
-
-async function storeSseToken(token: string, auth: AuthContext): Promise<void> {
-  const redis = getRedis();
-  if (redis) {
-    await redis.set(`${SSE_TOKEN_PREFIX}${token}`, JSON.stringify(auth), { ex: Math.ceil(SSE_TOKEN_TTL_MS / 1000) });
-    return;
-  }
-  sseTokenStore.set(token, { auth, expiresAt: Date.now() + SSE_TOKEN_TTL_MS });
-
-  // Lazy cleanup of expired tokens to prevent unbounded memory growth
-  if (sseTokenStore.size > 1000) {
-    const now = Date.now();
-    for (const [key, entry] of sseTokenStore) {
-      if (entry.expiresAt < now) sseTokenStore.delete(key);
-    }
-  }
-}
-
-async function consumeSseToken(token: string): Promise<AuthContext | null> {
-  const redis = getRedis();
-  if (redis) {
-    const key = `${SSE_TOKEN_PREFIX}${token}`;
-    const raw = await redis.get<string>(key);
-    if (!raw) return null;
-    // Single-use: delete immediately after retrieval
-    await redis.del(key);
-    try {
-      return JSON.parse(raw) as AuthContext;
-    } catch {
-      return null;
-    }
-  }
-
-  const entry = sseTokenStore.get(token);
-  if (!entry) return null;
-  // Single-use: delete immediately
-  sseTokenStore.delete(token);
-  if (entry.expiresAt < Date.now()) return null;
-  return entry.auth;
-}
 
 // ── Helpers ──────────────────────────────────────────────────
 
