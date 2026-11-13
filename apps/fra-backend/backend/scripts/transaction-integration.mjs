@@ -176,6 +176,62 @@ try {
   const audit=await pool.query("SELECT actor_id FROM public.audit_logs WHERE event_type='webhook.assessment_submitted' AND resource_id=$1",[assessmentId]);
   assert.equal(audit.rowCount,1);assert.equal(audit.rows[0].actor_id,null);
   pass('signed system webhook writes an actual PostgreSQL audit row');
+
+  // Account-link claims use memory in this process; account effects use real PostgreSQL.
+  const linkAccount=await account();
+  const resetLink=async()=>{
+    const result=await call('POST','/auth/forgot-password',{email:linkAccount.email});
+    assert.equal(result.status,200);assert(result.body.resetToken);return result.body.resetToken;
+  };
+  await pool.query('UPDATE public.users SET email_verified_at=NULL WHERE id=$1',[linkAccount.userId]);
+  const beforeReset=(await pool.query('SELECT password_hash FROM public.users WHERE id=$1',[linkAccount.userId])).rows[0].password_hash;
+  const retained=jwt.sign({sub:linkAccount.userId,type:'refresh',jti:crypto.randomUUID()},refreshSecret,{algorithm:'HS256',expiresIn:'1h'});
+  await pool.query('INSERT INTO public.refresh_tokens(token,user_id) VALUES($1,$2)',[hash(retained),linkAccount.userId]);
+  const failedReset=await resetLink();
+  const removeResetAudit=await failTrigger('audit_logs',`NEW.actor_id='${linkAccount.userId}'::uuid AND NEW.event_type='auth.reset_password'`);
+  try {
+    assert.equal((await call('POST','/auth/reset-password',{token:failedReset,newPassword:password})).status,500);
+    const row=(await pool.query('SELECT password_hash,email_verified_at FROM public.users WHERE id=$1',[linkAccount.userId])).rows[0];
+    assert.equal(row.password_hash,beforeReset);assert.equal(row.email_verified_at,null);
+    assert.equal((await pool.query('SELECT token FROM public.refresh_tokens WHERE token=$1',[hash(retained)])).rowCount,1);
+  }finally{await removeResetAudit();}
+  assert.equal((await call('POST','/auth/reset-password',{token:failedReset,newPassword:password})).status,400);
+  pass('failed password reset rolls back password, verification, session deletion and audit; claimed link stays consumed');
+
+  const concurrentReset=await resetLink();
+  const resetResults=await Promise.all([call('POST','/auth/reset-password',{token:concurrentReset,newPassword:password}),call('POST','/auth/reset-password',{token:concurrentReset,newPassword:'OtherPassword123!'})]);
+  assert.deepEqual(resetResults.map(x=>x.status).sort(),[200,400]);
+  assert.equal((await pool.query('SELECT token FROM public.refresh_tokens WHERE user_id=$1',[linkAccount.userId])).rowCount,0);
+  pass('one concurrent reset succeeds and previous refresh sessions are invalidated');
+
+  const racingLink=await resetLink();
+  const racingRefresh=jwt.sign({sub:linkAccount.userId,type:'refresh',jti:crypto.randomUUID()},refreshSecret,{algorithm:'HS256',expiresIn:'1h'});
+  await pool.query('INSERT INTO public.refresh_tokens(token,user_id) VALUES($1,$2)',[hash(racingRefresh),linkAccount.userId]);
+  const resetRace=await Promise.all([call('POST','/auth/reset-password',{token:racingLink,newPassword:password}),call('POST','/auth/refresh',{refreshToken:racingRefresh})]);
+  assert.equal(resetRace[0].status,200);assert([200,401].includes(resetRace[1].status));
+  assert.equal((await pool.query('SELECT token FROM public.refresh_tokens WHERE user_id=$1',[linkAccount.userId])).rowCount,0);
+  pass('password reset and refresh rotation serialize without leaving a replacement session');
+
+  const signupLink=async()=>{
+    const email=`confirm-${crypto.randomUUID()}@example.test`;
+    const result=await call('POST','/auth/signup',{email,password,name:'Confirmation fixture'});
+    assert.equal(result.status,200);assert(result.body.data.verificationToken);return {...result.body.data,email};
+  };
+  const failedConfirmation=await signupLink();
+  const failedUser=(await pool.query('SELECT id FROM public.users WHERE email=$1',[failedConfirmation.email])).rows[0];
+  assert(failedUser);const confirmationUser=failedUser;
+  const removeConfirmSession=await failTrigger('refresh_tokens',`NEW.user_id='${confirmationUser.id}'::uuid`);
+  try{
+    assert.equal((await call('POST','/auth/verify-email',{token:failedConfirmation.verificationToken})).status,500);
+    assert.equal((await pool.query('SELECT email_verified_at FROM public.users WHERE id=$1',[confirmationUser.id])).rows[0].email_verified_at,null);
+    assert.equal((await pool.query("SELECT id FROM public.audit_logs WHERE actor_id=$1 AND event_type='auth.email_verified'",[confirmationUser.id])).rowCount,0);
+  }finally{await removeConfirmSession();}
+  assert.equal((await call('POST','/auth/verify-email',{token:failedConfirmation.verificationToken})).status,400);
+  pass('confirmation session failure rolls back verification and audit; consumed link cannot mint a session on retry');
+  const confirmation=await signupLink();
+  const confirmationResults=await Promise.all([call('POST','/auth/verify-email',{token:confirmation.verificationToken}),call('POST','/auth/verify-email',{token:confirmation.verificationToken})]);
+  assert.deepEqual(confirmationResults.map(x=>x.status).sort(),[200,400]);
+  pass('one concurrent email confirmation succeeds against PostgreSQL');
   console.log(`PASS ${cases} PostgreSQL transaction/permission scenarios`);
 } catch (error) {
   console.error(logs);throw error;

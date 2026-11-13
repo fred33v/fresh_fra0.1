@@ -36,3 +36,13 @@ export async function deletePasswordResetToken(token: string): Promise<void> {
     passwordResetTokens.delete(hashToken(token));
   }
 }
+
+/** Atomically claim a link. A failed account operation requires a fresh link. */
+export async function consumePasswordResetToken(token: string): Promise<string | null> {
+  const redis = getRedis();
+  if (redis) return redis.getdel<string>(`${PASSWORD_RESET_PREFIX}${hashToken(token)}`);
+  const key = hashToken(token);
+  const entry = passwordResetTokens.get(key);
+  passwordResetTokens.delete(key);
+  return entry && entry.expiresAt > Date.now() ? entry.userId : null;
+}

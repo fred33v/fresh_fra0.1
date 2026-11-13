@@ -23,8 +23,8 @@ export async function dbGetUserByEmail(email: string, db?: DbExecutor): Promise<
   };
 }
 
-export async function dbGetUserById(id: string): Promise<User | null> {
-  const pool = getDbPool();
+export async function dbGetUserById(id: string, db?: DbExecutor): Promise<User | null> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<DbUserRow>(
     'select id, email, name, password_hash, role, organisation_id, department, created_at, email_verified_at from public.users where id = $1 limit 1',
     [id]
@@ -62,8 +62,8 @@ export async function dbInsertUser(user: User, db?: DbExecutor): Promise<void> {
   );
 }
 
-export async function dbUpdateUserPasswordHash(userId: string, passwordHash: string): Promise<void> {
-  const pool = getDbPool();
+export async function dbUpdateUserPasswordHash(userId: string, passwordHash: string, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query('update public.users set password_hash = $1 where id = $2', [passwordHash, userId]);
 }
 
@@ -126,8 +126,8 @@ export async function dbGetEmployeeDashboardData(organisationId: string): Promis
 }
 
 /** Marks the email confirmed. Returns false when the user does not exist. */
-export async function dbMarkUserEmailVerified(id: string, at: string): Promise<boolean> {
-  const pool = getDbPool();
+export async function dbMarkUserEmailVerified(id: string, at: string, db?: DbExecutor): Promise<boolean> {
+  const pool = db ?? getDbPool();
   const res = await pool.query('update public.users set email_verified_at = coalesce(email_verified_at, $2) where id = $1', [id, at]);
   return (res.rowCount ?? 0) > 0;
 }

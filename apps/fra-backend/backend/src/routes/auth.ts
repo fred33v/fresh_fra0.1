@@ -2,6 +2,8 @@ import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db.js';
+import { withTransaction } from '../db/transaction.js';
+import type { DbExecutor } from '../db/transaction.js';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { getRedis } from '../redis.js';
 import {
@@ -18,8 +20,8 @@ import {
   dbUpsertRefreshToken, dbRotateRefreshToken, dbDeleteRefreshToken, dbDeleteAllRefreshTokensForUser,
   dbGetOrganisationById,
   auditLog,
-  setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken,
-  setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken,
+  setPasswordResetToken, consumePasswordResetToken,
+  setEmailVerificationToken, consumeEmailVerificationToken,
   dbMarkUserEmailVerified,
 } from '../db/index.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
@@ -485,31 +487,33 @@ auth.post('/auth/verify-email', async (c) => {
   const parsed = verifyEmailSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid verify-email payload');
 
-  const userId = await getEmailVerificationUserId(parsed.data.token);
+  const userId = await consumeEmailVerificationToken(parsed.data.token);
   if (!userId) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
-  await deleteEmailVerificationToken(parsed.data.token);
 
-  const user = hasDatabase() ? await dbGetUserById(userId) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
-  if (!user) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
-
-  const verifiedAt = new Date().toISOString();
-  if (hasDatabase()) {
-    await dbMarkUserEmailVerified(user.id, verifiedAt);
-  } else {
-    user.emailVerifiedAt ??= verifiedAt;
+  const complete = async (db?: DbExecutor) => {
+    if (db) await db.query('SELECT id FROM public.users WHERE id=$1 FOR UPDATE', [userId]);
+    const user = hasDatabase() ? await dbGetUserById(userId, db) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
+    if (!user) return null;
+    const verifiedAt = new Date().toISOString();
+    if (hasDatabase()) await dbMarkUserEmailVerified(user.id, verifiedAt, db);
+    else user.emailVerifiedAt ??= verifiedAt;
+    await auditLog({
+      eventType: 'auth.email_verified', actorId: user.id, actorEmail: user.email,
+      organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
+      ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+    }, db);
+    const tokens = issueTokens(user);
+    if (hasDatabase()) await dbUpsertRefreshToken(tokens.refreshToken, user.id, db);
+    return { user, ...tokens };
+  };
+  let completed: Awaited<ReturnType<typeof complete>>;
+  try { completed = hasDatabase() ? await withTransaction(complete) : await complete(); }
+  catch {
+    logger.error('Email confirmation failed after claiming link', { userId });
+    return jsonError(c, 500, 'LINK_PROCESSING_FAILED', 'Could not confirm your account. Please request a new confirmation link.');
   }
-
-  await auditLog({
-    eventType: 'auth.email_verified', actorId: user.id, actorEmail: user.email,
-    organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
-    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-
-  // Following the link signs them in, so a new account goes straight to the app
-  const { accessToken, refreshToken } = issueTokens(user);
-  if (hasDatabase()) {
-    await dbUpsertRefreshToken(refreshToken, user.id);
-  }
+  if (!completed) return jsonError(c, 400, 'INVALID_TOKEN', 'This confirmation link is invalid or has expired');
+  const { user, accessToken, refreshToken } = completed;
   let orgName = 'Organisation';
   const org = hasDatabase() ? await dbGetOrganisationById(user.organisationId) : organisationsById.get(user.organisationId);
   if (org) orgName = org.name;
@@ -552,44 +556,47 @@ auth.post('/auth/reset-password', async (c) => {
   const parsed = resetPasswordSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid reset-password payload');
 
-  const userId = await getPasswordResetUserId(parsed.data.token);
+  const userId = await consumePasswordResetToken(parsed.data.token);
   if (!userId) {
     return jsonError(c, 400, 'INVALID_TOKEN', 'Invalid or expired reset token');
   }
 
-  // Delete token immediately to prevent reuse if password change fails
-  await deletePasswordResetToken(parsed.data.token);
-
-  const user = hasDatabase() ? await dbGetUserById(userId) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
-  if (!user) {
-    return jsonError(c, 400, 'INVALID_TOKEN', 'Invalid or expired reset token');
-  }
+  // Fail closed: a claimed link is never restored after an account operation fails.
 
   const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
-  // The reset link reached their inbox, which confirms the address too
-  const verifiedAt = new Date().toISOString();
-  if (hasDatabase()) {
-    await dbUpdateUserPasswordHash(user.id, newHash);
-    await dbMarkUserEmailVerified(user.id, verifiedAt);
-    await dbDeleteAllRefreshTokensForUser(user.id);
-  } else {
-    user.passwordHash = newHash;
-    user.emailVerifiedAt ??= verifiedAt;
-    for (const token of Array.from(refreshTokenAllowlist.values())) {
-      try {
-        const payload = jwt.decode(token) as jwt.JwtPayload | null;
-        if (payload && payload.sub === user.id) refreshTokenAllowlist.delete(token);
-      } catch {
-        refreshTokenAllowlist.delete(token);
+  const complete = async (db?: DbExecutor) => {
+    if (db) await db.query('SELECT id FROM public.users WHERE id=$1 FOR UPDATE', [userId]);
+    const user = hasDatabase() ? await dbGetUserById(userId, db) : Array.from(usersByEmail.values()).find((u) => u.id === userId) ?? null;
+    if (!user) return null;
+    const verifiedAt = new Date().toISOString();
+    if (hasDatabase()) {
+      await dbUpdateUserPasswordHash(user.id, newHash, db);
+      await dbMarkUserEmailVerified(user.id, verifiedAt, db);
+      await dbDeleteAllRefreshTokensForUser(user.id, db);
+    } else {
+      user.passwordHash = newHash;
+      user.emailVerifiedAt ??= verifiedAt;
+      for (const token of Array.from(refreshTokenAllowlist.values())) {
+        try {
+          const payload = jwt.decode(token) as jwt.JwtPayload | null;
+          if (!payload || payload.sub === user.id) refreshTokenAllowlist.delete(token);
+        } catch { refreshTokenAllowlist.delete(token); }
       }
     }
+    await auditLog({
+      eventType: 'auth.reset_password', actorId: user.id, actorEmail: user.email,
+      organisationId: user.organisationId, resourceType: 'user', resourceId: user.id,
+      ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+    }, db);
+    return user;
+  };
+  let user: User | null;
+  try { user = hasDatabase() ? await withTransaction(complete) : await complete(); }
+  catch {
+    logger.error('Password reset failed after claiming link', { userId });
+    return jsonError(c, 500, 'LINK_PROCESSING_FAILED', 'Could not reset your password. Please request a new reset link.');
   }
-
-  await auditLog({
-    eventType: 'auth.reset_password', actorId: user.id, actorEmail: user.email,
-    resourceType: 'user', resourceId: user.id, ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
-  });
+  if (!user) return jsonError(c, 400, 'INVALID_TOKEN', 'Invalid or expired reset token');
   sendEmailInBackground(passwordChangedEmail(user.email, user.name), { userId: user.id, kind: 'password_changed' });
 
   return c.json({ success: true });

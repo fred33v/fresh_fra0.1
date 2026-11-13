@@ -5,6 +5,6 @@ export { dbInsertOrganisation, dbGetOrganisationById, dbUpdateOrganisation } fro
 export { rowToKeypass, dbInsertKeypass, dbInsertKeypassBatch, dbGetKeypassByCode, dbUpdateKeypassStatus, dbClaimKeypass, dbListKeypassesByOrganisation, dbListKeypassesByUser, dbGetKeypassStatsByOrganisation, dbTouchKeypassInvite } from './keypasses.js';
 export { dbInsertPurchase, dbGetPurchaseById, dbUpdatePurchaseStatus, dbSetPurchaseCheckoutSession, dbMarkPurchasePaid, dbListPurchasesByOrganisation, dbListPackages, dbGetPackageById } from './purchases.js';
 export { auditLog } from './audit.js';
-export { setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken } from './password-reset.js';
-export { setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken } from './email-verification.js';
+export { consumePasswordResetToken, setPasswordResetToken, getPasswordResetUserId, deletePasswordResetToken } from './password-reset.js';
+export { consumeEmailVerificationToken, setEmailVerificationToken, getEmailVerificationUserId, deleteEmailVerificationToken } from './email-verification.js';
 export * from './enterprise.js';
