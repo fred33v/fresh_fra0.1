@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, clearTokens, connectSSE, setTokens } from '@/lib/api';
+import { api, ApiError, clearTokens, connectSSE, setTokens } from '@/lib/api';
 class Source {
   static instances: Source[] = [];
   onerror: (() => void) | null = null;
@@ -72,4 +72,25 @@ describe('SSE reconnection', () => {
     expect(post).toHaveBeenCalledTimes(1);
     stop();
   });
+  it('stops retrying when token exchange refuses authority', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValue(new ApiError('FORBIDDEN', 'Not allowed'));
+    const stop = connectSSE('/events', {});
+    await flush(); await vi.advanceTimersByTimeAsync(60_000);
+    expect(post).toHaveBeenCalledTimes(1);
+    stop();
+  });
+  it('never backs off longer than thirty seconds', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValue(new Error('offline'));
+    const stop = connectSSE('/events', {});
+    await flush();
+    for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
+      const attempts = post.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(post).toHaveBeenCalledTimes(attempts);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(post).toHaveBeenCalledTimes(attempts + 1);
+    }
+    stop();
+  });
+
 });

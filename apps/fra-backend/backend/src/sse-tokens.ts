@@ -24,7 +24,7 @@ export async function storeSseToken(token: string, auth: AuthContext): Promise<v
   if (sseTokenStore.size > 1000) {
     const now = Date.now();
     for (const [key, entry] of sseTokenStore) {
-      if (entry.expiresAt < now) sseTokenStore.delete(key);
+      if (entry.expiresAt <= now) sseTokenStore.delete(key);
     }
   }
 }
@@ -46,7 +46,7 @@ export async function consumeSseToken(token: string): Promise<AuthContext | null
   if (!entry) return null;
   // Single-use: delete immediately
   sseTokenStore.delete(token);
-  if (entry.expiresAt < Date.now()) return null;
+  if (entry.expiresAt <= Date.now()) return null;
   return entry.auth;
 }
 

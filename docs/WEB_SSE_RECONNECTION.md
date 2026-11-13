@@ -10,13 +10,14 @@ Redis token consumption previously used separate GET and DEL requests. It now us
 
 ## Verification
 
-- Backend: 74 tests passed across workshop, workshop-memory and new SSE-token suites.
-- Web: 12 tests passed across session-refresh and new SSE reconnection suites.
-- Backend production TypeScript and dashboard application/test TypeScript checks passed.
-- Changed production files and the new frontend test pass lint.
+- Full backend suite: 698 tests passed across 54 suites, including Redis and memory token exclusivity and exact expiry-boundary checks.
+- Web: 14 tests passed across session-refresh and SSE reconnection suites, including refused authority and the thirty-second retry ceiling.
+- Chromium: the new Playwright contract passes with the browser’s native EventSource. A finite mocked SSE response delivers an event and ends; reconnection obtains a distinct token, delivers a second event, and stops after cleanup.
+- Backend production TypeScript and dashboard application/test/E2E TypeScript checks passed.
+- Changed production files and the new frontend unit and browser tests pass lint.
 - Frozen-lockfile dependency installation completed with lifecycle scripts disabled after native Skia's download failed. The correct pinned pnpm 9.15.4 was used; no lockfile changes were made.
 
-Tests use mocked EventSource and mocked Redis; no live Redis or real-browser disconnect test is claimed. No migration, deployment or native application changes are required. This is a focused verification, not a full CI acceptance record.
+Unit tests use mocked EventSource and mocked Redis. The Chromium contract exercises native EventSource with mocked API responses; it does not validate a browser-to-backend/Redis deployment. No live Redis check is claimed. No migration, deployment or native application changes are required. This is a focused verification, not a full CI acceptance record.
 
 ## Limits
 
