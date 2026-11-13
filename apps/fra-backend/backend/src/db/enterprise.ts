@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { ApiKey, RiskRegisterEntry, WebhookEndpoint, WebhookEvent, ControlEffectiveness, RiskPriority, RiskStatus } from '../types.js';
 
@@ -84,15 +85,15 @@ function riskValues(r: RiskRegisterEntry) {
   ];
 }
 
-export async function dbInsertRisk(r: RiskRegisterEntry): Promise<void> {
-  await getDbPool().query(
+export async function dbInsertRisk(r: RiskRegisterEntry, db?: DbExecutor): Promise<void> {
+  await (db ?? getDbPool()).query(
     `insert into public.risk_register (${RISK_COLUMNS}) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
     riskValues(r)
   );
 }
 
-export async function dbUpdateRisk(r: RiskRegisterEntry): Promise<void> {
-  await getDbPool().query(
+export async function dbUpdateRisk(r: RiskRegisterEntry, db?: DbExecutor): Promise<void> {
+  await (db ?? getDbPool()).query(
     `update public.risk_register set title=$3, risk_area=$4, description=$5, impact=$6, likelihood=$7,
        control_effectiveness=$8, controls=$9, inherent_score=$10, residual_score=$11, priority=$12,
        owner_user_id=$13, action_plan=$14, due_date=$15, status=$16, updated_at=$17,
@@ -107,30 +108,30 @@ export async function dbUpdateRisk(r: RiskRegisterEntry): Promise<void> {
   );
 }
 
-export async function dbGetRisk(id: string, orgId: string): Promise<RiskRegisterEntry | null> {
-  const res = await getDbPool().query<RiskRow>(
+export async function dbGetRisk(id: string, orgId: string, db?: DbExecutor): Promise<RiskRegisterEntry | null> {
+  const res = await (db ?? getDbPool()).query<RiskRow>(
     `select ${RISK_COLUMNS} from public.risk_register where id = $1 and organisation_id = $2 limit 1`, [id, orgId]
   );
   return res.rows[0] ? rowToRisk(res.rows[0]) : null;
 }
 
-export async function dbListRisks(orgId: string): Promise<RiskRegisterEntry[]> {
-  const res = await getDbPool().query<RiskRow>(
+export async function dbListRisks(orgId: string, db?: DbExecutor): Promise<RiskRegisterEntry[]> {
+  const res = await (db ?? getDbPool()).query<RiskRow>(
     `select ${RISK_COLUMNS} from public.risk_register where organisation_id = $1 order by residual_score desc, created_at desc`, [orgId]
   );
   return res.rows.map(rowToRisk);
 }
 
-export async function dbListRisksByOwner(ownerUserId: string, orgId: string): Promise<RiskRegisterEntry[]> {
-  const res = await getDbPool().query<RiskRow>(
+export async function dbListRisksByOwner(ownerUserId: string, orgId: string, db?: DbExecutor): Promise<RiskRegisterEntry[]> {
+  const res = await (db ?? getDbPool()).query<RiskRow>(
     `select ${RISK_COLUMNS} from public.risk_register where owner_user_id = $1 and organisation_id = $2
      order by due_date asc nulls last, residual_score desc`, [ownerUserId, orgId]
   );
   return res.rows.map(rowToRisk);
 }
 
-export async function dbDeleteRisk(id: string, orgId: string): Promise<number> {
-  const res = await getDbPool().query('delete from public.risk_register where id = $1 and organisation_id = $2', [id, orgId]);
+export async function dbDeleteRisk(id: string, orgId: string, db?: DbExecutor): Promise<number> {
+  const res = await (db ?? getDbPool()).query('delete from public.risk_register where id = $1 and organisation_id = $2', [id, orgId]);
   return res.rowCount ?? 0;
 }
 
@@ -157,8 +158,8 @@ export async function dbInsertWebhookEndpoint(w: WebhookEndpoint): Promise<void>
   );
 }
 
-export async function dbListWebhookEndpoints(orgId: string): Promise<WebhookEndpoint[]> {
-  const res = await getDbPool().query<WebhookRow>(
+export async function dbListWebhookEndpoints(orgId: string, db?: DbExecutor): Promise<WebhookEndpoint[]> {
+  const res = await (db ?? getDbPool()).query<WebhookRow>(
     'select * from public.webhook_endpoints where organisation_id = $1 order by created_at desc', [orgId]
   );
   return res.rows.map(rowToWebhook);

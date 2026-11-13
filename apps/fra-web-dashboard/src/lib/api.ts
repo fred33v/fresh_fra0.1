@@ -12,6 +12,7 @@ if (import.meta.env.PROD && API_URL && !API_URL.startsWith('https://')) {
 }
 const TOKEN_KEY = 'fra_access_token';
 const REFRESH_KEY = 'fra_refresh_token';
+const SESSION_KEY = 'fra_session_id';
 
 type ApiResponse<T> = {
   success: true;
@@ -43,12 +44,19 @@ export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_KEY);
 }
 
-export function setTokens(access: string, refresh: string) {
+function writeTokens(access: string, refresh: string) {
   localStorage.setItem(TOKEN_KEY, access);
   localStorage.setItem(REFRESH_KEY, refresh);
 }
 
+/** A new login starts a new session; rotation preserves this marker across tabs. */
+export function setTokens(access: string, refresh: string) {
+  localStorage.setItem(SESSION_KEY, Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''));
+  writeTokens(access, refresh);
+}
+
 export function clearTokens() {
+  localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);
 }
@@ -58,34 +66,43 @@ export function hasStoredTokens(): boolean {
 }
 
 async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
-  try {
-    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (!res.ok) {
-      clearTokens();
+  const attemptedToken = getRefreshToken();
+  const session = localStorage.getItem(SESSION_KEY);
+  if (!attemptedToken) return false;
+  const sameSession = () => localStorage.getItem(SESSION_KEY) === session;
+  const replacementAvailable = () => sameSession() && !!getRefreshToken() && hasStoredTokens();
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  const rotate = async (): Promise<boolean> => {
+    // A queued tab can use the preceding tab's rotation, but never a different login.
+    if (!sameSession()) return false;
+    if (getRefreshToken() !== attemptedToken) return replacementAvailable();
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: attemptedToken }),
+      });
+      // Logout, another login or a peer's rotation wins over this stale response.
+      if (!sameSession()) return false;
+      if (getRefreshToken() !== attemptedToken) return replacementAvailable();
+      if (!res.ok) {
+        // Without Web Locks, a peer may still be rotating this token. Keep credentials
+        // so its successful response can commit; the server continues to refuse replay.
+        if (locks && (res.status === 401 || res.status === 403)) clearTokens();
+        return false;
+      }
+      const json = await res.json() as ApiResponse<{ accessToken: string; refreshToken: string }>;
+      if (!sameSession()) return false;
+      if (getRefreshToken() !== attemptedToken) return replacementAvailable();
+      if (!json.success) return false;
+      writeTokens(json.data.accessToken, json.data.refreshToken);
+      return true;
+    } catch (err: unknown) {
+      logger.warn('Token refresh failed', err);
+      // A transient transport/server failure must not sign out this or another tab.
       return false;
     }
-
-    const json = await res.json() as ApiResponse<{ accessToken: string; refreshToken: string }>;
-    if (!json.success) {
-      clearTokens();
-      return false;
-    }
-
-    setTokens(json.data.accessToken, json.data.refreshToken);
-    return true;
-  } catch (err: unknown) {
-    logger.warn('Token refresh failed', err);
-    clearTokens();
-    return false;
-  }
+  };
+  return locks ? locks.request('fra-auth-refresh', rotate) : rotate();
 }
 
 async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {

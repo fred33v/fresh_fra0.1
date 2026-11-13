@@ -17,10 +17,10 @@ import { RATE_LIMITS, isValidUUID } from './types.js';
 import { auditLog } from './db/index.js';
 import { requirePackage } from './entitlements.js';
 import { mergeQuizScores, missingForCompletion, quizResult, QUIZ_PASS_MARK } from './workshop-quiz.js';
-import { newCertificateNumber } from './certificates.js';
+import { CertificateEligibilityError, getTrainingCertificate, issueTrainingCertificate } from './certificates.js';
 import {
   workshopProfiles, workshopSessions, sessionParticipants, workshopProgress, polls, pollResponses, questions,
-  questionUpvotes, actionPlans, certificates, newId, nowIso, memSessionRole, memParticipantCount, memFindProgress,
+  questionUpvotes, actionPlans, newId, nowIso, memSessionRole, memParticipantCount, memFindProgress,
   latestFirst, type SessionRow,
 } from './workshop-store.js';
 
@@ -280,6 +280,16 @@ workshop.post('/sessions', async (c) => {
   const schema = z.object({ title: z.string().min(1).max(200) });
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Title is required');
+
+  // Delivery authority is server-assigned; a paid package alone does not grant it.
+  if (auth.role !== 'admin') {
+    if (!hasDatabase()) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
+    const roles = await getDbPool().query(
+      "SELECT 1 FROM workshop_roles WHERE user_id = $1 AND role = 'facilitator' LIMIT 1",
+      [auth.userId],
+    );
+    if (!roles.rowCount) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
+  }
 
   const sessionCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
 
@@ -1280,18 +1290,7 @@ workshop.get('/certificates', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  if (!hasDatabase()) {
-    const latest = latestFirst([...certificates.values()].filter((ct) => ct.user_id === auth.userId), 'issued_at')[0];
-    return c.json({ success: true, data: latest ?? null });
-  }
-
-  const pool = getDbPool();
-  const res = await pool.query(
-    'SELECT * FROM certificates WHERE user_id = $1 ORDER BY issued_at DESC LIMIT 1',
-    [auth.userId]
-  );
-
-  return c.json({ success: true, data: res.rows[0] ?? null });
+  return c.json({ success: true, data: await getTrainingCertificate(auth.userId) });
 });
 
 workshop.post('/certificates', async (c) => {
@@ -1304,58 +1303,16 @@ workshop.post('/certificates', async (c) => {
   const schema = z.object({ sessionId: z.string().uuid().optional() });
   const parsed = schema.safeParse(await c.req.json().catch(() => ({})));
 
-  // Generate certificate number server-side
-  const certNumber = newCertificateNumber();
-  let issued: unknown;
-
-  if (hasDatabase()) {
-    const pool = getDbPool();
-
-    // Check if already has a certificate
-    const existing = await pool.query('SELECT * FROM certificates WHERE user_id = $1 LIMIT 1', [auth.userId]);
-    if (existing.rows[0]) return c.json({ success: true, data: existing.rows[0] });
-
-    // Verify workshop completion before issuing certificate
-    // Completed with the quiz pass mark (progress completed before the pass mark existed does not count)
-    const progress = await pool.query(
-      'SELECT quiz_scores FROM workshop_progress WHERE user_id = $1 AND completed_at IS NOT NULL ORDER BY completed_at DESC',
-      [auth.userId]
-    );
-    const passed = progress.rows.map((r: { quiz_scores: Record<string, number> }) => quizResult(r.quiz_scores)).find((r) => r.passed);
-    if (!passed) {
-      return jsonError(c, 400, 'NOT_COMPLETED', `Workshop must be completed with a quiz score of at least ${QUIZ_PASS_MARK}% before generating a certificate`);
-    }
-
-    const res = await pool.query(
-      `INSERT INTO certificates (user_id, session_id, certificate_number, quiz_score)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [auth.userId, parsed.data?.sessionId ?? null, certNumber, passed.percent]
-    );
-    issued = res.rows[0];
-  } else {
-    const existing = [...certificates.values()].find((ct) => ct.user_id === auth.userId);
-    if (existing) return c.json({ success: true, data: existing });
-    const passed = [...workshopProgress.values()]
-      .filter((wp) => wp.user_id === auth.userId && wp.completed_at)
-      .map((wp) => quizResult(wp.quiz_scores)).find((r) => r.passed);
-    if (!passed) {
-      return jsonError(c, 400, 'NOT_COMPLETED', `Workshop must be completed with a quiz score of at least ${QUIZ_PASS_MARK}% before generating a certificate`);
-    }
-    const row = {
-      id: newId(), user_id: auth.userId, session_id: parsed.data?.sessionId ?? null,
-      certificate_number: certNumber, quiz_score: passed.percent, issued_at: nowIso(),
-    };
-    certificates.set(row.id, row);
-    issued = row;
+  if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid certificate request');
+  try {
+    const issued = await issueTrainingCertificate(auth, parsed.data.sessionId, {
+      ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
+    });
+    return c.json({ success: true, data: issued.row }, issued.created ? 201 : 200);
+  } catch (error) {
+    if (error instanceof CertificateEligibilityError) return jsonError(c, error.status, error.code, error.message);
+    throw error;
   }
-
-  await auditLog({
-    eventType: 'workshop.certificate_generate', actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'certificate', resourceId: certNumber,
-    ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-
-  return c.json({ success: true, data: issued }, 201);
 });
 
 // ── SSE Events endpoint ──────────────────────────────────────

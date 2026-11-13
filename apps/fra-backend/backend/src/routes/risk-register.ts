@@ -1,3 +1,5 @@
+import { domainWrite } from '../domain-write.js';
+import type { DbExecutor } from '../db/transaction.js';
 // ============================================================
 // Enterprise risk register — organisation-level fraud risks with
 // inherent/residual scoring, owners, action plans and status tracking.
@@ -23,7 +25,7 @@ import {
 } from '../db/index.js';
 import { getIntakeByOrg } from '../speak-up-store.js';
 import { csvResponse, wantsCsv } from '../csv.js';
-import { emitOrgEvent } from '../webhooks-out.js';
+import { emitOrgEvent, enqueueOrgEvent } from '../webhooks-out.js';
 import { registerSuggestions } from '../assessment-to-register.js';
 
 const CONTROL_REDUCTION: Record<ControlEffectiveness, number> = {
@@ -71,52 +73,53 @@ const reviewSchema = z.object({ decision: z.enum(['approve', 'reopen']) });
 
 const riskRegister = new Hono();
 
-async function requireRiskAccess(c: Context): Promise<AuthContext | Response> {
+async function requireRiskAccess(c: Context, db?: DbExecutor): Promise<AuthContext | Response> {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
   if (!isManagerRole(auth.role)) return jsonError(c, 403, 'FORBIDDEN', 'Risk register requires employer or admin role');
-  const denied = await requirePackage(c, auth, 'pkg_full');
+  const denied = await requirePackage(c, auth, 'pkg_full', db);
   return denied ?? auth;
 }
 
 /** Any signed-in member of an Enterprise organisation: for the actions they own. */
-async function requireEnterpriseMember(c: Context): Promise<AuthContext | Response> {
+async function requireEnterpriseMember(c: Context, db?: DbExecutor): Promise<AuthContext | Response> {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
-  const denied = await requirePackage(c, auth, 'pkg_full');
+  const denied = await requirePackage(c, auth, 'pkg_full', db);
   return denied ?? auth;
 }
 
-async function saveRisk(entry: RiskRegisterEntry): Promise<void> {
-  if (hasDatabase()) await dbUpdateRisk(entry);
+async function saveRisk(entry: RiskRegisterEntry, db?: DbExecutor): Promise<void> {
+  if (hasDatabase()) await dbUpdateRisk(entry, db);
   else riskRegisterById.set(entry.id, entry);
 }
 
-async function ownerInOrg(userId: string, orgId: string): Promise<boolean> {
+async function ownerInOrg(userId: string, orgId: string, db?: DbExecutor): Promise<boolean> {
   if (hasDatabase()) {
-    const user = await dbGetUserById(userId);
+    const user = await dbGetUserById(userId, db);
     return !!user && user.organisationId === orgId;
   }
   return Array.from(usersByEmail.values()).some((u) => u.id === userId && u.organisationId === orgId);
 }
 
-async function listRisks(orgId: string): Promise<RiskRegisterEntry[]> {
-  if (hasDatabase()) return dbListRisks(orgId);
+async function listRisks(orgId: string, db?: DbExecutor): Promise<RiskRegisterEntry[]> {
+  if (hasDatabase()) return dbListRisks(orgId, db);
   return Array.from(riskRegisterById.values())
     .filter((r) => r.organisationId === orgId)
     .sort((a, b) => b.residualScore - a.residualScore || b.createdAt.localeCompare(a.createdAt));
 }
 
-async function getRisk(id: string, orgId: string): Promise<RiskRegisterEntry | null> {
-  if (hasDatabase()) return dbGetRisk(id, orgId);
+async function getRisk(id: string, orgId: string, db?: DbExecutor): Promise<RiskRegisterEntry | null> {
+  if (hasDatabase()) return dbGetRisk(id, orgId, db);
   const r = riskRegisterById.get(id);
   return r && r.organisationId === orgId ? r : null;
 }
 
-function notifyRiskChange(entry: RiskRegisterEntry, event: 'risk.created' | 'risk.updated', previousPriority?: RiskPriority) {
-  void emitOrgEvent(entry.organisationId, event, { risk: entry });
+async function notifyRiskChange(entry: RiskRegisterEntry, event: 'risk.created' | 'risk.updated', previousPriority: RiskPriority | undefined, db?: DbExecutor) {
+  const emit = (type:Parameters<typeof emitOrgEvent>[1],data:Record<string,unknown>)=>db?enqueueOrgEvent(entry.organisationId,type,data,db):emitOrgEvent(entry.organisationId,type,data);
+  await emit(event, { risk: entry });
   if (entry.priority === 'HIGH' && previousPriority !== 'HIGH') {
-    void emitOrgEvent(entry.organisationId, 'risk.high_priority', { risk: entry });
+    await emit('risk.high_priority', { risk: entry });
   }
 }
 
@@ -155,8 +158,8 @@ riskRegister.get('/my-actions', async (c) => {
   });
 });
 
-riskRegister.post('/my-actions/:id/progress', async (c) => {
-  const auth = await requireEnterpriseMember(c);
+riskRegister.post('/my-actions/:id/progress', domainWrite(async (c, db) => {
+  const auth = await requireEnterpriseMember(c, db);
   if (auth instanceof Response) return auth;
   const id = requireUUIDParam(c, 'id');
   if (id instanceof Response) return id;
@@ -164,7 +167,7 @@ riskRegister.post('/my-actions/:id/progress', async (c) => {
   const parsed = progressSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid progress update');
 
-  const existing = await getRisk(id, auth.organisationId);
+  const existing = await getRisk(id, auth.organisationId, db);
   // Someone else's risk looks the same as a missing one
   if (!existing || existing.ownerUserId !== auth.userId) return jsonError(c, 404, 'NOT_FOUND', 'Action not found');
   if (existing.status === 'closed' || existing.status === 'accepted') {
@@ -181,21 +184,21 @@ riskRegister.post('/my-actions/:id/progress', async (c) => {
     ownerUpdatedAt: now,
     updatedAt: now,
   };
-  await saveRisk(updated);
+  await saveRisk(updated, db);
 
   await auditLog({
     eventType: 'risk_register.owner_update', actorId: auth.userId, actorEmail: auth.email,
     organisationId: auth.organisationId, resourceType: 'risk_register', resourceId: id,
     details: { status, note: updated.ownerNote ?? null }, ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-  notifyRiskChange(updated, 'risk.updated', existing.priority);
+  }, db);
+  await notifyRiskChange(updated, 'risk.updated', existing.priority, db);
 
   return c.json({ success: true, data: updated });
-});
+}));
 
 // The employer confirms an action its owner marked done, or sends it back
-riskRegister.post('/risk-register/:id/review', async (c) => {
-  const auth = await requireRiskAccess(c);
+riskRegister.post('/risk-register/:id/review', domainWrite(async (c, db) => {
+  const auth = await requireRiskAccess(c, db);
   if (auth instanceof Response) return auth;
   const id = requireUUIDParam(c, 'id');
   if (id instanceof Response) return id;
@@ -203,7 +206,7 @@ riskRegister.post('/risk-register/:id/review', async (c) => {
   const parsed = reviewSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid review');
 
-  const existing = await getRisk(id, auth.organisationId);
+  const existing = await getRisk(id, auth.organisationId, db);
   if (!existing) return jsonError(c, 404, 'NOT_FOUND', 'Risk not found');
   if (!existing.reviewPending) return jsonError(c, 409, 'NOTHING_TO_REVIEW', 'This risk has no update waiting for review');
 
@@ -213,25 +216,25 @@ riskRegister.post('/risk-register/:id/review', async (c) => {
     reviewPending: false,
     updatedAt: new Date().toISOString(),
   };
-  await saveRisk(updated);
+  await saveRisk(updated, db);
 
   await auditLog({
     eventType: `risk_register.owner_update_${parsed.data.decision === 'approve' ? 'approved' : 'reopened'}`,
     actorId: auth.userId, actorEmail: auth.email, organisationId: auth.organisationId,
     resourceType: 'risk_register', resourceId: id, details: { ownerUserId: existing.ownerUserId ?? null },
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-  notifyRiskChange(updated, 'risk.updated', existing.priority);
+  }, db);
+  await notifyRiskChange(updated, 'risk.updated', existing.priority, db);
 
   return c.json({ success: true, data: updated });
-});
+}));
 
 // ── From the fraud risk assessment ──────────────────────────────
 
-async function suggestionsFor(orgId: string) {
+async function suggestionsFor(orgId: string, db?: DbExecutor) {
   const [assessments, register] = await Promise.all([
-    hasDatabase() ? dbListAssessmentsByOrganisation(orgId) : Promise.resolve([...assessmentsById.values()].filter((a) => a.organisationId === orgId)),
-    listRisks(orgId),
+    hasDatabase() ? dbListAssessmentsByOrganisation(orgId, db) : Promise.resolve([...assessmentsById.values()].filter((a) => a.organisationId === orgId)),
+    listRisks(orgId, db),
   ]);
   return registerSuggestions(assessments, register);
 }
@@ -244,12 +247,12 @@ riskRegister.get('/risk-register/from-assessment', async (c) => {
 });
 
 /** Adds them as open risks with no owner, for the employer to review and assign. */
-riskRegister.post('/risk-register/from-assessment', async (c) => {
-  const auth = await requireRiskAccess(c);
+riskRegister.post('/risk-register/from-assessment', domainWrite(async (c, db) => {
+  const auth = await requireRiskAccess(c, db);
   if (auth instanceof Response) return auth;
   const body = (await c.req.json().catch(() => ({}))) as { titles?: unknown };
   const wanted = Array.isArray(body.titles) ? new Set(body.titles.filter((t): t is string => typeof t === 'string')) : null;
-  const picked = (await suggestionsFor(auth.organisationId)).filter((s) => !wanted || wanted.has(s.title));
+  const picked = (await suggestionsFor(auth.organisationId, db)).filter((s) => !wanted || wanted.has(s.title));
 
   const now = new Date().toISOString();
   const created: RiskRegisterEntry[] = [];
@@ -260,18 +263,18 @@ riskRegister.post('/risk-register/from-assessment', async (c) => {
       ...scoreRisk(s.impact, s.likelihood, s.controlEffectiveness),
       status: 'open', createdByUserId: auth.userId, createdAt: now, updatedAt: now,
     };
-    if (hasDatabase()) await dbInsertRisk(entry);
+    if (hasDatabase()) await dbInsertRisk(entry, db);
     else riskRegisterById.set(entry.id, entry);
-    notifyRiskChange(entry, 'risk.created');
+    await notifyRiskChange(entry, 'risk.created', undefined, db);
     created.push(entry);
   }
   await auditLog({
     eventType: 'risk_register.imported_from_assessment', actorId: auth.userId, actorEmail: auth.email,
     organisationId: auth.organisationId, resourceType: 'risk_register', details: { count: created.length, titles: created.map((r) => r.title) },
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
+  }, db);
   return c.json({ success: true, data: created }, 201);
-});
+}));
 
 riskRegister.get('/risk-register', async (c) => {
   const auth = await requireRiskAccess(c);
@@ -324,15 +327,15 @@ riskRegister.get('/risk-register/:id', async (c) => {
   return c.json({ success: true, data: risk });
 });
 
-riskRegister.post('/risk-register', async (c) => {
-  const auth = await requireRiskAccess(c);
+riskRegister.post('/risk-register', domainWrite(async (c, db) => {
+  const auth = await requireRiskAccess(c, db);
   if (auth instanceof Response) return auth;
 
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid risk register entry');
   const d = parsed.data;
 
-  if (d.ownerUserId && !(await ownerInOrg(d.ownerUserId, auth.organisationId))) {
+  if (d.ownerUserId && !(await ownerInOrg(d.ownerUserId, auth.organisationId, db))) {
     return jsonError(c, 400, 'INVALID_OWNER', 'Owner must be a member of your organisation');
   }
 
@@ -357,7 +360,7 @@ riskRegister.post('/risk-register', async (c) => {
     updatedAt: now,
   };
 
-  if (hasDatabase()) await dbInsertRisk(entry);
+  if (hasDatabase()) await dbInsertRisk(entry, db);
   else riskRegisterById.set(entry.id, entry);
 
   await auditLog({
@@ -365,14 +368,14 @@ riskRegister.post('/risk-register', async (c) => {
     organisationId: auth.organisationId, resourceType: 'risk_register', resourceId: entry.id,
     details: { title: entry.title, residualScore: entry.residualScore, priority: entry.priority },
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-  notifyRiskChange(entry, 'risk.created');
+  }, db);
+  await notifyRiskChange(entry, 'risk.created', undefined, db);
 
   return c.json({ success: true, data: entry }, 201);
-});
+}));
 
-riskRegister.patch('/risk-register/:id', async (c) => {
-  const auth = await requireRiskAccess(c);
+riskRegister.patch('/risk-register/:id', domainWrite(async (c, db) => {
+  const auth = await requireRiskAccess(c, db);
   if (auth instanceof Response) return auth;
   const id = requireUUIDParam(c, 'id');
   if (id instanceof Response) return id;
@@ -381,10 +384,10 @@ riskRegister.patch('/risk-register/:id', async (c) => {
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid risk register update');
   const d = parsed.data;
 
-  const existing = await getRisk(id, auth.organisationId);
+  const existing = await getRisk(id, auth.organisationId, db);
   if (!existing) return jsonError(c, 404, 'NOT_FOUND', 'Risk not found');
 
-  if (d.ownerUserId && !(await ownerInOrg(d.ownerUserId, auth.organisationId))) {
+  if (d.ownerUserId && !(await ownerInOrg(d.ownerUserId, auth.organisationId, db))) {
     return jsonError(c, 400, 'INVALID_OWNER', 'Owner must be a member of your organisation');
   }
 
@@ -400,7 +403,7 @@ riskRegister.patch('/risk-register/:id', async (c) => {
   if (d.status !== undefined && d.status !== existing.status) merged.reviewPending = false;
   Object.assign(merged, scoreRisk(merged.impact, merged.likelihood, merged.controlEffectiveness));
 
-  if (hasDatabase()) await dbUpdateRisk(merged);
+  if (hasDatabase()) await dbUpdateRisk(merged, db);
   else riskRegisterById.set(id, merged);
 
   await auditLog({
@@ -408,21 +411,21 @@ riskRegister.patch('/risk-register/:id', async (c) => {
     organisationId: auth.organisationId, resourceType: 'risk_register', resourceId: id,
     details: { changes: Object.keys(d), residualScore: merged.residualScore, priority: merged.priority },
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
-  notifyRiskChange(merged, 'risk.updated', existing.priority);
+  }, db);
+  await notifyRiskChange(merged, 'risk.updated', existing.priority, db);
 
   return c.json({ success: true, data: merged });
-});
+}));
 
-riskRegister.delete('/risk-register/:id', async (c) => {
-  const auth = await requireRiskAccess(c);
+riskRegister.delete('/risk-register/:id', domainWrite(async (c, db) => {
+  const auth = await requireRiskAccess(c, db);
   if (auth instanceof Response) return auth;
   const id = requireUUIDParam(c, 'id');
   if (id instanceof Response) return id;
 
   let deleted = 0;
   if (hasDatabase()) {
-    deleted = await dbDeleteRisk(id, auth.organisationId);
+    deleted = await dbDeleteRisk(id, auth.organisationId, db);
   } else if (riskRegisterById.get(id)?.organisationId === auth.organisationId) {
     riskRegisterById.delete(id);
     deleted = 1;
@@ -433,8 +436,8 @@ riskRegister.delete('/risk-register/:id', async (c) => {
     eventType: 'risk_register.deleted', actorId: auth.userId, actorEmail: auth.email,
     organisationId: auth.organisationId, resourceType: 'risk_register', resourceId: id,
     ipAddress: getClientIp(c), userAgent: c.req.header('user-agent'),
-  });
+  }, db);
   return c.json({ success: true, data: { id, deleted: true } });
-});
+}));
 
 export default riskRegister;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, SearchCheck, XCircle } from 'lucide-react';
 import { anonymousApi, ApiError } from '@/lib/api';
@@ -13,6 +13,7 @@ type Result =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'valid'; certificate: VerifiedCertificate }
+  | { state: 'revoked'; number: string }
   | { state: 'invalid'; message: string };
 
 const longDate = (value: string) =>
@@ -36,21 +37,29 @@ export default function CertificateVerify() {
   const fromLink = searchParams.get('n') ?? '';
   const [number, setNumber] = useState(fromLink);
   const [result, setResult] = useState<Result>({ state: 'idle' });
+  const requestSequence = useRef(0);
 
   const check = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
+    const request = ++requestSequence.current;
     setResult({ state: 'checking' });
     try {
       const certificate = await anonymousApi.get<VerifiedCertificate>(`/api/v1/certificates/verify/${encodeURIComponent(trimmed)}`);
-      setResult({ state: 'valid', certificate });
+      if (request !== requestSequence.current) return;
+      if (certificate.status === 'revoked') setResult({ state: 'revoked', number: certificate.certificateNumber });
+      else if (certificate.valid === true) setResult({ state: 'valid', certificate });
+      else setResult({ state: 'invalid', message: 'This certificate could not be verified.' });
     } catch (err: unknown) {
-      setResult({ state: 'invalid', message: failureMessage(err) });
+      if (request === requestSequence.current) setResult({ state: 'invalid', message: failureMessage(err) });
     }
   };
 
   useEffect(() => {
     if (fromLink) check(fromLink);
+    // This is a sequence counter, not a DOM ref: cleanup invalidates pending checks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { requestSequence.current++; };
     // Check once for the number in the link; later checks come from the form
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -105,7 +114,9 @@ export default function CertificateVerify() {
                   Certificate is valid
                 </CardTitle>
                 <CardDescription>
-                  These are the details we hold. They should match the certificate exactly.
+                  {result.certificate.snapshotOrigin === 'legacy_reconstructed'
+                    ? 'Legacy record: these details were reconstructed from existing records and may differ from the original certificate.'
+                    : 'These are the details recorded when this certificate was issued. They should match the certificate exactly.'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -137,6 +148,8 @@ export default function CertificateVerify() {
                       <dd className="font-medium">{result.certificate.quizScore}%</dd>
                     </>
                   )}
+                  {result.certificate.completedAt && <><dt className="text-muted-foreground">Date completed</dt>
+                    <dd className="font-medium">{longDate(result.certificate.completedAt)}</dd></>}
                   <dt className="text-muted-foreground">Date issued</dt>
                   <dd className="font-medium">{longDate(result.certificate.issuedAt)}</dd>
                   <dt className="text-muted-foreground">Number</dt>
@@ -144,6 +157,15 @@ export default function CertificateVerify() {
                 </dl>
               </CardContent>
             </Card>
+          )}
+
+          {result.state === 'revoked' && (
+            <Card className="border-destructive"><CardContent className="pt-6 flex gap-3">
+              <XCircle className="h-6 w-6 text-destructive flex-none" aria-hidden="true" />
+              <div><h2 className="font-semibold mb-1">Certificate has been revoked</h2>
+                <p className="font-mono">{result.number}</p>
+                <p className="text-muted-foreground">This certificate is no longer valid. Contact the issuing organisation if you need further information.</p></div>
+            </CardContent></Card>
           )}
 
           {result.state === 'invalid' && (

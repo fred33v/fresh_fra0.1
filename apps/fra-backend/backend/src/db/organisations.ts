@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { Organisation } from '../types.js';
 
@@ -9,8 +10,8 @@ export async function dbInsertOrganisation(org: Organisation): Promise<void> {
   );
 }
 
-export async function dbGetOrganisationById(id: string): Promise<Organisation | null> {
-  const pool = getDbPool();
+export async function dbGetOrganisationById(id: string, db?: DbExecutor): Promise<Organisation | null> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<{
     id: string; name: string; created_by_user_id: string; employee_count: string | null;
     region: string | null; industry: string | null; created_at: string; updated_at: string;

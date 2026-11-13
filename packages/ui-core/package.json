@@ -5,26 +5,26 @@
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./tokens": {
-      "types": "./dist/tokens/index.d.ts",
+      "types": "./src/tokens/index.ts",
       "import": "./dist/tokens/index.js"
     },
     "./types": {
-      "types": "./dist/types/index.d.ts",
+      "types": "./src/types/index.ts",
       "import": "./dist/types/index.js"
     },
     "./accessibility": {
-      "types": "./dist/accessibility/index.d.ts",
+      "types": "./src/accessibility/index.ts",
       "import": "./dist/accessibility/index.js"
     },
     "./constants": {
-      "types": "./dist/constants/index.d.ts",
+      "types": "./src/constants/index.ts",
       "import": "./dist/constants/index.js"
     }
   },

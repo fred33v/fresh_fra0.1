@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
       await hydrateFromMe();
-      return { error: null, emailConfirmationRequired: !!data.emailConfirmationRequired };
+      return { error: null };
     } catch (err: unknown) {
       return { error: err as Error };
     }

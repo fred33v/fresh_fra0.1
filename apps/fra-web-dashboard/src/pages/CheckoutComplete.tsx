@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertCircle, Loader2, Smartphone } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -57,7 +57,7 @@ export default function CheckoutComplete() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [purchaseId, fromMobile]);
 
-  const content: Record<State, { icon: JSX.Element; title: string; body: string; actions: JSX.Element }> = {
+  const content: Record<State, { icon: ReactElement; title: string; body: string; actions: ReactElement }> = {
     checking: {
       icon: <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />,
       title: 'Confirming your payment…',

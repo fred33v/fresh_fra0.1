@@ -56,10 +56,16 @@ function load(kind: Kind, userId: string): Saved | null {
 
 /** The self-assessment checklist and the 90-day roadmap, filled in on the web instead of on paper. */
 export default function ResourceChecklist({ kind }: { kind: Kind }) {
+  const { user } = useAuth();
+  // Reset local form state before saving when the signed-in account changes.
+  return <ResourceChecklistContent key={`${kind}:${user?.userId ?? 'anonymous'}`} kind={kind} />;
+}
+
+function ResourceChecklistContent({ kind }: { kind: Kind }) {
   const content = CONTENT[kind];
   const { user, profile } = useAuth();
   const { entitlements } = useEntitlements();
-  const userId = user?.id ?? 'anonymous';
+  const userId = user?.userId ?? 'anonymous';
   const saved = useMemo(() => load(kind, userId), [kind, userId]);
 
   const [ticked, setTicked] = useState<Set<string>>(() => new Set(saved?.ticked ?? []));

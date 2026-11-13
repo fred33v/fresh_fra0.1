@@ -1,3 +1,5 @@
+import { domainWrite } from '../domain-write.js';
+import type { DbExecutor } from '../db/transaction.js';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
@@ -11,25 +13,24 @@ import {
 import { rateLimit, getClientIp } from '../middleware.js';
 import { getAssessmentAllowance } from '../entitlements.js';
 import { ASSESSMENT_MODULES } from '../assessment-modules.js';
-import { emitOrgEvent } from '../webhooks-out.js';
+import { emitOrgEvent, enqueueOrgEvent } from '../webhooks-out.js';
 import { scoreAssessment } from '../assessment-risk.js';
 import { computeResult, isSubmitted, resultsOf } from '../assessment-result.js';
 import { organisationReassessmentStatus } from '../reassessment.js';
 import { issueAssessmentCertificateLater } from '../certificates.js';
 
 // Answers stay out of webhook payloads; integrations fetch detail via the API if needed
-function notifySubmitted(a: Assessment) {
-  // Every submitted assessment gets its own verifiable certificate
-  issueAssessmentCertificateLater(a);
+async function publishSubmitted(a: Assessment, db?: DbExecutor) {
+  const emit = (type: Parameters<typeof emitOrgEvent>[1],data:Record<string,unknown>) => db ? enqueueOrgEvent(a.organisationId,type,data,db) : emitOrgEvent(a.organisationId,type,data);
   const risk = scoreAssessment(a);
   const assessment = {
     id: a.id, title: a.title, status: a.status, createdByUserId: a.createdByUserId,
     submittedAt: a.submittedAt, answerCount: Object.keys(a.answers).length,
     riskLevel: risk.level, riskCounts: risk.counts,
   };
-  void emitOrgEvent(a.organisationId, 'assessment.submitted', { assessment });
+  await emit('assessment.submitted', { assessment });
   if (risk.level === 'high') {
-    void emitOrgEvent(a.organisationId, 'assessment.high_risk', {
+    await emit('assessment.high_risk', {
       assessment,
       highRisks: risk.risks.filter((r) => r.priority === 'high').map(({ title, area, residualScore }) => ({ title, area, residualScore })),
     });
@@ -93,7 +94,7 @@ assessments.get('/assessments/organisation/:orgId', async (c) => {
   return c.json({ success: true, data: result.items, pagination: { page: result.page, pageSize: result.pageSize, total: result.total, totalPages: result.totalPages } });
 });
 
-assessments.post('/assessments', async (c) => {
+assessments.post('/assessments', domainWrite(async (c, db) => {
   const limited = await rateLimit('assessments:create', { windowMs: 60_000, max: 20 })(c);
   if (limited instanceof Response) return limited;
 
@@ -103,7 +104,7 @@ assessments.post('/assessments', async (c) => {
   const parsed = assessmentCreateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid assessment payload');
 
-  const allowance = await getAssessmentAllowance(auth);
+  const allowance = await getAssessmentAllowance(auth, new Date(), db);
   if (allowance.limit === 0) return jsonError(c, 403, 'PACKAGE_REQUIRED', 'A paid package is required to start an assessment');
   if (!allowance.allowed) return jsonError(c, 403, 'ASSESSMENT_LIMIT_REACHED', allowance.reason ?? 'Assessment limit reached');
 
@@ -120,7 +121,7 @@ assessments.post('/assessments', async (c) => {
   };
 
   if (hasDatabase()) {
-    await dbInsertAssessment(assessment);
+    await dbInsertAssessment(assessment, db);
   } else {
     assessmentsById.set(assessment.id, assessment);
   }
@@ -130,10 +131,10 @@ assessments.post('/assessments', async (c) => {
     organisationId: auth.organisationId, resourceType: 'assessment', resourceId: assessment.id,
     details: { title: assessment.title }, ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
-  });
+  }, db);
 
   return c.json({ success: true, data: assessment }, 201);
-});
+}));
 
 // Registered before /assessments/:id so "modules" is not treated as an ID
 // When the organisation's quarterly reassessment is due (Professional and Enterprise)
@@ -180,7 +181,7 @@ assessments.get('/assessments/:id', async (c) => {
   return c.json({ success: true, data: assessment });
 });
 
-assessments.patch('/assessments/:id', async (c) => {
+assessments.patch('/assessments/:id', domainWrite(async (c, db, afterCommit) => {
   const limited = await rateLimit('assessments:patch', { windowMs: 60_000, max: 30 })(c);
   if (limited instanceof Response) return limited;
 
@@ -227,11 +228,11 @@ assessments.patch('/assessments/:id', async (c) => {
     if (isSubmitted(updated) && !updated.result) updated.result = computeResult(updated, now);
 
     assessmentsById.set(id, updated);
-    if (newStatus === 'submitted' && assessment.status !== 'submitted') notifySubmitted(updated);
+    if (newStatus === 'submitted' && assessment.status !== 'submitted') { await publishSubmitted(updated, db); afterCommit(()=>issueAssessmentCertificateLater(updated)); }
     return c.json({ success: true, data: updated });
   }
 
-  const existing = await dbGetAssessmentById(id);
+  const existing = await dbGetAssessmentById(id, db);
   if (!existing || existing.organisationId !== auth.organisationId) {
     return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
   }
@@ -254,7 +255,7 @@ assessments.patch('/assessments/:id', async (c) => {
     updatedAt: now,
     submittedAt: newStatus === 'submitted' && existing.status !== 'submitted' ? now : undefined,
     result: isSubmitted({ status: newStatus }) && !existing.result ? computeResult({ id, answers }, now) : undefined,
-  });
+  }, db);
 
   if (!updated) return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
 
@@ -263,13 +264,14 @@ assessments.patch('/assessments/:id', async (c) => {
     organisationId: auth.organisationId, resourceType: 'assessment', resourceId: id,
     details: { title: updated.title, status: updated.status }, ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
-  });
-  if (newStatus === 'submitted' && existing.status !== 'submitted') notifySubmitted(updated);
+  }, db);
+  if (newStatus === 'submitted' && existing.status !== 'submitted') await publishSubmitted(updated, db);
+  afterCommit(() => issueAssessmentCertificateLater(updated));
 
   return c.json({ success: true, data: updated });
-});
+}));
 
-assessments.post('/assessments/:id/submit', async (c) => {
+assessments.post('/assessments/:id/submit', domainWrite(async (c, db, afterCommit) => {
   const limited = await rateLimit('assessments:submit', { windowMs: 60_000, max: 10 })(c);
   if (limited instanceof Response) return limited;
 
@@ -310,12 +312,13 @@ assessments.post('/assessments/:id/submit', async (c) => {
       ipAddress: getClientIp(c),
       userAgent: c.req.header('user-agent'),
     });
-    notifySubmitted(updated);
+    await publishSubmitted(updated, db);
+    afterCommit(() => issueAssessmentCertificateLater(updated));
 
     return c.json({ success: true, data: updated });
   }
 
-  const existing = await dbGetAssessmentById(id);
+  const existing = await dbGetAssessmentById(id, db);
   if (!existing || existing.organisationId !== auth.organisationId) {
     return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
   }
@@ -332,7 +335,7 @@ assessments.post('/assessments/:id/submit', async (c) => {
     submittedAt: now,
     updatedAt: now,
     result: computeResult(existing, now),
-  });
+  }, db);
 
   if (!updated) return jsonError(c, 404, 'NOT_FOUND', 'Assessment not found');
 
@@ -342,11 +345,12 @@ assessments.post('/assessments/:id/submit', async (c) => {
     details: { title: updated.title, answerCount: Object.keys(updated.answers).length },
     ipAddress: getClientIp(c),
     userAgent: c.req.header('user-agent'),
-  });
-  notifySubmitted(updated);
+  }, db);
+  await publishSubmitted(updated, db);
+  afterCommit(() => issueAssessmentCertificateLater(updated));
 
   return c.json({ success: true, data: updated });
-});
+}));
 
 assessments.get('/assessments/:id/results', async (c) => {
   const limited = await rateLimit('assessments:results', { windowMs: 60_000, max: 60 })(c);

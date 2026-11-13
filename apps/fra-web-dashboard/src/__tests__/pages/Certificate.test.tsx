@@ -108,6 +108,8 @@ function setupAuth(overrides?: Record<string, unknown>) {
     isLoading: false,
     signUp: vi.fn(),
     signIn: vi.fn(),
+    verifyEmail: vi.fn().mockResolvedValue({ error: null }),
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn(),
     hasRole: vi.fn(),
     refreshProfile: vi.fn(),
@@ -122,7 +124,7 @@ function setupProgress(overrides?: Record<string, unknown>) {
     error: null,
     updateSection: vi.fn(),
     completeSection: vi.fn(),
-    saveQuizScore: vi.fn(),
+    saveQuizAnswer: vi.fn(),
     saveScenarioChoice: vi.fn(),
     markComplete: vi.fn(),
     refreshProgress: vi.fn(),
@@ -435,3 +437,16 @@ describe('Certificate', () => {
     });
   });
 });
+
+ it('previews the issued identity instead of later profile changes', async () => {
+  mockedApi.get.mockResolvedValue(makeCertificate({issued_details:{holderName:'Original Recipient',organisationName:'Original Organisation'}}));
+  renderCertificate();
+  expect(await screen.findByText('Original Recipient')).toBeInTheDocument();
+  expect(screen.getByText('Original Organisation')).toBeInTheDocument();
+ });
+ it('marks a revoked certificate and disables download/share', async () => {
+  mockedApi.get.mockResolvedValue(makeCertificate({status:'revoked'}));renderCertificate();
+  expect(await screen.findByRole('alert')).toHaveTextContent('revoked');
+  expect(screen.getByRole('button',{name:/Download/})).toBeDisabled();
+  expect(screen.getByRole('button',{name:/Share/})).toBeDisabled();
+ });

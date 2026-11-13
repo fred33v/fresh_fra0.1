@@ -8,6 +8,7 @@ import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
 import { checkProductionEnv } from './production-env.js';
 import { createLogger } from './logger.js';
 import { scheduleRetention } from './retention.js';
+import { scheduleWebhookDeliveries } from './webhook-deliveries.js';
 import { scheduleReassessmentReminders } from './reassessment.js';
 import { usingDevRefreshSecret, refreshSecret } from './types.js';
 import { applyGlobalMiddleware, applyApiMiddleware } from './middleware.js';
@@ -184,6 +185,7 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const server = serve({ fetch: app.fetch, port, hostname });
   // Daily data-retention job (dry run unless RETENTION_ENABLED=true); needs the database
   const stopRetention = hasDatabase() ? scheduleRetention() : () => {};
+  const stopWebhookDeliveries = scheduleWebhookDeliveries();
   // Daily quarterly-reassessment reminders (audit trail and reassessment.due webhooks)
   const stopReminders = scheduleReassessmentReminders();
   // Frontend error count to CloudWatch once a minute (production only)
@@ -192,9 +194,11 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully`);
     stopRetention();
+    const deliveriesStopped = stopWebhookDeliveries();
     stopReminders();
     stopClientErrorMetrics();
     server.close(async () => {
+      await deliveriesStopped;
       await closeDbPool();
       logger.info('Shutdown complete');
       process.exit(0);

@@ -126,6 +126,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      WEBHOOK_WORKER_ENABLED: 'false' # Integration drains use a fake transport; never call external endpoints
       DATABASE_URL: postgresql://fra:fra-ci-only@localhost:5432/fra
       NODE_ENV: development
     steps:
@@ -175,6 +176,40 @@ jobs:
           # PDF rendering needs a headless browser, which is not under test here
           SMOKE_SKIP_PDF: '1'
         run: node scripts/db-smoke.mjs
+
+      - name: Transaction concurrency and permissions (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          TRANSACTION_TEST_DATABASE: '1'
+        run: node scripts/transaction-integration.mjs
+
+      - name: Payment lifecycle and durable receipts (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          PAYMENT_TEST_DATABASE: '1'
+        run: node --import tsx scripts/payment-integration.mjs
+
+      - name: Durable outgoing webhooks (PostgreSQL, fake transport)
+        working-directory: apps/fra-backend/backend
+        env:
+          WEBHOOK_TEST_DATABASE: '1'
+        run: node --import tsx scripts/webhook-delivery-integration.mjs
+
+      - name: Atomic domain publication and budget planning (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          DOMAIN_BUDGET_TEST_DATABASE: '1'
+        run: node --import tsx scripts/domain-budget-integration.mjs
+
+      - name: Ensure Chrome for certificate PDF tests
+        working-directory: apps/fra-backend/backend
+        run: pnpm exec puppeteer browsers install chrome
+
+      - name: Certificate lifecycle and PDFs (PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          CERTIFICATE_TEST_DATABASE: '1'
+        run: node scripts/certificate-integration.mjs
 
       - name: Backend log on failure
         if: failure()

@@ -96,6 +96,9 @@ importers:
 
   apps/fra-backend/backend:
     dependencies:
+      '@stopfra/types':
+        specifier: workspace:*
+        version: link:../../../packages/types
       '@aws-sdk/client-cloudwatch':
         specifier: ^3.1152.0
         version: 3.1161.0
@@ -721,6 +724,9 @@ importers:
       '@stopfra/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@stopfra/ui-core':
+        specifier: workspace:*
+        version: link:../../packages/ui-core
       '@tanstack/react-query':
         specifier: ^5.83.0
         version: 5.90.20(react@19.1.0)
