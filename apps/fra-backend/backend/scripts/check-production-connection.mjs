@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Run with: node --import tsx scripts/check-production-connection.mjs
 // Reads DATABASE_URL from the environment; never prints the URL or server errors.
+import '../src/env.ts';
 import pg from 'pg';
 import { productionDatabaseConfig } from '../src/database-tls.ts';
 

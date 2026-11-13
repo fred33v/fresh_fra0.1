@@ -1,5 +1,5 @@
 // Must stay the first import: modules below read process.env when they load
-import 'dotenv/config';
+import './env.js';
 import { serve } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { getDbPool, closeDbPool } from './db.js';

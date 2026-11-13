@@ -1,3 +1,4 @@
+import './env.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getDbPool, closeDbPool } from './db.js';
@@ -12,6 +13,15 @@ const MIGRATION_LOCK = 'SELECT pg_advisory_lock(193477, 1)';
 const MIGRATION_UNLOCK = 'SELECT pg_advisory_unlock(193477, 1)';
 
 async function main() {
+  // Neon pulls both URLs: migrations hold a session advisory lock and need direct TCP.
+  if (process.env.DATABASE_URL_UNPOOLED) process.env.DATABASE_URL = process.env.DATABASE_URL_UNPOOLED;
+  if (process.env.DATABASE_URL) {
+    const target = new URL(process.env.DATABASE_URL);
+    const host = target.searchParams.get('host') ?? target.hostname;
+    if (host.split('.')[0].endsWith('-pooler')) {
+      throw new Error('Migrations require DATABASE_URL_UNPOOLED or a direct DATABASE_URL');
+    }
+  }
   const migrationsDir = join(process.cwd(), 'migrations');
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
