@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { ApiKey, RiskRegisterEntry, WebhookEndpoint, WebhookEvent, ControlEffectiveness, RiskPriority, RiskStatus } from '../types.js';
 
@@ -157,8 +158,8 @@ export async function dbInsertWebhookEndpoint(w: WebhookEndpoint): Promise<void>
   );
 }
 
-export async function dbListWebhookEndpoints(orgId: string): Promise<WebhookEndpoint[]> {
-  const res = await getDbPool().query<WebhookRow>(
+export async function dbListWebhookEndpoints(orgId: string, db?: DbExecutor): Promise<WebhookEndpoint[]> {
+  const res = await (db ?? getDbPool()).query<WebhookRow>(
     'select * from public.webhook_endpoints where organisation_id = $1 order by created_at desc', [orgId]
   );
   return res.rows.map(rowToWebhook);

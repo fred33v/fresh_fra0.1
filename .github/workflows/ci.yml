@@ -126,6 +126,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      WEBHOOK_WORKER_ENABLED: 'false' # Integration drains use a fake transport; never call external endpoints
       DATABASE_URL: postgresql://fra:fra-ci-only@localhost:5432/fra
       NODE_ENV: development
     steps:
@@ -187,6 +188,12 @@ jobs:
         env:
           PAYMENT_TEST_DATABASE: '1'
         run: node --import tsx scripts/payment-integration.mjs
+
+      - name: Durable outgoing webhooks (PostgreSQL, fake transport)
+        working-directory: apps/fra-backend/backend
+        env:
+          WEBHOOK_TEST_DATABASE: '1'
+        run: node --import tsx scripts/webhook-delivery-integration.mjs
 
       - name: Ensure Chrome for certificate PDF tests
         working-directory: apps/fra-backend/backend

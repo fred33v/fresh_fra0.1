@@ -20,7 +20,7 @@ import { sendVerificationLink } from './auth.js';
 import type { KeypassStatus } from '../types.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { getActiveKeypassAllowance, listOrgPurchases } from '../entitlements.js';
-import { emitOrgEvent } from '../webhooks-out.js';
+import { emitOrgEvent, enqueueOrgEvent } from '../webhooks-out.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('keypasses');
@@ -388,9 +388,9 @@ keypasses.post('/keypasses/use', async (c) => {
         ipAddress: getClientIp(c),
         userAgent: c.req.header('user-agent'),
       });
-      afterCommit(() => { void emitOrgEvent(user.organisationId, 'keypass.used', {
-        userId: user.id, email: user.email, keypass: `****${code.slice(-4)}`, usedAt: now,
-      }); });
+      const eventData={userId:user.id,email:user.email,keypass:`****${code.slice(-4)}`,usedAt:now};
+      if(db)await enqueueOrgEvent(user.organisationId,'keypass.used',eventData,db);
+      else afterCommit(()=>{void emitOrgEvent(user.organisationId,'keypass.used',eventData);});
 
       return c.json({
         success: true,
