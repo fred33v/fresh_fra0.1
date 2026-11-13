@@ -84,3 +84,22 @@ Using the freshly pulled values:
 - Built dashboard: **200**.
 
 Both local startup test processes were stopped. No production migration or application-data write was performed. Neon API authentication and config deployment are now confirmed. Native database reachability, schema initialization and full application end-to-end validation remain unresolved; the successful HTTPS diagnostic does not substitute for the native `pg` connection used by this app. Shared credentials must be rotated after configuration.
+
+## Confirmed runtime TCP blocker — 13 November 2026
+
+A read-only request to the managed environment's live proxy status endpoint, outside the sandbox, returned:
+
+```json
+{"revision":"5bc992db-8151-46cc-8b33-c9097b948137","tcp":{"enabled":false,"proxy_port":8088,"domains":[],"ip_ranges":[]},"http_mode":"denylist"}
+```
+
+This confirms that native TCP egress is disabled in the selected runtime. It explains why a successful Neon HTTPS diagnostic does not establish native PostgreSQL reachability. No network rule was modified, and no alternate tunnel was used to bypass this policy.
+
+The required environment change is to enable TCP egress and authorize these destinations on port 5432:
+
+- `ep-square-dream-zaf55bjm-pooler.c-2.eu-west-2.aws.neon.tech` — app traffic.
+- `ep-square-dream-zaf55bjm.c-2.eu-west-2.aws.neon.tech` — direct migration connection.
+
+Apply the change to the running Codex environment, then refresh environment status and re-read the live TCP policy before retrying. This thread currently has no environment-configuration mutation tool; the change must be made through environment settings. Allowing HTTPS domains alone does not enable native TCP.
+
+After the network change, retry `pnpm --filter @stopfra/backend db:check`, check both pooled and direct TLS connections, validate migrations on an isolated Neon branch, and only then apply the tested schema rollout to the intended production database. Do not assume the policy change alone proves connection success or migration safety.
