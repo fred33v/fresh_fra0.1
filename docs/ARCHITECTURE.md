@@ -24,7 +24,7 @@ does (the old `apps/fra-web-dashboard/supabase/` folder is a leftover).
 
 ## The API (`apps/fra-backend/backend`)
 
-- **Framework:** Hono on Node 20+, written in TypeScript. Routes are in `src/routes`, data access in
+- **Framework:** Hono on Node 22+, written in TypeScript. Routes are in `src/routes`, data access in
   `src/db`, and shared rules (scoring, entitlements, risk modules) in `src/*.ts`.
 - **Database:** PostgreSQL through `pg` with plain SQL and numbered migrations in `migrations/`,
   applied by a tracked runner (`pnpm db:migrate`, or `start.sh migrate` on the server). With no

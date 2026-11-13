@@ -12,8 +12,8 @@ echo "=== Stop FRA EC2 Setup Starting ==="
 # --- System Updates ---
 dnf update -y
 
-# --- Install Node.js 20 ---
-dnf install -y nodejs20 nodejs20-npm
+# --- Install Node.js 22 ---
+dnf install -y nodejs22 nodejs22-npm
 node --version
 npm --version
 

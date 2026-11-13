@@ -34,7 +34,7 @@ web app now talks only to the API in `apps/fra-backend`.
 
 ## Tech stack
 
-- **API:** Node 20+, Hono, `pg` (plain SQL with numbered migrations), Zod, JWT with refresh
+- **API:** Node 22+, Hono, `pg` (plain SQL with numbered migrations), Zod, JWT with refresh
   tokens stored hashed, bcrypt, Stripe Checkout, Nodemailer (Amazon SES in production),
   Puppeteer for PDFs, Upstash Redis, S3.
 - **Web:** React, React Router, TanStack Query, React Hook Form with Zod, Tailwind and shadcn/ui.
@@ -44,7 +44,7 @@ web app now talks only to the API in `apps/fra-backend`.
 
 ## Getting started
 
-You need Node 20 or later and pnpm 9 (`corepack enable` picks up the version in `package.json`).
+You need Node 22 or later and pnpm 9 (`corepack enable` picks up the version in `package.json`).
 
 ```bash
 pnpm install
