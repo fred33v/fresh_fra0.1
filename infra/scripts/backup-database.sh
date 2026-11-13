@@ -19,7 +19,7 @@
 # ============================================================
 set -euo pipefail
 
-AWS_REGION="eu-west-2"
+AWS_REGION="eu-north-1"
 BACKUP_BUCKET="${BACKUP_BUCKET:-stopfra-backups-production}"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP_FILE="$(mktemp -d)/stopfra-backup-${TIMESTAMP}.sql.gz"

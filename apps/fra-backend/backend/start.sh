@@ -5,7 +5,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-AWS_REGION="${AWS_REGION:-eu-west-2}"
+AWS_REGION="${AWS_REGION:-eu-north-1}"
 
 # Load every parameter under /fra/backend/ (the CLI pages through them all), so a new
 # setting only has to be added to Parameter Store. The server refuses to start in
