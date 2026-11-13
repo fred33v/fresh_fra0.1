@@ -7,7 +7,7 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 
 | What | Where to get it |
 |------|-----------------|
-| Neon connection string | Neon console, the production branch, "Connection string" with `?sslmode=require`. Turn **Connection pooling off** so the host has no `-pooler` in it: the migration runner holds a database lock that needs a direct connection |
+| Neon connection string | Neon console, the production branch, "Connection string" with `?sslmode=verify-full`. Turn **Connection pooling off** so the host has no `-pooler` in it: the migration runner holds a database lock that needs a direct connection |
 | Upstash Redis REST URL and token | Upstash console, the database, "REST API" |
 | Two JWT secrets | Run `openssl rand -hex 32` twice. The two values must be different |
 | Stripe live secret key (`sk_live_…`) | Stripe dashboard, Developers > API keys |
@@ -16,6 +16,8 @@ Run these from your own machine. You need the AWS CLI signed in to the productio
 | Cloudflare API token | The domain's DNS is on Cloudflare. dash.cloudflare.com > My Profile > API Tokens > Create Token > Custom. Permissions: Zone: Zone Read and Zone: DNS Edit. Limit it to fraud-risk.co.uk |
 
 Email needs no values: Terraform sets up Amazon SES and stores the SMTP login itself.
+
+Production database connections always require TLS with certificate and hostname verification. Existing `sslmode=require` URLs and URLs without `sslmode` are upgraded to verified TLS by the backend; explicit insecure settings such as `sslmode=disable`, `sslmode=no-verify` or `ssl=false` refuse startup. Use `sslmode=verify-full` in new configuration. If a private CA is required, provide a readable `sslrootcert` path on the backend host; existing `sslcert`/`sslkey` client certificate paths are supported. Check the database certificate before rollout: plaintext or untrusted endpoints will fail to connect. Local development and disposable PostgreSQL CI may still use plaintext outside production.
 
 ## 2. Terraform
 

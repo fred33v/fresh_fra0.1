@@ -31,7 +31,7 @@ variable "vpc_cidr" {
 # --- Database (Neon) ---
 
 variable "neon_database_url" {
-  description = "Neon PostgreSQL connection string (postgresql://user:pass@ep-xxx.eu-west-2.aws.neon.tech/stopfra?sslmode=require)"
+  description = "Neon PostgreSQL connection string (postgresql://user:pass@ep-xxx.eu-west-2.aws.neon.tech/stopfra?sslmode=verify-full)"
   type        = string
   sensitive   = true
 }

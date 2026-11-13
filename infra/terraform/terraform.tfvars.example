@@ -10,7 +10,7 @@ project_name = "stopfra"
 
 # --- Database (Neon) ---
 # Get your connection string from https://console.neon.tech
-neon_database_url = "postgresql://stopfra_admin:CHANGE_ME@ep-xxx-yyy-123.eu-west-2.aws.neon.tech/stopfra?sslmode=require"
+neon_database_url = "postgresql://stopfra_admin:CHANGE_ME@ep-xxx-yyy-123.eu-west-2.aws.neon.tech/stopfra?sslmode=verify-full"
 
 # --- EC2 ---
 ec2_instance_type = "t3.small"

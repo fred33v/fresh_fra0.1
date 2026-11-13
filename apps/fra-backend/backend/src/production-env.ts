@@ -1,3 +1,5 @@
+import { productionDatabaseUrl } from './database-tls.js';
+
 // ============================================================
 // What production needs before the server may start. Pure, so it can be tested without
 // booting the server: index.ts calls it at startup and refuses to run on any error.
@@ -20,8 +22,12 @@ export function checkProductionEnv(
   // Required (fatal)
   if (!env.DATABASE_URL) {
     errors.push('DATABASE_URL must be set');
-  } else if (!env.DATABASE_URL.includes('sslmode=require')) {
-    warnings.push('DATABASE_URL has no sslmode=require — database traffic is not encrypted');
+  } else {
+    try {
+      productionDatabaseUrl(env.DATABASE_URL);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : 'DATABASE_URL TLS configuration is invalid');
+    }
   }
   if (jwt.usingDevSecret) {
     errors.push('JWT_SECRET must not use the development default');
