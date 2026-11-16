@@ -37,7 +37,7 @@ Preservation does not implement an erasure-request process. Subject requests, le
 
 Existing verifiable certificate records retain an issuance snapshot and support revocation. Public verification exposes an allowlist of certificate fields; it does not establish an advanced or qualified electronic signature.
 
-The owner requested Documenso or DocuSeal in place of Yousign/Youtrust. DocuSeal EU is the recommended candidate for external advanced or qualified signing; its specialised test capabilities still need confirmation. Provider account activation, document and identity verification flows, authentic completion checks and retained signed-document/audit evidence remain delivery gates. Sandbox identity verification is simulated and cannot establish a production legal signature. No paid subscription or production signature is authorised during this development.
+The owner selected **OpenSign**, replacing the earlier provider options. Its Cloud sandbox API is available on the free plan; its documented QES workflows require a paid plan and supported external providers. QES API settings, supported signer countries, sandbox availability, identity verification, authentic completion checks and retained signed-document/audit evidence remain delivery gates. A successful basic sandbox signature does not establish an advanced or qualified production signature. No paid subscription or production signature is authorised during this development.
 
 ## Release evidence and remaining acceptance
 
