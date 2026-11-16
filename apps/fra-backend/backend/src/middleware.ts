@@ -169,9 +169,9 @@ export function applyGlobalMiddleware(app: Hono) {
     // Security headers (helmet-style)
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Frame-Options', 'DENY');
-    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    c.header('Referrer-Policy', c.req.path.startsWith('/api/v1/esign/sign/') ? 'no-referrer' : 'strict-origin-when-cross-origin');
     c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-    c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    c.header('Content-Security-Policy', c.req.path.startsWith('/api/v1/esign/sign/') ? "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" : "default-src 'none'; frame-ancestors 'none'");
     c.header('X-Permitted-Cross-Domain-Policies', 'none');
     c.header('X-Download-Options', 'noopen');
     c.header('Cross-Origin-Embedder-Policy', 'require-corp');
@@ -188,11 +188,11 @@ export function applyGlobalMiddleware(app: Hono) {
     if (c.req.path !== '/health') {
       // Speak-up reporters may be anonymous: their paths carry intake tokens and the
       // caller's address could identify them, so neither is logged
-      const speakUp = c.req.path.startsWith('/api/v1/speak-up');
+      const speakUp = c.req.path.startsWith('/api/v1/speak-up') || c.req.path.startsWith('/api/v1/esign/sign/');
       const logEntry = {
         ts: new Date().toISOString(),
         method: c.req.method,
-        path: speakUp ? '/api/v1/speak-up/[redacted]' : c.req.path,
+        path: speakUp ? (c.req.path.startsWith('/api/v1/esign/sign/') ? '/api/v1/esign/sign/[redacted]' : '/api/v1/speak-up/[redacted]') : c.req.path,
         status: c.res.status,
         ms: Number(ms),
         ip: speakUp ? undefined : getClientIp(c),
@@ -251,7 +251,12 @@ export function applyApiMiddleware(api: Hono, allowedOrigins: string[]) {
           return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
         }
       }
-      if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
+      let signingOrigin: string | undefined;
+      if (c.req.path.startsWith('/api/v1/esign/sign/') && process.env.ESIGN_PUBLIC_URL) {
+        try { signingOrigin = new URL(process.env.ESIGN_PUBLIC_URL).origin; } catch { /* fail closed below */ }
+      }
+      const opaqueSigningForm = !!signingOrigin && requestOrigin === 'null'; // signer routes enforce a session-bound form token
+      if (requestOrigin && !opaqueSigningForm && requestOrigin !== signingOrigin && !allowedOrigins.includes(requestOrigin)) {
         return jsonError(c, 403, 'CSRF_REJECTED', 'Origin not allowed');
       }
     }

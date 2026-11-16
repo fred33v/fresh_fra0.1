@@ -8,7 +8,7 @@ Updated 2026-11-16. This records the owner's decisions, not an assertion that th
 - Provider/professional recruitment, including review and approval.
 - The provider or referrer receives **17% of the VAT-exclusive package sales they bring**. This is a referral commission; it is not a platform fee on the professional's services. Attribution, refunds, disputes, idempotency and payout recovery must be tested.
 - Integrated commissions through Stripe Connect, with recipient verification/onboarding. No real charges or transfers are authorised during development.
-- Professional signing through an external provider, at advanced or qualified level. The owner selected **OpenSign**, replacing the previous Youtrust/DocuSeal/Documenso options. Account and qualified-signing API capabilities still require verification. An internal certificate/HMAC or a browser success redirect is not evidence of external signing. Tenant-specific professional access, immutable document binding, provider status verification and retained signed documents/audit evidence remain implementation and acceptance requirements.
+- The owner has now requested an **internal electronic-signing service**, replacing OpenSign and the earlier provider options. This implementation covers email OTP, consent, typed signatures, a hash-chained audit trail and a platform PDF seal. It does not establish advanced/qualified eIDAS signer identity. See [implementation and activation](ESIGN_SETUP.md).
 - Preserve all newly introduced Phase 1 data without automatic purging. Existing retention jobs must not indirectly delete new evidence through cascading foreign keys. Production deletion is outside this work.
 - Native applications remain preserved with development suspended.
 
@@ -16,11 +16,7 @@ Updated 2026-11-16. This records the owner's decisions, not an assertion that th
 
 The owner confirmed the Stripe reference account and authorised the CLI browser flow. The subsequent local `stripe whoami --format json` still reports `authenticated: false`. Separate development and CI sandboxes have **not** been provisioned; no test credential or successful external Connect transfer is claimed.
 
-The current provider is **OpenSign**. The earlier Youtrust and DocuSeal account-creation instructions are superseded.
-
-OpenSign documents [Sandbox API tokens](https://docs.opensignlabs.com/docs/help/Settings/APIToken/) on every Cloud plan, including free. Generate a Sandbox token under Settings → API Token, and use Login to Sandbox on that page. The documented API v1.2 sandbox base is `https://sandbox.opensignlabs.com/api/v1.2`; requests authenticate with the server-side `x-api-token` header. Only synthetic, non-confidential fixtures may be used in this sandbox. The free self-hosted edition does not support API token generation.
-
-OpenSign documents [qualified-signature workflows](https://docs.opensignlabs.com/docs/help/New-Document/qualified_signature/) through integrated providers for supported countries. QES requires a paid plan and consumes 10 API credits per signer. The visible signature stamp does not establish cryptographic validity. General sandbox API availability does not prove that the QES provider journey is available for free testing, or that the API supports every QES setting. Verify those gates before claiming completion. No paid plan, credits purchase or production signing is authorised.
+The current plan is the internal signing module described in [ESIGN_SETUP.md](ESIGN_SETUP.md). The owner confirmed that a P12/PFX seal and dedicated S3 Object Lock bucket still need to be configured and requested step-by-step guidance. The feature defaults to disabled. No paid provider account or real production signature is authorised. An internal platform seal must not be labelled an advanced/qualified signer signature.
 
 Credentials belong in server-side secrets, never source control, browser bundles, logs or chat. Sandbox signing is a test and must not be displayed as a legally effective production signature.
 
@@ -30,4 +26,4 @@ Compliance endpoints now check the persisted user role and organisation on every
 
 Validation: three dedicated unit cases, the existing compliance-evidence suite (25 targeted tests total), backend TypeScript, and the disposable PostgreSQL domain/budget integration suite (11 scenarios, including stale-role and stale-tenant rejection). The complete backend suite also passed: 58 suites, 749 tests (327.604 seconds). `npm run build` passed; backend ESLint reported zero errors and five existing warnings in unrelated files. No production database was changed.
 
-The overall Phase 1 is still open until recruitment, Connect commissions, external AES/QES signing, preservation/visibility controls and their end-to-end acceptance checks are implemented and verified. PR #78 remains a draft; no merge or production deployment is implied.
+The overall Phase 1 is still open until recruitment, Connect commissions, the agreed signature assurance and real-service activation, preservation/visibility controls and their end-to-end acceptance checks are implemented and verified. PR #78 remains a draft; no merge or production deployment is implied.
