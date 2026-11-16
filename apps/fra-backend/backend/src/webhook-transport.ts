@@ -5,7 +5,8 @@
 
 import crypto from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { request as httpsRequest } from 'node:https';
 import type { WebhookEndpoint, WebhookEvent } from './types.js';
 import { createLogger } from './logger.js';
 
@@ -52,29 +53,60 @@ export function verifySignedPayload(
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
-function isPrivateIPv4(host: string): boolean {
-  const [a, b] = host.split('.').map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
-}
+const blockedAddresses = new BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16],
+  ['192.0.0.0', 24], ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) blockedAddresses.addSubnet(address, prefix, 'ipv4');
+for (const [address, prefix] of [
+  ['::', 96], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
+  ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['2002::', 16], ['2001::', 32],
+] as const) blockedAddresses.addSubnet(address, prefix, 'ipv6');
 
 function isPrivateAddress(address: string): boolean {
-  const host = address.toLowerCase();
-  const version = isIP(host);
-  if (version === 4) return isPrivateIPv4(host);
-  if (version === 6) {
-    const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateIPv4(mapped[1]);
-    return host === '::1' || host === '::' || /^(fc|fd|fe[89ab])/.test(host);
-  }
-  return false;
+  const family = isIP(address);
+  // BlockList also matches IPv4-mapped IPv6 against IPv4 subnets.
+  return !family || blockedAddresses.check(address, family === 6 ? 'ipv6' : 'ipv4');
+}
+
+/** Resolve once per attempt; the timeout covers DNS as well as HTTPS. */
+async function resolveDestination(host: string, signal: AbortSignal): Promise<import('node:dns').LookupAddress[]> {
+  if (isIP(host)) return [{ address: host, family: isIP(host) }];
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) { abort(); return; }
+    lookup(host, { all: true }).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
+}
+
+async function deliverPinned(url: URL, body: string, headers: Record<string, string>, signal: AbortSignal): Promise<number> {
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const addresses = await resolveDestination(host, signal);
+  signal.throwIfAborted();
+  if (!addresses.length || addresses.some(entry => isPrivateAddress(entry.address))) return 0;
+  const pinnedLookup: LookupFunction = (_hostname, options, callback) => {
+    if (options.all) callback(null, addresses);
+    else {
+      const selected = addresses.find(entry => entry.family === 4) ?? addresses[0];
+      callback(null, selected.address, selected.family);
+    }
+  };
+  return new Promise<number>((resolve, reject) => {
+    // Keep the URL hostname for Host/SNI/certificate verification. No shared
+    // agent or subsequent resolver can substitute an unvalidated destination.
+    const request = httpsRequest(url, {
+      method: 'POST', headers: { ...headers, 'Content-Length': String(Buffer.byteLength(body)) },
+      lookup: pinnedLookup, agent: false, rejectUnauthorized: true, signal,
+    }, response => {
+      const status = response.statusCode ?? 0;
+      response.destroy();
+      resolve(status); // Native HTTPS never follows redirects.
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
 }
 
 /**
@@ -95,7 +127,7 @@ export function validateWebhookUrl(raw: string): string | null {
   }
   if (url.username || url.password) return 'Webhook URL must not contain credentials';
 
-  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
   if (
     host === 'localhost' ||
     host.endsWith('.localhost') ||
@@ -104,14 +136,7 @@ export function validateWebhookUrl(raw: string): string | null {
   ) {
     return 'Webhook URL must be publicly reachable';
   }
-  const ipVersion = isIP(host);
-  if (ipVersion === 4 && isPrivateIPv4(host)) return 'Webhook URL must be publicly reachable';
-  if (
-    ipVersion === 6 &&
-    (host === '::1' || host === '::' || /^(fc|fd|fe80)/.test(host) || host.startsWith('::ffff:'))
-  ) {
-    return 'Webhook URL must be publicly reachable';
-  }
+  if (isIP(host) && isPrivateAddress(host)) return 'Webhook URL must be publicly reachable';
   return null;
 }
 
@@ -122,29 +147,24 @@ export async function deliverOnce(
 ): Promise<number> {
   const body = JSON.stringify(payload);
   try {
-    // A public-looking hostname can still resolve to localhost or the cloud metadata address
+    if (validateWebhookUrl(endpoint.url)) return 0;
+    const signal = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'StopFRA-Webhooks/1.0',
+      'X-StopFRA-Event': payload.type,
+      'X-StopFRA-Delivery': payload.id,
+      'X-StopFRA-Signature': signPayload(endpoint.secret, body),
+    };
     if (process.env.NODE_ENV === 'production') {
-      const host = new URL(endpoint.url).hostname.replace(/^\[|\]$/g, '');
-      const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-      if (addresses.length === 0 || addresses.some((a) => isPrivateAddress(a.address))) {
-        logger.warn('Webhook delivery blocked: host resolves to a private address', {
-          endpointId: endpoint.id,
-        });
-        return 0;
-      }
+      return await deliverPinned(new URL(endpoint.url), body, headers, signal);
     }
     const res = await fetch(endpoint.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'StopFRA-Webhooks/1.0',
-        'X-StopFRA-Event': payload.type,
-        'X-StopFRA-Delivery': payload.id,
-        'X-StopFRA-Signature': signPayload(endpoint.secret, body),
-      },
+      headers,
       body,
       redirect: 'manual',
-      signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+      signal,
     });
     const status = res.status;
     // Only headers matter; release the response stream before the next queued job.
