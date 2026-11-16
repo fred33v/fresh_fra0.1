@@ -12,9 +12,9 @@ describe('RouteTitle', () => {
         <Routes><Route path="*" element={null} /></Routes>
       </MemoryRouter>,
     );
-    expect(document.title).toBe('Join your organisation — Risk Aware');
+    expect(document.title).toBe('Join your organisation — fraud-risk.co.uk');
     await userEvent.click(document.querySelector('a')!);
-    expect(document.title).toBe('Privacy notice — Risk Aware');
+    expect(document.title).toBe('Privacy notice — fraud-risk.co.uk');
   });
 
   it('moves focus to the main content after navigating, but not on first load', async () => {

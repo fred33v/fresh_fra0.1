@@ -37,8 +37,8 @@ export function Header() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
             <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="hidden font-semibold sm:inline-block">
-            Fraud Risk Awareness
+          <span className="hidden font-bold tracking-wide sm:inline-block">
+            FRAUD-RISK.CO.UK
           </span>
         </Link>
 
