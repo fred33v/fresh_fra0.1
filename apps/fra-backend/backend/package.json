@@ -30,7 +30,7 @@
     "dotenv": "^16.4.5",
     "hono": "^4.13.13",
     "jsonwebtoken": "^9.0.2",
-    "node-forge": "1.4.3",
+    "node-forge": "^1.4.3",
     "nodemailer": "^10.1.4",
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
