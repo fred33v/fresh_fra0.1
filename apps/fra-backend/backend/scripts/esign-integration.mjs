@@ -413,6 +413,14 @@ try {
   pass(
     'storage outage retains signatures; concurrent retry seals once; certificate page and CMS signature verify with OpenSSL'
   );
+  const timezoneClient = await pool.connect();
+  try {
+    await timezoneClient.query("SET TIME ZONE 'Pacific/Auckland'");
+    await verifyAudit(timezoneClient, doc.id);
+  } finally {
+    await timezoneClient.query("SET TIME ZONE 'UTC'");
+    timezoneClient.release();
+  }
   const entries = await verifyAudit(pool, doc.id);
   assert(entries.length > 8);
   const manifestBytes = [...objects.values()].find((o) => o.type === 'application/json').body;

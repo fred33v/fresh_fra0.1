@@ -38,7 +38,7 @@ export async function verifyAudit(db: DbExecutor, documentId: string): Promise<A
     const e = rows[i];
     const canonical = JSON.parse(e.canonical) as unknown[];
     const { rows: check } = await db.query<{ valid: boolean }>(
-      `SELECT $1::jsonb = jsonb_build_array($2::text,$3::bigint,$4::timestamptz,$5::text,$6::text,$7::jsonb,$8::text) AS valid`,
+      `SELECT ($1::jsonb->>2)::timestamptz = $4::timestamptz AND $1::jsonb = jsonb_build_array($2::text,$3::bigint,($1::jsonb->>2),$5::text,$6::text,$7::jsonb,$8::text) AS valid`,
       [
         e.canonical,
         e.document_id,
