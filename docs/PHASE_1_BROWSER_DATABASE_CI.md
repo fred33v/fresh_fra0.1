@@ -1,6 +1,6 @@
 # Phase 1 — Authenticated browser/PostgreSQL CI
 
-The existing Database (PostgreSQL) job now installs Chromium and runs a browser journey against a separate real backend process and the job's disposable PostgreSQL database. It remains part of the existing required check; no sixth required-check name is introduced.
+The existing Database (PostgreSQL) job now installs Chromium and runs a browser journey against a separate real backend process and the job's disposable PostgreSQL database. It remains part of the existing required check; no sixth required-check name is introduced. This job is pinned to Ubuntu 24.04, supported by the repository’s Playwright 1.58.2; the floating Ubuntu 26.04 image cannot install this browser version.
 
 ## What is exercised
 

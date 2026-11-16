@@ -107,7 +107,8 @@ jobs:
 
   database:
     name: Database (PostgreSQL)
-    runs-on: ubuntu-latest
+    # Playwright 1.58 supports Ubuntu 24.04, while ubuntu-latest now selects 26.04.
+    runs-on: ubuntu-24.04
     needs: lint-and-typecheck
     # Unit tests use the in-memory stores; this runs the real SQL: every migration on a
     # fresh database (twice, to prove they re-run safely), then the API end to end.
