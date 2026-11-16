@@ -211,6 +211,14 @@ jobs:
           CERTIFICATE_TEST_DATABASE: '1'
         run: node scripts/certificate-integration.mjs
 
+      - name: Install Chromium for authenticated browser/database checks
+        run: pnpm --filter @stopfra/web-dashboard exec playwright install --with-deps chromium
+
+      - name: Authenticated browser journey against PostgreSQL
+        env:
+          BROWSER_DATABASE_TEST: '1'
+        run: pnpm --filter @stopfra/web-dashboard test:e2e:database
+
       - name: Backend log on failure
         if: failure()
         working-directory: apps/fra-backend/backend
