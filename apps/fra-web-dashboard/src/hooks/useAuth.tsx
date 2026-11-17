@@ -216,7 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles([]);
   }, []);
 
-  const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
+  // Match workshop creation on the API: account admins or assigned facilitators.
+  const hasRole = useCallback((role: AppRole) =>
+    (role === 'facilitator' && user?.role === 'admin') || roles.includes(role), [roles, user?.role]);
 
   const value = useMemo(() => ({
     user,

@@ -95,6 +95,16 @@ async function removeFailure() {
   }
 }
 try {
+  const manager = await actor();
+  const evidencePaths = ['/compliance/report', '/compliance/export', '/compliance/audit-trail'];
+  for (const path of evidencePaths) assert.equal((await call('GET', path, undefined, manager)).status, 200);
+  await pool.query("UPDATE public.users SET role='employee' WHERE id=$1", [manager.id]);
+  for (const path of evidencePaths) assert.equal((await call('GET', path, undefined, manager)).status, 403);
+  await pool.query("UPDATE public.users SET role='employer', organisation_id=$2 WHERE id=$1", [manager.id, other.organisationId]);
+  for (const path of evidencePaths) assert.equal((await call('GET', path, undefined, manager)).status, 403);
+  await pool.query('UPDATE public.users SET organisation_id=$2 WHERE id=$1', [manager.id, manager.organisationId]);
+  assert.equal((await call('GET', '/compliance/export', undefined, manager)).status, 200);
+  pass('compliance evidence enforces persisted role and tenant changes against previously issued JWTs');
   await pool.query(
     `INSERT INTO public.webhook_endpoints(id,organisation_id,url,secret,events,created_by_user_id) VALUES($1,$2,'https://receiver.example.test/hook','fixture-only',$3,$4)`,
     [

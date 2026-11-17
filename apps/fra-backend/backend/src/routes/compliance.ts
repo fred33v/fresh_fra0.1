@@ -39,7 +39,8 @@ import {
   type ComplianceIncident, type SeniorManager,
 } from '../types.js';
 
-const compliance = new Hono();
+type ComplianceEnv = { Variables: { complianceAuth: AuthContext } };
+const compliance = new Hono<ComplianceEnv>();
 
 // ── Middleware: Require Enterprise package + employer/admin role ─
 compliance.use('/*', async (c, next) => {
@@ -54,6 +55,15 @@ compliance.use('/*', async (c, next) => {
     );
   }
 
+  const current = hasDatabase()
+    ? await dbGetUserById(auth.userId)
+    : Array.from(usersByEmail.values()).find(user => user.id === auth.userId);
+  if (!current || !isManagerRole(current.role) || current.organisationId !== auth.organisationId) {
+    return jsonError(c, 403, 'FORBIDDEN', 'Compliance access requires current employer or admin authority');
+  }
+  c.set('complianceAuth', { ...auth, role: current.role, email: current.email });
+  c.header('Cache-Control', 'no-store');
+
   if (!hasPackageEntitlement(await listOrgPurchases(auth.organisationId), 'pkg_full')) {
     return c.json(
       { success: false, error: { code: 'PACKAGE_REQUIRED', message: 'Enterprise package required' } },
@@ -63,8 +73,8 @@ compliance.use('/*', async (c, next) => {
   await next();
 });
 
-function authOf(c: Context): AuthContext {
-  return requireAuth(c) as AuthContext; // middleware has already verified the token
+function authOf(c: Context<ComplianceEnv>): AuthContext {
+  return c.get('complianceAuth');
 }
 
 async function logAccess(c: Context, auth: AuthContext, action: string, details: Record<string, unknown> = {}) {

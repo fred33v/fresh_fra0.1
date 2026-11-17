@@ -58,6 +58,28 @@ instead of sending them, and sign-up returns the confirmation token in its respo
 finish without an inbox. To use PostgreSQL, set `DATABASE_URL` and run `pnpm db:migrate`. The
 variables the API reads are listed in `apps/fra-backend/.env.example`.
 
+### Neon PostgreSQL setup
+
+Use Node 20.19+ and the repository-pinned pnpm 9.15.4. This Node/Hono backend keeps its existing `pg` connection pool. From the repository root:
+
+```bash
+npx neon@latest init -y --org-id org-autumn-queen-65017202 --project-id patient-surf-03013684 --branch production --services postgres
+npx neon@latest deploy
+npm run build
+```
+
+Authenticate Neon in the same environment, with `neon login` or the secret `NEON_API_KEY`. The API key is different from a PostgreSQL connection URL. Never commit either credential. `.neon` and `.env*` files are ignored by Git.
+
+The backend reads package-local `.env.local`/`.env`, then root `.env.local`/`.env`, with injected environment variables taking priority. Neon supplies `DATABASE_URL` for app traffic and `DATABASE_URL_UNPOOLED` for migrations. A lower-priority file cannot supply a different direct URL for an already-selected database. Unit tests do not automatically load these files.
+
+Check connectivity without migrations or writes:
+
+```bash
+pnpm --filter @stopfra/backend db:check
+```
+
+The check verifies native PostgreSQL TLS, certificate trust and hostname verification, then runs a read-only query. Before applying migrations, follow `infra/LAUNCH.md`, use a direct connection and validate the migration rollout on a disposable branch. See `docs/NEON_SETUP_STATUS.md` for the latest setup evidence and remaining blockers.
+
 The apps:
 
 ```bash

@@ -50,7 +50,7 @@ export function Header() {
                   <Link to="/employer">Organisation</Link>
                 </Button>
               )}
-              {(hasRole('facilitator') || hasRole('admin')) && (
+              {hasRole('facilitator') && (
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/facilitator">Facilitator Dashboard</Link>
                 </Button>

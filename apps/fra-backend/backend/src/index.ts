@@ -1,5 +1,5 @@
 // Must stay the first import: modules below read process.env when they load
-import 'dotenv/config';
+import './env.js';
 import { serve } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { getDbPool, closeDbPool } from './db.js';
@@ -33,6 +33,7 @@ import certificatesRoutes from './routes/certificates.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 import clientErrorRoutes from './routes/client-errors.js';
+import esignRoutes from './esign/routes.js';
 import { scheduleClientErrorMetrics } from './client-errors.js';
 
 const app = new Hono();
@@ -47,7 +48,7 @@ app.onError((err, c) => {
     rid: requestId,
     method: c.req.method,
     // Speak-up paths carry intake tokens (see the request log in middleware.ts)
-    path: c.req.path.startsWith('/api/v1/speak-up') ? '/api/v1/speak-up/[redacted]' : c.req.path,
+    path: c.req.path.startsWith('/api/v1/esign/sign/') ? '/api/v1/esign/sign/[redacted]' : c.req.path.startsWith('/api/v1/speak-up') ? '/api/v1/speak-up/[redacted]' : c.req.path,
     error: err.message,
     stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
   });
@@ -136,6 +137,7 @@ api.route('/', webhookEndpointRoutes);
 api.route('/', organisationRoutes);
 api.route('/', certificatesRoutes);
 api.route('/', clientErrorRoutes);
+api.route('/esign', esignRoutes);
 api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);

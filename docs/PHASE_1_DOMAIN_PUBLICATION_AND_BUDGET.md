@@ -43,4 +43,6 @@ Apply migrations through 035 before the updated backend and dashboard. Preserve 
 
 ## Remaining Phase 1 work
 
+Follow-up implementation records: [SSE reconnection](WEB_SSE_RECONNECTION.md), [workshop role alignment](WEB_WORKSHOP_ROLE_ALIGNMENT.md), [database TLS](WEB_DATABASE_TLS.md) and [webhook address pinning](PHASE_1_WEBHOOK_ADDRESS_PINNING.md), plus [authenticated browser/PostgreSQL CI](PHASE_1_BROWSER_DATABASE_CI.md). These are local changes; the list below records the earlier delivery state rather than current production acceptance.
+
 These changes close the previously documented domain publication gap and assessment budget persistence/edit/delete/failure gap locally. SSE reconnect/atomic Redis claims, role alignment, real authenticated browser CI, database TLS/address pinning and explicit visibility/retention policy remain open. Verified professional signing and provider recruitment/17% commissions remain new features. Native applications remain preserved with development suspended.
