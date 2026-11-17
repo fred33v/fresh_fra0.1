@@ -1,3 +1,4 @@
+import { esignOrigin } from '../src/esign/origin.js';
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import {
   S3Client,
@@ -112,5 +113,28 @@ describe('S3 evidence retention contract', () => {
       await expect(
         fake(overrides).store.put('key', Buffer.from('data'), 'application/pdf')
       ).rejects.toThrow();
+  });
+});
+
+describe('signing public origin validation', () => {
+  it('permits only loopback HTTP in development and test', () => {
+    expect(esignOrigin('http://localhost:3080', 'development')).toBe('http://localhost:3080');
+    expect(esignOrigin('http://127.0.0.1:3080', 'test')).toBe('http://127.0.0.1:3080');
+    expect(() => esignOrigin('http://localhost:3080', 'production')).toThrow();
+    expect(() => esignOrigin('http://localhost:3080', '')).toThrow();
+    expect(() => esignOrigin('http://example.com', 'development')).toThrow();
+    expect(() => esignOrigin('http://localhost.example.com', 'development')).toThrow();
+  });
+  it('requires an origin without credentials, paths, queries or fragments', () => {
+    expect(esignOrigin('https://example.com', 'production')).toBe('https://example.com');
+    for (const origin of [
+      'https://user:password@example.com',
+      'https://example.com/path',
+      'https://example.com/?token=private',
+      'https://example.com/#private',
+      'ftp://localhost',
+    ]) {
+      expect(() => esignOrigin(origin, 'development')).toThrow();
+    }
   });
 });

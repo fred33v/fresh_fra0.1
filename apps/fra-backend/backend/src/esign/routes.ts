@@ -17,6 +17,7 @@ import { sendEmail, emailConfigured } from '../email.js';
 import { rateLimit, getClientIp } from '../middleware.js';
 import { appendAudit, verifyAudit } from './audit.js';
 import { CONSENT, newToken, newCode, codeHash, equalHash, sha256 } from './crypto.js';
+import { esignOrigin } from './origin.js';
 // Keep PDF/certificate libraries out of unrelated API startup and disabled deployments.
 type PdfServices = typeof import('./finalise.js');
 const checkFinalisation: PdfServices['checkFinalisation'] = async () =>
@@ -51,18 +52,9 @@ export function createEsignRoutes(
   const success = (c: Context, data: unknown, status: 200 | 201 = 200) =>
     c.json({ success: true, data }, status);
   function origin(): string {
-    const url = new URL(process.env.ESIGN_PUBLIC_URL ?? 'http://localhost:3000');
-    if (
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      url.pathname !== '/' ||
-      (process.env.NODE_ENV === 'production' && url.protocol !== 'https:')
-    )
-      throw new Error('Invalid ESIGN_PUBLIC_URL');
-    return url.origin;
+    return esignOrigin(process.env.ESIGN_PUBLIC_URL ?? 'http://localhost:3000');
   }
+
   async function manager(c: Context): Promise<AuthContext | Response> {
     if (!hasDatabase())
       return jsonError(c, 503, 'DATABASE_REQUIRED', 'Electronic signing requires PostgreSQL');

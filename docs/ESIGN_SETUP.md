@@ -107,3 +107,7 @@ The SQL integration tests use captured email and a storage double, but real Post
 - All **36 migrations** applied to a fresh disposable PostgreSQL 17 database, followed by **8 signing scenarios**, including real Chromium and OpenSSL verification of the PDF CMS seal. The browser test includes a Latin-accented typed signature, and tests reject CSRF, expired codes/links, replay, refused consent and tampering; resend rotates the invitation.
 - Backend ESLint: **zero errors**, five existing warnings outside the new module. Shell scripts pass `bash -n`.
 - `esign:check` correctly reports NOT READY in this unconfigured environment. The actual S3 bucket/IAM protection, real SMTP delivery, deployed proxy configuration and a production seal certificate remain activation gates. No production migration or deployment occurred.
+
+## Local walkthrough
+
+For the existing London bucket `fresh-fra-s`, follow the complete [French local activation walkthrough](ESIGN_LOCAL_WALKTHROUGH.fr.md), including the bucket-scoped IAM policy and opt-in real SMTP/S3 signing demo. The demo only accepts an isolated loopback development database and refuses root credentials.
