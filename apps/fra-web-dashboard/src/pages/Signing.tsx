@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import {
   signingPath,
+  signingTimestamp,
   signingStatusLabels,
   validateLayout,
   type DocumentSummary,
@@ -814,7 +815,7 @@ export default function Signing() {
                         <li key={entry.seq} className="border-l-2 border-teal-200 pl-4 text-sm">
                           <p className="font-medium">{entry.event.replace(/[._]/g, ' ')}</p>
                           <time className="text-xs text-muted-foreground">
-                            {new Date(entry.occurred_at).toLocaleString('en-GB')}
+                            {signingTimestamp(entry.occurred_at).toLocaleString('en-GB')}
                           </time>
                         </li>
                       ))}

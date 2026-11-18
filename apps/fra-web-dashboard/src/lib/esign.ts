@@ -69,3 +69,12 @@ export function validateLayout(
   return null;
 }
 export const signingPath = (id: string) => `/api/v1/esign/documents/${encodeURIComponent(id)}`;
+
+/** PostgreSQL audit timestamps include a space, microseconds and a short UTC offset. */
+export function signingTimestamp(value: string): Date {
+  const iso = value
+    .replace(' ', 'T')
+    .replace(/(\.\d{3})\d+/, '$1')
+    .replace(/([+-]\d{2})$/, '$1:00');
+  return new Date(iso);
+}

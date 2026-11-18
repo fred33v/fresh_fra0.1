@@ -1,4 +1,4 @@
-import { validateLayout, type SigningField, type Signer } from '@/lib/esign';
+import { signingTimestamp, validateLayout, type SigningField, type Signer } from '@/lib/esign';
 const signer = { id: 's1' } as Signer;
 const field: SigningField = {
   signerId: 's1',
@@ -29,4 +29,16 @@ it.each([
   { signerId: 'someone-else' },
 ])('rejects off-page or invalid placement %j', (patch) => {
   expect(validateLayout([{ ...field, ...patch }], [signer], pages)).toMatch(/inside/);
+});
+
+it('normalises retained PostgreSQL timestamps for browsers with strict ISO parsing', () => {
+  expect(signingTimestamp('2026-11-18 07:12:34.123456+00').toISOString()).toBe(
+    '2026-11-18T07:12:34.123Z'
+  );
+  expect(signingTimestamp('2026-11-18 09:12:34.123456+02').toISOString()).toBe(
+    '2026-11-18T07:12:34.123Z'
+  );
+  expect(signingTimestamp('2026-11-18T07:12:34.123Z').toISOString()).toBe(
+    '2026-11-18T07:12:34.123Z'
+  );
 });
