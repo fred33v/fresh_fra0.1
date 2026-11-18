@@ -197,6 +197,24 @@ try {
   assert.equal((await pool.query('SELECT application_id FROM public.provider_sale_attributions WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rows[0].application_id,application.id);
   assert.equal((await pool.query('SELECT 1 FROM public.provider_commission_entries WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rowCount,0);
   checks++;
+  let expired=false;
+  setStripeClient({checkout:{sessions:{
+    create:async()=>({id:'cs_replacement_fixture',url:'https://example.test/replacement-checkout'}),
+    retrieve:async()=>({id:'cs_provider_fixture',client_reference_id:checkoutData.data.purchaseId,payment_status:'unpaid',status:expired?'expired':'open',url:'https://example.test/fixture-checkout'}),
+  }}});
+  const checkoutCall=code=>checkoutApp.request('http://localhost/api/v1/purchases',{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${checkoutBuyer.token}`},
+    body:JSON.stringify({packageId:'pkg_basic',client:'web',providerCode:code}),
+  });
+  assert.equal((await checkoutCall('PRV-'+'f'.repeat(32))).status,409);checks++;
+  const sellerOffer=await call(admin,`/${seller.id}/assignments`,{packageId:'pkg_basic',service:'sales',reference:randomUUID()});
+  await call(other,`/me/assignments/${sellerOffer.id}/decision`,{status:'accepted'});
+  const sellerCode=(await call(other,'/me')).providerCode;
+  expired=true;
+  const replacement=await checkoutCall(sellerCode);
+  assert.equal(replacement.status,200,await replacement.clone().text());
+  const replacementData=await replacement.json();
+  assert.equal((await pool.query('SELECT application_id FROM public.provider_sale_attributions WHERE purchase_id=$1',[replacementData.data.purchaseId])).rows[0].application_id,seller.id);checks++;
   setStripeClient(null);
   process.env.STRIPE_SECRET_KEY='rk_test_fixture_only';
   process.env.STRIPE_WEBHOOK_SECRET='whsec_fixture_only';

@@ -184,16 +184,17 @@ payments.post('/purchases', async (c) => {
   }
   const pending = orgPurchases.find((p) => p.packageId === parsed.data.packageId && p.status === 'requires_confirmation');
   if (pending) {
-    if (parsed.data.providerCode && hasDatabase()) {
-      const {rows:[attribution]} = await (await import('../db.js')).getDbPool().query(`SELECT a.provider_code FROM public.provider_sale_attributions s JOIN public.provider_applications a ON a.id=s.application_id WHERE s.purchase_id=$1`,[pending.id]);
-      if (attribution?.provider_code !== parsed.data.providerCode) return jsonError(c,409,'ATTRIBUTION_LOCKED','The existing checkout has a different referral. Complete or cancel it before changing attribution.');
-    }
     if (!stripe || !pending.checkoutSessionId) {
       return jsonError(c, 409, 'DUPLICATE_PURCHASE', 'An active purchase for this package already exists');
     }
     // A buyer who left Stripe's page comes back to the same payment while it is open
     const session = await stripe.checkout.sessions.retrieve(pending.checkoutSessionId);
     const outcome = sessionOutcome(session, pending);
+    if (outcome === 'open' && parsed.data.providerCode && hasDatabase()) {
+      const {rows:[attribution]} = await (await import('../db.js')).getDbPool().query(`SELECT a.provider_code FROM public.provider_sale_attributions s JOIN public.provider_applications a ON a.id=s.application_id WHERE s.purchase_id=$1`,[pending.id]);
+      if (attribution?.provider_code !== parsed.data.providerCode) return jsonError(c,409,'ATTRIBUTION_LOCKED','The existing checkout has a different referral. Complete or cancel it before changing attribution.');
+    }
+
     if (outcome === 'paid') {
       await settlePaid(pending, paymentIntentIdOf(session), 'checkout_return', { userId: auth.userId, email: auth.email, ip: getClientIp(c), userAgent: c.req.header('user-agent') });
       const current=await loadPurchase(pending.id);
