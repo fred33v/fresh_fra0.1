@@ -752,12 +752,42 @@ repeated-extglob shapes found 24 that took over 100 ms on each version
 ### Exposure in this repository
 
 No source file imports a glob library. Every path to `picomatch` is
-build or test tooling (Vite, Vitest, Jest, Expo CLI, Tailwind, ESLint,
-lint-staged). The deployed backend is built with `pnpm deploy --prod`,
-which leaves development dependencies out, and the dashboard ships only
-`dist/`. The glob patterns in our own configs are literals. Whether
-Vite, Vitest, Jest or Expo pass untrusted strings to `picomatch` as
-patterns has not been verified, so exploitability is not ruled out.
+build or test tooling. The deployed backend is built with
+`pnpm deploy --prod`, which leaves development dependencies out, and the
+dashboard ships only `dist/`. Nothing on a running server matches a
+pattern.
+
+All 24 packages that reach `picomatch`, directly or through
+`micromatch`, `anymatch`, `readdirp`, `tinyglobby`, `fast-glob` or
+`chokidar`, were read for where their patterns come from:
+
+- **Written by us:** Jest (`testMatch`, coverage and ignore globs),
+  Vitest (`include`, `exclude`, coverage), Tailwind (`content`),
+  lint-staged (the two globs in root `package.json`), `sucrase`, the
+  `@expo/cli` asset patterns (`assetBundlePatterns`) and its template
+  globs, Metro's file map, and the ESLint and `tsconfig.json`
+  `include` globs read by `eslint-import-resolver-typescript` and
+  `@typescript-eslint/typescript-estree`.
+- **Vite's `server.fs.deny`:** built once at startup from config.
+  Request paths are only the text being matched. The default patterns
+  contain no repeated extglob.
+- **Not written by us:** the `sideEffects` array in the `package.json`
+  of any package Vite or Expo's Metro config resolves, including
+  packages in `node_modules` and their dependencies. Both turn it into
+  `picomatch` patterns without checking it. A `tsconfig.json` that
+  extends a third-party base can also supply `include` globs.
+
+The `sideEffects` path was exercised. In a throwaway project, a
+dependency declaring `"sideEffects": ["+(*a)"]` and holding a file named
+`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaab.js` stalled `vite build` for 12.9 s with
+the unpatched `picomatch`, against 0.2 s with benign `sideEffects` and
+0.2 s with the patch. One more character doubles the time.
+
+So the risk is a build that hangs, not a running service, and it needs a
+dependency (or a dependency update) that carries a hostile
+`package.json`. A malicious package has other ways to harm a build, so
+this is not a new privilege, but it needs no code execution and a
+dependency-update pull request would trigger it in CI.
 
 ### Fix
 
