@@ -815,3 +815,44 @@ is not 4.0.7 or 2.3.2, so the patch cannot silently stop applying.
 the patch, so they will keep reporting this advisory. It was not added
 to an audit ignore list. Remove both patches when a fixed release of
 each line is published.
+
+### Bundled copies of picomatch
+
+The patches above only reach the two `picomatch` packages that pnpm
+installs. Some packages bundle their own copy of the same engine inside
+their `dist` files, and `patchedDependencies` cannot touch those.
+Searching `node_modules` for the engine's constants table found copies in
+Rollup, Prettier, Playwright, tsx and resolve-workspace-root.
+
+**Rollup 4.68.0** (what Vite builds with) is the one patched here, by
+`patches/rollup@4.68.0.patch`. It holds six copies: one each in
+`dist/shared/rollup.js` and `dist/es/shared/node-entry.js` (picomatch
+4.x, used for plugin hook filters) and two each in `dist/shared/index.js`
+and `dist/es/shared/watch.js` (picomatch 2.x, inside the bundled
+chokidar, used for `watch.chokidar.ignored`). The patch applies the same
+check as the picomatch patches to all six.
+
+- Reproduced through Rollup's public API, in the CommonJS and ES builds: a
+  hook filter `**/+(*a)` on a 24-character file name took 0.9 s, and
+  `watch.chokidar.ignored: '+(*a)'` took 1.3 s, doubling with each extra
+  character. After the patch both take 10 to 35 ms at 24 and at 32
+  characters.
+- 72 combinations of ordinary hook-filter patterns, file names and builds
+  were compared with and without the patch. Only the 8 that use
+  `+(*.js)` or `+(*.test.js)` differ; they now match only their own text.
+- The dashboard build with the patch produces the same bundle
+  (`index-CBIxdYpv.js`, same content hash), and all 11 test tasks pass.
+- `tests/security/rollup-picomatch-redos.test.cjs` drives each route and
+  checks that all six copies carry the guard: 37 tests, of which 17 fail
+  against an unpatched Rollup.
+
+The patch is tied to `rollup@4.68.0`. A Rollup update makes
+`pnpm install` fail until the patch is redone for the new version or
+dropped, which also stops it being applied silently to code it was not
+written for. Drop it when a Rollup release bundles a fixed picomatch.
+
+**Still unpatched:** Prettier 3.8.1, Playwright 1.58.2, tsx 4.21.0 and
+resolve-workspace-root 2.0.1. They were not tested. Their patterns are
+expected to come from our own config files and the command line, which
+has not been verified. None of them is in the production backend package
+or the dashboard `dist/`; both were checked.

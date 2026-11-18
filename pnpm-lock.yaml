@@ -76,6 +76,9 @@ patchedDependencies:
   picomatch@4.0.7:
     hash: cndcr2bolen6ye4idonddqgpue
     path: patches/picomatch@4.0.7.patch
+  rollup@4.68.0:
+    hash: j5kffpnl2azkkx6im6j7tijbry
+    path: patches/rollup@4.68.0.patch
 
 importers:
 
@@ -17527,7 +17530,7 @@ snapshots:
     dependencies:
       glob: 7.2.3
 
-  rollup@4.68.0:
+  rollup@4.68.0(patch_hash=j5kffpnl2azkkx6im6j7tijbry):
     dependencies:
       '@types/estree': 1.0.10
     optionalDependencies:
@@ -18330,7 +18333,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
       picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       postcss: 8.5.32
-      rollup: 4.68.0
+      rollup: 4.68.0(patch_hash=j5kffpnl2azkkx6im6j7tijbry)
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 22.19.7
@@ -18347,7 +18350,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
       picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       postcss: 8.5.32
-      rollup: 4.68.0
+      rollup: 4.68.0(patch_hash=j5kffpnl2azkkx6im6j7tijbry)
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 22.19.7
