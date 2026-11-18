@@ -171,7 +171,7 @@ export function applyGlobalMiddleware(app: Hono) {
     c.header('X-Frame-Options', 'DENY');
     c.header('Referrer-Policy', c.req.path.startsWith('/api/v1/esign/sign/') ? 'no-referrer' : 'strict-origin-when-cross-origin');
     c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-    c.header('Content-Security-Policy', c.req.path.startsWith('/api/v1/esign/sign/') ? "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" : "default-src 'none'; frame-ancestors 'none'");
+    c.header('Content-Security-Policy', c.req.path.startsWith('/api/v1/esign/sign/') ? "default-src 'none'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" : "default-src 'none'; frame-ancestors 'none'");
     c.header('X-Permitted-Cross-Domain-Policies', 'none');
     c.header('X-Download-Options', 'noopen');
     c.header('Cross-Origin-Embedder-Policy', 'require-corp');

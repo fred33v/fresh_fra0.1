@@ -221,6 +221,9 @@ jobs:
       - name: Install Chromium for authenticated browser/database checks
         run: pnpm --filter @stopfra/web-dashboard exec playwright install --with-deps chromium
 
+      - name: Document preparation UI (mock API, real PDF canvas)
+        run: pnpm --filter @stopfra/web-dashboard test:e2e:signing
+
       - name: Electronic signer browser journey (PostgreSQL, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend
         env:

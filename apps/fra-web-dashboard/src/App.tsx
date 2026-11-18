@@ -42,6 +42,7 @@ const Integrations = lazy(() => import("./pages/Integrations"));
 const Compliance = lazy(() => import("./pages/Compliance"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Signing = lazy(() => import("./pages/Signing"));
 const SpeakUp = lazy(() => import("./pages/SpeakUp"));
 
 const queryClient = new QueryClient({
@@ -103,6 +104,8 @@ const App = () => (
                 <Route path="/risk-register" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><RiskRegister /></PackageGate></ProtectedRoute>} />
                 <Route path="/compliance" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Compliance /></PackageGate></ProtectedRoute>} />
                 <Route path="/integrations" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Integrations /></PackageGate></ProtectedRoute>} />
+                <Route path="/signing" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
+                <Route path="/signing/:id" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 {/* Public speak-up pages: no sign-in, reporters may be anonymous */}
                 <Route path="/speak-up/status" element={<SpeakUp mode="follow" />} />

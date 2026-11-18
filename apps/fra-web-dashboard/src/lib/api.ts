@@ -107,7 +107,8 @@ async function refreshAccessToken(): Promise<boolean> {
 
 async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
   const token = getAccessToken();
-  const headers: Record<string, string> = {
+  const multipart = body instanceof FormData;
+  const headers: Record<string, string> = multipart ? {} : {
     'Content-Type': 'application/json',
   };
   if (token) {
@@ -117,7 +118,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: multipart ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   // Handle 401 with token refresh
@@ -149,7 +150,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
 }
 
 /** Fetch a file (e.g. ?format=csv) with the user's token and save it in the browser. */
-async function download(path: string, filename: string, retry = true): Promise<void> {
+async function getBlob(path: string, retry = true): Promise<Blob> {
   const token = getAccessToken();
   const res = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -159,7 +160,7 @@ async function download(path: string, filename: string, retry = true): Promise<v
     if (!refreshPromise) {
       refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
     }
-    if (await refreshPromise) return download(path, filename, false);
+    if (await refreshPromise) return getBlob(path, false);
     throw new Error('Session expired. Please sign in again.');
   }
 
@@ -168,7 +169,11 @@ async function download(path: string, filename: string, retry = true): Promise<v
     throw new ApiError(json?.error?.code ?? 'DOWNLOAD_FAILED', json?.error?.message ?? `Download failed (${res.status})`);
   }
 
-  const url = URL.createObjectURL(await res.blob());
+  return res.blob();
+}
+
+async function download(path: string, filename: string): Promise<void> {
+  const url = URL.createObjectURL(await getBlob(path));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -208,6 +213,8 @@ export const anonymousApi = {
 
 export const api = {
   download,
+  blob: getBlob,
+  upload: <T>(path: string, body: FormData) => request<T>('POST', path, body),
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

@@ -74,6 +74,7 @@ export function Header() {
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
+                  {(user.role === 'admin' || user.role === 'employer') && <DropdownMenuItem asChild><Link to="/signing">Documents to sign</Link></DropdownMenuItem>}
                   {user.role === 'admin' && <DropdownMenuItem asChild><Link to="/certificate/manage">Manage certificates</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
