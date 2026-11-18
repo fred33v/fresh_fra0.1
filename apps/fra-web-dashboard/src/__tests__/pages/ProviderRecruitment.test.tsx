@@ -12,7 +12,7 @@ function page(component: React.ReactNode) {
 }
 beforeEach(() => vi.resetAllMocks());
 it('submits a training application with experience and verified identity supplied by server', async () => {
-  vi.mocked(api.get).mockResolvedValue(null);
+  vi.mocked(api.get).mockImplementation(async path => path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} : null);
   vi.mocked(api.post).mockResolvedValue({companyName:'Training Ltd',status:'submitted'});
   page(<ProviderApplication />);
   fireEvent.change(await screen.findByLabelText('Company name'),{target:{value:'Training Ltd'}});
@@ -25,7 +25,7 @@ it('submits a training application with experience and verified identity supplie
   });
 });
 it('allows the approved applicant to accept an offer', async () => {
-  vi.mocked(api.get).mockImplementation(async path => path.endsWith('/assignments') ?
+  vi.mocked(api.get).mockImplementation(async path => path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} : path.endsWith('/assignments') ?
     [{id:'offer',packageName:'Starter',reference:'WORK-1',service:'sales',status:'offered'}] :
     {companyName:'Sales Ltd',status:'approved',providerCode:'PRV-reference'});
   vi.mocked(api.post).mockResolvedValue({status:'accepted'});
@@ -41,7 +41,7 @@ it('shows a permission error instead of an empty review queue', async () => {
   expect(screen.queryByText('No applications yet.')).not.toBeInTheDocument();
 });
 it('submits an approval with concurrency revision, agreement and qualification evidence', async () => {
-  vi.mocked(api.get).mockImplementation(async path => path.includes('/review?') ? [{
+  vi.mocked(api.get).mockImplementation(async path => path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} : path.includes('/review?') ? [{
     id:'application',applicantName:'Alice',applicantEmail:'alice@example.test',companyName:'Training Ltd',
     serviceInterest:'training',trainingExperience:'Workshop delivery',status:'submitted',revision:3,
   }] : []);

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import type { DbExecutor } from './db/transaction.js';
 import type { AuthContext } from './helpers.js';
 
 export class RecruitmentError extends Error {
@@ -18,7 +19,7 @@ export async function recruitmentIdentity(db: PoolClient, auth: AuthContext, rev
   return user;
 }
 
-export async function recruitmentAudit(db: PoolClient, id: string, actor: string, event: string, details: unknown) {
+export async function recruitmentAudit(db: DbExecutor, id: string, actor: string, event: string, details: unknown) {
   await db.query(`INSERT INTO public.provider_recruitment_audit(application_id,actor_id,event,details)
     VALUES($1,$2,$3,$4::jsonb)`, [id, actor, event, JSON.stringify(details)]);
 }

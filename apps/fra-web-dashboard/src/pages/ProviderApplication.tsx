@@ -1,3 +1,4 @@
+import { ProviderStatement } from '@/components/ProviderStatement';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
@@ -73,9 +74,10 @@ export default function ProviderApplication() {
           </p>
         )}
         {application.data?.reviewReason && <p>Review decision: {application.data.reviewReason}</p>}
+        {application.data && <ProviderStatement />}
         {application.data?.status === 'approved' && <>
           <p>Your provider reference: <strong>{application.data.providerCode}</strong>. This reference identifies you; it is not a login or customer access code.</p>
-          <Assignments />
+          <Assignments providerCode={application.data.providerCode ?? ''} />
         </>}
         {application.isSuccess && application.data === null && (
           <form className="space-y-4" onSubmit={submit}>
@@ -130,7 +132,7 @@ export default function ProviderApplication() {
 
 
 type Assignment = { id: string; packageName: string; reference: string; service: string; status: string };
-function Assignments() {
+function Assignments({ providerCode }: { providerCode: string }) {
   const { user } = useAuth();
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['provider-assignments', user?.userId, user?.organisationId],
@@ -145,6 +147,7 @@ function Assignments() {
     {decision.isError && <p role="alert">{decision.error.message}</p>}
     {query.data?.map(a => <article key={a.id} className="space-y-2 rounded border p-3">
       <h3>{a.packageName} — {a.service}</h3><p>{a.reference}: {a.status}</p>
+      {a.service === 'sales' && ['accepted','completed'].includes(a.status) && <Link className="underline" to={`/checkout?package=${encodeURIComponent(a.packageName)}&provider=${encodeURIComponent(providerCode)}`}>Open referral checkout for {a.packageName}</Link>}
       {a.status === 'offered' && <div className="flex gap-3">
         <Button disabled={decision.isPending} onClick={() => decision.mutate({ id: a.id, status: 'accepted' })}>Accept {a.reference}</Button>
         <Button variant="outline" disabled={decision.isPending} onClick={() => decision.mutate({ id: a.id, status: 'refused' })}>Refuse {a.reference}</Button>

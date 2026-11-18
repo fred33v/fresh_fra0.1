@@ -1,3 +1,4 @@
+import { providerBalance, refreshProviderPayments } from '../provider-commissions.js';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -254,4 +255,117 @@ routes.post('/:id/assignments/:assignmentId/close', async (c) => {
     await recruitmentAudit(db,a.id,auth.userId,`assignment.${input.data.status}`,{id:saved.id,reason:input.data.reason});
     return saved;
   }));
+});
+
+async function commissionStatement(db: Parameters<typeof providerBalance>[0], id: string) {
+  const currencies = (await db.query(`SELECT DISTINCT currency FROM public.provider_commission_entries WHERE application_id=$1
+    UNION SELECT currency FROM public.provider_payouts WHERE application_id=$1`,[id])).rows;
+  const balances = [];
+  for (const {currency} of currencies) balances.push({currency,...await providerBalance(db,id,currency)});
+  const entries = (await db.query(`SELECT id,delta_cents AS "deltaCents",target_cents AS "targetCents",currency,reason,created_at AS "createdAt"
+    FROM public.provider_commission_entries WHERE application_id=$1 ORDER BY id DESC LIMIT 200`,[id])).rows;
+  const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",
+    created_at AS "createdAt",prepared_by AS "preparedBy",approved_by AS "approvedBy" FROM public.provider_payouts WHERE application_id=$1 ORDER BY created_at DESC LIMIT 200`,[id])).rows;
+  return {balances,entries,payouts};
+}
+
+routes.get('/me/statement', async c => {
+  const auth = await applicant(c);
+  if (auth instanceof Response) return auth;
+  return recruitmentResponse(c,()=>withTransaction(async db=>{
+    await recruitmentIdentity(db,auth);
+    const {rows:[a]}=await db.query(`SELECT id FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2 FOR UPDATE`,[auth.userId,auth.organisationId]);
+    if (!a) throw new RecruitmentError(404,'Application not found');
+    return commissionStatement(db,a.id);
+  }));
+});
+routes.get('/:id/statement', async c => {
+  const auth = await applicant(c);
+  if (auth instanceof Response) return auth;
+  if(!z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid provider');
+  return recruitmentResponse(c,()=>withTransaction(async db=>{
+    await recruitmentIdentity(db,auth,true);
+    const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
+    if(!a) throw new RecruitmentError(404,'Application not found');
+    return commissionStatement(db,a.id);
+  }));
+});
+
+routes.post('/:id/payouts', async c => {
+  const auth = await applicant(c);
+  if(auth instanceof Response) return auth;
+  if(process.env.PROVIDER_PAYOUTS_ENABLED!=='true') return jsonError(c,503,'PAYOUTS_DISABLED','Payout preparation is not enabled');
+  const parsed=z.strictObject({requestKey:z.string().uuid(),currency:z.literal('gbp'),amountCents:z.number().int().positive().max(100000000),reason:z.string().trim().min(10).max(2000)})
+    .safeParse(await c.req.json().catch(()=>null));
+  if(!parsed.success || !z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid payout');
+  return recruitmentResponse(c,async()=>{
+    await refreshProviderPayments(auth,c.req.param('id'));
+    return withTransaction(async db=>{
+    await recruitmentIdentity(db,auth,true);
+    const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
+    if(!a) throw new RecruitmentError(404,'Application not found');
+    if(a.applicant_id===auth.userId) throw new RecruitmentError(403,'You cannot prepare your own payout');
+    const {rows:[previous]}=await db.query('SELECT * FROM public.provider_payouts WHERE request_key=$1',[parsed.data.requestKey]);
+    if(previous){
+      if(previous.application_id!==a.id || previous.currency!==parsed.data.currency || previous.amount_cents!==parsed.data.amountCents || previous.prepared_by!==auth.userId)
+        throw new RecruitmentError(409,'Payout request key is already used');
+      return {id:previous.id,status:previous.status};
+    }
+    if(a.status!=='approved') throw new RecruitmentError(409,'Provider approval is required');
+    const b=await providerBalance(db,a.id,parsed.data.currency);
+    if(parsed.data.amountCents>b.available) throw new RecruitmentError(409,'Amount exceeds the unreserved commission balance');
+    const {rows:[p]}=await db.query(`INSERT INTO public.provider_payouts(application_id,currency,amount_cents,request_key,prepared_by,reason)
+      VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`,[a.id,parsed.data.currency,parsed.data.amountCents,parsed.data.requestKey,auth.userId,parsed.data.reason]);
+    await recruitmentAudit(db,a.id,auth.userId,'payout.prepared',{...parsed.data,id:p.id});
+    return p;
+    });
+  });
+});
+
+routes.post('/payouts/:id/action', async c => {
+  const auth=await applicant(c);
+  if(auth instanceof Response)return auth;
+  if(process.env.PROVIDER_PAYOUTS_ENABLED!=='true') return jsonError(c,503,'PAYOUTS_DISABLED','Payout operations are not enabled');
+  const parsed=z.strictObject({action:z.enum(['approve','record','cancel']),reason:z.string().trim().min(10).max(2000),
+    settlementReference:z.string().trim().min(6).max(160).optional()}).safeParse(await c.req.json().catch(()=>null));
+  if(!parsed.success || !z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid payout action');
+  return recruitmentResponse(c,async()=>{
+    if(parsed.data.action!=='cancel') {
+      const lookup=await withTransaction(async db=>{
+        await recruitmentIdentity(db,auth,true);
+        return (await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')])).rows[0];
+      });
+      if(!lookup)throw new RecruitmentError(404,'Payout not found');
+      await refreshProviderPayments(auth,lookup.application_id);
+    }
+    return withTransaction(async db=>{
+    await recruitmentIdentity(db,auth,true);
+    const {rows:[lookup]}=await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')]);
+    if(!lookup)throw new RecruitmentError(404,'Payout not found');
+    const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[lookup.application_id]);
+    const {rows:[p]}=await db.query('SELECT * FROM public.provider_payouts WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
+    const {action,reason,settlementReference}=parsed.data;
+    if(a.applicant_id===auth.userId)throw new RecruitmentError(403,'You cannot authorise your own payout');
+    if(action==='record' && p.status==='recorded' && p.settlement_reference===settlementReference) return {id:p.id,status:p.status};
+    if(action==='cancel'){
+      if(!['prepared','approved'].includes(p.status))throw new RecruitmentError(409,'Only unsettled payouts can be cancelled');
+      await db.query("UPDATE public.provider_payouts SET status='cancelled' WHERE id=$1",[p.id]);
+    }else{
+      if(a.status!=='approved')throw new RecruitmentError(409,'Provider approval is required');
+      if(p.prepared_by===auth.userId)throw new RecruitmentError(403,'A second reviewer must approve and record settlement');
+      if((await providerBalance(db,a.id,p.currency)).available<0)throw new RecruitmentError(409,'Refunds or disputes reduced this balance; cancel and prepare a corrected payout');
+      if(action==='approve'){
+        if(p.status!=='prepared')throw new RecruitmentError(409,'Payout is not awaiting approval');
+        await db.query("UPDATE public.provider_payouts SET status='approved',approved_by=$2,approved_at=now() WHERE id=$1",[p.id,auth.userId]);
+      }else{
+        if(p.status!=='approved' || !settlementReference)throw new RecruitmentError(409,'An independently approved payout and bank settlement reference are required');
+        const duplicate=(await db.query('SELECT id FROM public.provider_payouts WHERE settlement_reference=$1',[settlementReference])).rows[0];
+        if(duplicate)throw new RecruitmentError(409,'Settlement reference is already recorded');
+        await db.query("UPDATE public.provider_payouts SET status='recorded',recorded_by=$2,recorded_at=now(),settlement_reference=$3 WHERE id=$1",[p.id,auth.userId,settlementReference]);
+      }
+    }
+    await recruitmentAudit(db,a.id,auth.userId,`payout.${action}`,{id:p.id,reason,settlementReference:settlementReference??null});
+    return {id:p.id,status:action==='approve'?'approved':action==='record'?'recorded':'cancelled'};
+    });
+  });
 });

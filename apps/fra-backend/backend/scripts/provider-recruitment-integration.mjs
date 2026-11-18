@@ -8,6 +8,7 @@ if (process.env.PROVIDER_TEST_DATABASE !== '1' || process.env.NODE_ENV === 'prod
     !['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.DATABASE_URL ?? 'https://invalid').hostname))
   throw new Error('Requires PROVIDER_TEST_DATABASE=1 and a disposable local DATABASE_URL');
 process.env.NODE_ENV = 'test';
+process.env.PROVIDER_PAYOUTS_ENABLED='false';
 const { default: routes } = await import('../src/routes/provider-applications.ts');
 const { jwtSecret } = await import('../src/helpers.ts');
 const { closeDbPool } = await import('../src/db.ts');
@@ -120,7 +121,87 @@ try {
   await call(admin,`/${declined.id}/review`,{revision:0,status:'declined',reason:'Application does not meet requirements'});
   await call(admin,`/${declined.id}/assignments`,{...offer,reference:randomUUID()},409);
   await assert.rejects(pool.query('DELETE FROM public.provider_recruitment_audit WHERE application_id=$1',[application.id])); checks++;
+  // Financial integration: real PostgreSQL and the existing isolated Stripe snapshot fixture.
+  const { attributeProviderSale, commissionTarget } = await import('../src/provider-commissions.ts');
+  const { withTransaction } = await import('../src/db/transaction.ts');
+  const { dbInsertPurchase } = await import('../src/db/purchases.ts');
+  const { reconcilePaidPurchase } = await import('../src/payment-lifecycle.ts');
+  const { setStripeClient } = await import('../src/stripe.ts');
+  const { paymentProvider } = await import('../__tests__/fixtures/payment-provider.ts');
+  assert.equal(commissionTarget(100000,120000,0,true),17000);
+  assert.equal(commissionTarget(100000,120000,60000,true),8500);
+  assert.equal(commissionTarget(100000,120000,0,false),0);
+  checks+=3;
+  const sales=await call(admin,`/${application.id}/assignments`,{packageId:'pkg_basic',reference:randomUUID(),service:'sales'});
+  await call(applicant,`/me/assignments/${sales.id}/decision`,{status:'accepted'});
+  const sale={id:randomUUID(),organisationId:declinedUser.org,userId:declinedUser.id,packageId:'pkg_basic',status:'requires_confirmation',amountCents:100000,currency:'gbp',createdAt:new Date().toISOString()};
+  await withTransaction(async db=>{
+    await dbInsertPurchase(sale,db);
+    await attributeProviderSale(db,{userId:declinedUser.id,organisationId:declinedUser.org,email:declinedUser.email,role:'employer'},sale.id,'pkg_basic',approved.providerCode);
+  });
+  const provider=paymentProvider(sale);setStripeClient(provider.client);
+  await reconcilePaidPurchase(sale,provider.paymentIntentId,'test');
+  let statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,17000);
+  await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-replay');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.entries.length,1);
+  await call(other,`/${application.id}/statement`,null,403);
+  await call(admin,`/${application.id}/payouts`,{requestKey:randomUUID(),currency:'gbp',amountCents:17000,reason:'Finance verified customer receipt'},503);
+  process.env.PROVIDER_PAYOUTS_ENABLED='true';
+  provider.refund(60000);await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-refund');
+  provider.dispute('needs_response');await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-dispute');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);
+  provider.dispute('won');await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-dispute-won');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,8500);
+  const second=await actor('admin',operatorOrg);
+  const request={requestKey:randomUUID(),currency:'gbp',amountCents:8500,reason:'Finance verified customer receipt'};
+  provider.state.unavailable=true;
+  await call(admin,`/${application.id}/payouts`,request,409);
+  provider.state.unavailable=false;
+  const reserved=await call(admin,`/${application.id}/payouts`,request);
+  assert.equal((await call(admin,`/${application.id}/payouts`,request)).id,reserved.id);
+  await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID()},409);
+  const approve={action:'approve',reason:'Independent finance verification'};
+  await call(admin,`/payouts/${reserved.id}/action`,approve,403);
+  await call(second,`/payouts/${reserved.id}/action`,approve);
+  provider.refund(30000); // Refresh before recording catches even a not-yet-delivered refund webhook.
+  const record={action:'record',reason:'Bank settlement verified in fixture',settlementReference:`LOCAL-TEST-${randomUUID()}`};
+  await call(second,`/payouts/${reserved.id}/action`,record,409);
+  await call(admin,`/payouts/${reserved.id}/action`,{action:'cancel',reason:'Refund requires corrected amount'});
+  const corrected=await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:4250});
+  await call(second,`/payouts/${corrected.id}/action`,approve);
+  await call(second,`/payouts/${corrected.id}/action`,record);
+  await call(second,`/payouts/${corrected.id}/action`,record); // Idempotent replay.
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].recorded,4250);assert.equal(statement.balances[0].available,0);
+  provider.refund(30000);await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-full-refund');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);assert.equal(statement.balances[0].available,-4250);
+  await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:1},409);
+  await assert.rejects(pool.query('DELETE FROM public.provider_commission_entries WHERE purchase_id=$1',[sale.id]));
+  await assert.rejects(pool.query("UPDATE public.provider_payouts SET settlement_reference='rewritten' WHERE id=$1",[corrected.id]));
+  checks+=2;
+  const selfSale={...sale,id:randomUUID(),userId:applicant.id,organisationId:applicant.org};
+  await assert.rejects(withTransaction(async db=>{
+    await dbInsertPurchase(selfSale,db);
+    await attributeProviderSale(db,{userId:applicant.id,organisationId:applicant.org,email:applicant.email,role:'employer'},selfSale.id,'pkg_basic',approved.providerCode);
+  }),/Self-referrals/);
+  assert.equal((await pool.query('SELECT 1 FROM public.purchases WHERE id=$1',[selfSale.id])).rowCount,0);checks++;
+  const {default:paymentRoutes}=await import('../src/routes/payments.ts');
+  const checkoutApp=new Hono().route('/api/v1',paymentRoutes);
+  const checkoutBuyer=await actor('employer');
+  setStripeClient({checkout:{sessions:{create:async()=>({id:'cs_provider_fixture',url:'https://example.test/fixture-checkout'})}}});
+  const checkout=await checkoutApp.request('http://localhost/api/v1/purchases',{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${checkoutBuyer.token}`},
+    body:JSON.stringify({packageId:'pkg_basic',client:'web',providerCode:approved.providerCode}),
+  });
+  assert.equal(checkout.status,200,await checkout.clone().text());
+  const checkoutData=await checkout.json();
+  assert.equal((await pool.query('SELECT application_id FROM public.provider_sale_attributions WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rows[0].application_id,application.id);
+  assert.equal((await pool.query('SELECT 1 FROM public.provider_commission_entries WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rowCount,0);
+  checks++;
+  setStripeClient(null);
+  process.env.STRIPE_SECRET_KEY='rk_test_fixture_only';
+  process.env.STRIPE_WEBHOOK_SECRET='whsec_fixture_only';
+  await import('../src/check-provider-setup.ts');checks++;
   await pool.query("UPDATE public.users SET role='employee' WHERE id=$1",[admin.id]);
   await call(admin,'/review',null,403);
-  console.log(`PASS: ${checks} recruitment checks, signed-agreement binding, tenant isolation, stale-role rejection, concurrent decisions, suspension and retained audit`);
+  console.log(`PASS: ${checks} recruitment checks, signed-agreement binding, tenant isolation, stale-role rejection, concurrent decisions, suspension, retained audit, attribution, refunds/disputes and independently approved payout records`);
 } finally { await closeDbPool(); await pool.end(); }

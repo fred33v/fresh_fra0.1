@@ -1,3 +1,4 @@
+import { ProviderStatement } from '@/components/ProviderStatement';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Layout } from '@/components/layout/Layout';
@@ -112,6 +113,7 @@ function Review({ application: a }: { application: Application }) {
       {['offered','accepted'].includes(o.status) && <Button variant="outline" disabled={reason.trim().length < 10 || close.isPending} onClick={() => close.mutate({id:o.id,status:'cancelled'})}>Cancel {o.reference}</Button>}
       {o.status === 'accepted' && a.status === 'approved' && <Button disabled={reason.trim().length < 10 || close.isPending} onClick={() => close.mutate({id:o.id,status:'completed'})}>Complete {o.reference}</Button>}
     </div>)}
+    <ProviderStatement applicationId={a.id} />
     {audit.isError && <p role="alert">Could not load the decision history.</p>}
     <details><summary>Decision history</summary><ul>{audit.data?.map((e, i) => <li key={i}>{e.occurredAt}: {e.event}</li>)}</ul></details>
   </section>;
