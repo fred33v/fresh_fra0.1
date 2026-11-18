@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import type { DbExecutor } from '../db/transaction.js';
+import { processPaymentEvent, purchaseForReversal, reconcilePaidPurchase } from '../payment-lifecycle.js';
 import { Hono } from 'hono';
 import { blocksRepurchase, getAuth, hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { getEntitlementSummary } from '../entitlements.js';
@@ -16,7 +18,7 @@ import { getClientIp, rateLimit } from '../middleware.js';
 import { createCheckoutSession, getStripe, paymentIntentIdOf, sessionOutcome, totalWithVat } from '../stripe.js';
 import type Stripe from 'stripe';
 import {
-  dbInsertPurchase, dbGetPurchaseById, dbUpdatePurchaseStatus, dbSetPurchaseCheckoutSession, dbMarkPurchasePaid,
+  dbInsertPurchase, dbGetPurchaseById, dbUpdatePurchaseStatus, dbSetPurchaseCheckoutSession,
   dbListPurchasesByOrganisation, dbListPackages, dbGetPackageById,
   dbListAssessmentsByOrganisation,
   auditLog,
@@ -24,52 +26,23 @@ import {
 
 const payments = new Hono();
 
-// Track processed webhook event IDs for idempotency
-const processedWebhookIds = new Set<string>();
 
 /** Without Stripe, payments are simulated for local development and tests; production refuses them. */
 const paymentsUnavailable = () => !getStripe() && process.env.NODE_ENV === 'production';
 
-const loadPurchase = async (id: string): Promise<Purchase | null> =>
-  hasDatabase() ? dbGetPurchaseById(id) : purchasesById.get(id) ?? null;
+const loadPurchase = async (id: string, db?: DbExecutor): Promise<Purchase | null> =>
+  hasDatabase() ? dbGetPurchaseById(id, db) : purchasesById.get(id) ?? null;
 
 const orgPurchasesOf = async (orgId: string): Promise<Purchase[]> =>
   hasDatabase() ? dbListPurchasesByOrganisation(orgId) : Array.from(purchasesById.values()).filter((p) => p.organisationId === orgId);
 
-async function setPurchaseStatus(purchase: Purchase, status: 'failed'): Promise<void> {
-  if (hasDatabase()) await dbUpdatePurchaseStatus(purchase.id, status, undefined, 'requires_confirmation');
+async function setPurchaseStatus(purchase: Purchase, status: 'failed', db?: DbExecutor): Promise<void> {
+  if (hasDatabase()) await dbUpdatePurchaseStatus(purchase.id, status, undefined, 'requires_confirmation', db);
   else if (purchase.status === 'requires_confirmation') purchase.status = status;
 }
 
-/**
- * Marks a pending purchase paid once Stripe shows it paid. Safe to call from both the buyer's return
- * and the webhook: only the first call changes anything. Returns whether this call did.
- */
-async function settlePaid(purchase: Purchase, paymentIntentId: string | null, source: 'checkout_return' | 'webhook',
-  actor?: { userId: string; email: string; ip?: string; userAgent?: string }): Promise<boolean> {
-  const now = new Date().toISOString();
-  let changed = false;
-  if (hasDatabase()) {
-    changed = (await dbMarkPurchasePaid(purchase.id, now, paymentIntentId)) > 0;
-  } else {
-    const stored = purchasesById.get(purchase.id);
-    if (stored && stored.status === 'requires_confirmation') {
-      stored.status = 'succeeded';
-      stored.confirmedAt = now;
-      if (paymentIntentId) stored.paymentIntentId = paymentIntentId;
-      changed = true;
-    }
-  }
-  if (changed) {
-    await auditLog({
-      eventType: 'purchase.confirmed', actorId: actor?.userId, actorEmail: actor?.email,
-      organisationId: purchase.organisationId, resourceType: 'purchase', resourceId: purchase.id,
-      details: { source, paymentIntentId, amountCents: totalWithVat(purchase.amountCents), packageId: purchase.packageId },
-      ipAddress: actor?.ip, userAgent: actor?.userAgent,
-    });
-  }
-  return changed;
-}
+/** Reconcile the paid purchase from the provider, including subsequent reversals. */
+const settlePaid = reconcilePaidPurchase;
 
 payments.post('/payments/create-intent', async (c) => {
   const limited = await rateLimit('payments:intent', { windowMs: RATE_LIMITS.PAYMENT_INTENT_WINDOW_MS, max: RATE_LIMITS.PAYMENT_INTENT_MAX })(c);
@@ -214,6 +187,8 @@ payments.post('/purchases', async (c) => {
     const outcome = sessionOutcome(session, pending);
     if (outcome === 'paid') {
       await settlePaid(pending, paymentIntentIdOf(session), 'checkout_return', { userId: auth.userId, email: auth.email, ip: getClientIp(c), userAgent: c.req.header('user-agent') });
+      const current=await loadPurchase(pending.id);
+      if(current?.status!=='succeeded')return jsonError(c,409,'PAYMENT_REVERSED','This payment no longer provides access. Please start a new checkout.');
       return jsonError(c, 409, 'DUPLICATE_PURCHASE', 'This package has already been paid for');
     }
     if (outcome === 'open' && session.url) {
@@ -321,7 +296,13 @@ payments.post('/purchases/:id/confirm', async (c) => {
   const stripe = getStripe();
   if (stripe) {
     const paid = { purchaseId, organisationId: auth.organisationId, status: 'succeeded' as const };
-    if (purchase.status === 'succeeded') return c.json({ success: true, data: { ...paid, paymentIntentId: purchase.paymentIntentId ?? null } });
+    if ((purchase.status === 'succeeded' || purchase.status === 'disputed') && purchase.paymentIntentId) {
+      await settlePaid(purchase,purchase.paymentIntentId,'checkout_return',{userId:auth.userId,email:auth.email});
+      const current=await loadPurchase(purchaseId);
+      if(current?.status!=='succeeded')return jsonError(c,409,'PAYMENT_REVERSED','This payment no longer provides access.');
+      return c.json({success:true,data:{...paid,paymentIntentId:purchase.paymentIntentId}});
+    }
+    if(purchase.status==='refunded')return jsonError(c,409,'PAYMENT_REVERSED','This payment was refunded and no longer provides access.');
     if (purchase.status !== 'requires_confirmation' || !purchase.checkoutSessionId) {
       return jsonError(c, 409, 'PAYMENT_NOT_COMPLETED', 'This payment was not completed. Please start a new checkout.');
     }
@@ -330,6 +311,8 @@ payments.post('/purchases/:id/confirm', async (c) => {
     if (outcome === 'paid') {
       const paymentIntentId = paymentIntentIdOf(session);
       await settlePaid(purchase, paymentIntentId, 'checkout_return', { userId: auth.userId, email: auth.email, ip: getClientIp(c), userAgent: c.req.header('user-agent') });
+      const current=await loadPurchase(purchaseId);
+      if(current?.status!=='succeeded')return jsonError(c,409,'PAYMENT_REVERSED','This payment no longer provides access.');
       return c.json({ success: true, data: { ...paid, paymentIntentId } });
     }
     if (outcome === 'expired') await setPurchaseStatus(purchase, 'failed');
@@ -422,7 +405,7 @@ payments.get('/purchases/organisation/:orgId', async (c) => {
   if (orgId !== auth.organisationId) return jsonError(c, 403, 'FORBIDDEN', 'Forbidden');
 
   const statusFilter = c.req.query('status');
-  const validStatuses = new Set(['requires_confirmation', 'succeeded', 'failed', 'refunded']);
+  const validStatuses = new Set(['requires_confirmation', 'succeeded', 'failed', 'refunded', 'disputed']);
   if (statusFilter && !validStatuses.has(statusFilter)) {
     return jsonError(c, 400, 'INVALID_PARAM', 'Invalid status filter');
   }
@@ -500,25 +483,8 @@ payments.post('/webhooks/stripe', async (c) => {
   const eventType = parsed.data.type;
   const eventData = parsed.data.data as Record<string, unknown> | undefined;
 
-  // Simple in-memory idempotency check to prevent duplicate processing
-  if (eventId && processedWebhookIds.has(eventId)) {
-    logger.info('Duplicate webhook event ignored', { eventId, type: eventType });
-    return c.json({ success: true, data: { received: true, type: eventType, duplicate: true } });
-  }
-
-  logger.info('Stripe webhook received', { eventId, type: eventType });
-
-  // Mark as processed BEFORE handling to prevent duplicate processing on retry
-  if (eventId) {
-    processedWebhookIds.add(eventId);
-    // Prevent unbounded memory growth — keep last 10 000 event IDs
-    if (processedWebhookIds.size > 10_000) {
-      const first = processedWebhookIds.values().next().value;
-      if (first) processedWebhookIds.delete(first);
-    }
-  }
-
   try {
+    const changed = await processPaymentEvent(eventId,eventType,async (db) => {
     switch (eventType) {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded':
@@ -526,7 +492,8 @@ payments.post('/webhooks/stripe', async (c) => {
       case 'checkout.session.async_payment_failed': {
         const session = (eventData as { object?: Stripe.Checkout.Session } | undefined)?.object;
         const purchaseId = session?.metadata?.purchaseId ?? session?.client_reference_id ?? undefined;
-        const purchase = purchaseId && /^[0-9a-f-]{36}$/i.test(purchaseId) ? await loadPurchase(purchaseId) : null;
+        const purchase = purchaseId && /^[0-9a-f-]{36}$/i.test(purchaseId) ? await loadPurchase(purchaseId, db) : null;
+        if (session && purchaseId && /^[0-9a-f-]{36}$/i.test(purchaseId) && !purchase)throw new Error('Linked purchase not available yet');
         if (!session || !purchase) {
           logger.warn('Checkout webhook for an unknown purchase', { eventId, purchaseId });
           break;
@@ -536,13 +503,13 @@ payments.post('/webhooks/stripe', async (c) => {
           break;
         }
         if (eventType === 'checkout.session.expired' || eventType === 'checkout.session.async_payment_failed') {
-          await setPurchaseStatus(purchase, 'failed');
+          await setPurchaseStatus(purchase, 'failed', db);
           logger.info('Purchase payment not completed', { purchaseId, eventType });
           break;
         }
         const outcome = sessionOutcome(session, purchase);
         if (outcome === 'paid') {
-          const changed = await settlePaid(purchase, paymentIntentIdOf(session), 'webhook');
+          const changed = await settlePaid(purchase, paymentIntentIdOf(session), 'webhook', undefined, db);
           logger.info('Purchase paid', { purchaseId, alreadySettled: !changed });
         } else if (outcome === 'mismatch') {
           logger.error('Checkout webhook amount or purchase mismatch', { eventId, purchaseId, amountTotal: session.amount_total });
@@ -550,6 +517,22 @@ payments.post('/webhooks/stripe', async (c) => {
         break;
       }
 
+      case 'charge.refunded':
+      case 'charge.refund.updated':
+      case 'refund.created':
+      case 'refund.updated':
+      case 'refund.failed':
+      case 'charge.dispute.created':
+      case 'charge.dispute.updated':
+      case 'charge.dispute.closed':
+      case 'charge.dispute.funds_withdrawn':
+      case 'charge.dispute.funds_reinstated': {
+        const object=(eventData as {object?: {payment_intent?:string|{id:string}|null}}|undefined)?.object;
+        if(!object)throw new Error('Payment event object missing');
+        const linked=await purchaseForReversal(object,db);
+        if(linked)await reconcilePaidPurchase(linked.purchase,linked.paymentIntentId,'webhook',undefined,db);
+        break;
+      }
       case 'payment_intent.succeeded': {
         // Purchases are settled from their Checkout Session, which carries the amount and purchase
         logger.info('Payment intent succeeded', { eventId });
@@ -561,14 +544,13 @@ payments.post('/webhooks/stripe', async (c) => {
         break;
       }
     }
+    });
+    return c.json({ success: true, data: { received: true, type: eventType, ...(!changed ? {duplicate:true} : {}) } });
   } catch (err: unknown) {
-    // Let Stripe's retry be processed rather than ignored as a duplicate
-    if (eventId) processedWebhookIds.delete(eventId);
     logger.error('Webhook processing error', { eventId, type: eventType, error: String(err) });
     return jsonError(c, 500, 'WEBHOOK_ERROR', 'Failed to process webhook event');
   }
 
-  return c.json({ success: true, data: { received: true, type: eventType } });
 });
 
 export default payments;

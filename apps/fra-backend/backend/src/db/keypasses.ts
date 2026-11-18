@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { Keypass, KeypassStatus, DbKeypassRow } from '../types.js';
 
@@ -20,9 +21,9 @@ export async function dbInsertKeypass(kp: Keypass): Promise<void> {
   );
 }
 
-export async function dbInsertKeypassBatch(keypasses: Keypass[]): Promise<void> {
+export async function dbInsertKeypassBatch(keypasses: Keypass[], db?: DbExecutor): Promise<void> {
   if (keypasses.length === 0) return;
-  const pool = getDbPool();
+  const pool = db ?? getDbPool();
   const values: unknown[] = [];
   const placeholders: string[] = [];
   for (let i = 0; i < keypasses.length; i++) {
@@ -37,8 +38,8 @@ export async function dbInsertKeypassBatch(keypasses: Keypass[]): Promise<void> 
   );
 }
 
-export async function dbGetKeypassByCode(code: string): Promise<Keypass | null> {
-  const pool = getDbPool();
+export async function dbGetKeypassByCode(code: string, db?: DbExecutor): Promise<Keypass | null> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<DbKeypassRow>(
     'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id, invited_email, invited_at from public.keypasses where code = $1 limit 1',
     [code]
@@ -48,17 +49,17 @@ export async function dbGetKeypassByCode(code: string): Promise<Keypass | null> 
   return rowToKeypass(row);
 }
 
-export async function dbUpdateKeypassStatus(code: string, status: KeypassStatus, usedAt?: string, usedByUserId?: string): Promise<void> {
-  const pool = getDbPool();
+export async function dbUpdateKeypassStatus(code: string, status: KeypassStatus, usedAt?: string, usedByUserId?: string, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query(
-    'update public.keypasses set status = $1, used_at = coalesce($2, used_at), used_by_user_id = coalesce($3, used_by_user_id) where code = $4',
+    'update public.keypasses set status = $1, used_at = coalesce($2, used_at), used_by_user_id = coalesce($3, used_by_user_id) where code = $4 and (status <> \'used\' or $1 = \'used\')',
     [status, usedAt ?? null, usedByUserId ?? null, code]
   );
 }
 
 /** Atomically claim a keypass — only updates if current status is 'available'. Returns true if claimed. */
-export async function dbClaimKeypass(code: string, usedAt: string, usedByUserId: string): Promise<boolean> {
-  const pool = getDbPool();
+export async function dbClaimKeypass(code: string, usedAt: string, usedByUserId: string, db?: DbExecutor): Promise<boolean> {
+  const pool = db ?? getDbPool();
   const res = await pool.query(
     `update public.keypasses set status = 'used', used_at = $1, used_by_user_id = $2
      where code = $3 and status = 'available'
@@ -68,8 +69,8 @@ export async function dbClaimKeypass(code: string, usedAt: string, usedByUserId:
   return (res.rowCount ?? 0) > 0;
 }
 
-export async function dbListKeypassesByOrganisation(orgId: string): Promise<Keypass[]> {
-  const pool = getDbPool();
+export async function dbListKeypassesByOrganisation(orgId: string, db?: DbExecutor): Promise<Keypass[]> {
+  const pool = db ?? getDbPool();
   const res = await pool.query<DbKeypassRow>(
     'select code, organisation_id, status, created_at, expires_at, used_at, used_by_user_id, invited_email, invited_at from public.keypasses where organisation_id = $1 order by created_at desc',
     [orgId]

@@ -38,7 +38,9 @@ const defaultAuthReturn = {
   isLoading: false,
   signUp: vi.fn(),
   signIn: vi.fn(),
-  signOut: vi.fn(),
+  verifyEmail: vi.fn().mockResolvedValue({ error: null }),
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
+    signOut: vi.fn(),
   hasRole: vi.fn(),
   refreshProfile: vi.fn(),
 };

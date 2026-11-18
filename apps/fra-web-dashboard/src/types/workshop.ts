@@ -1,3 +1,4 @@
+import type { QuizQuestion } from '@stopfra/types';
 export type OrgSector = 'public' | 'charity' | 'private';
 export type AppRole = 'admin' | 'facilitator' | 'participant';
 
@@ -89,11 +90,32 @@ export interface Certificate {
   /** Quiz score in percent at the time the certificate was issued */
   quiz_score?: number | null;
   issued_at: string;
+  status?: 'valid' | 'revoked';
+  completed_at?: string | null;
+  issued_details?: CertificateSnapshot;
+}
+
+export interface CertificateSnapshot {
+  kind: 'training' | 'assessment';
+  certificateNumber: string;
+  issuedAt: string;
+  completedAt?: string | null;
+  holderName: string;
+  organisationName: string;
+  title: string;
+  quizScore: number | null;
+  areasAssessed: number | null;
+  courseId?: string;
+  courseVersion?: string | null;
+  snapshotOrigin?: 'issued' | 'legacy_reconstructed';
 }
 
 /** What the public verification page shows for a certificate number */
 export interface VerifiedCertificate {
-  valid: true;
+  valid: boolean;
+  status?: 'valid' | 'revoked';
+  completedAt?: string | null;
+  snapshotOrigin?: 'issued' | 'legacy_reconstructed';
   kind: 'training' | 'assessment';
   certificateNumber: string;
   issuedAt: string;

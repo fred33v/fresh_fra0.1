@@ -1,3 +1,4 @@
+import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import { hasDatabase } from '../helpers.js';
 import { createLogger } from '../logger.js';
@@ -15,7 +16,7 @@ export async function auditLog(event: {
   details?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
-}): Promise<void> {
+}, db?: DbExecutor): Promise<void> {
   if (!hasDatabase()) {
     auditEvents.push({
       id: crypto.randomUUID(), eventType: event.eventType, actorId: event.actorId, actorEmail: event.actorEmail,
@@ -26,7 +27,7 @@ export async function auditLog(event: {
     return;
   }
   try {
-    const pool = getDbPool();
+    const pool = db ?? getDbPool();
     await pool.query(
       'insert into public.audit_logs (event_type, actor_id, actor_email, organisation_id, resource_type, resource_id, details, ip_address, user_agent) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
       [
@@ -37,7 +38,9 @@ export async function auditLog(event: {
       ]
     );
   } catch (err: unknown) {
-    // Audit log failures must not break the request, but should be logged
+    // An explicit transaction must roll back if its required audit cannot be stored.
+    if (db) throw err;
+    // Standalone audit remains best effort for existing callers.
     logger.error('Failed to write audit log', { eventType: event.eventType, error: String(err) });
   }
 }

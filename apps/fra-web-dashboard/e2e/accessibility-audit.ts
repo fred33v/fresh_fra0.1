@@ -58,7 +58,7 @@ const SAFE_FOCUS_SELECTOR = [
  * This is a basic check for obvious issues
  * Reference: https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html
  */
-export async function checkColorContrast(page: Page): Promise<{
+export async function checkColorContrast(_page: Page): Promise<{
   pass: boolean;
   failures: string[];
   warnings: string[];
@@ -149,8 +149,6 @@ export async function checkFormLabels(page: Page): Promise<{
     for (const input of inputs) {
       const element = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
       const id = element.id;
-      const name = element.name;
-      const placeholder = element.getAttribute('placeholder');
       const ariaLabel = element.getAttribute('aria-label');
       const ariaLabelledBy = element.getAttribute('aria-labelledby');
       const type = element.getAttribute('type');
@@ -338,7 +336,7 @@ export async function checkAriaAttributes(page: Page): Promise<{
 
   return {
     pass: issues.length === 0,
-    elements: ariaElements.length,
+    elements: ariaElementCount,
     ariaIssues: issues,
   };
 }

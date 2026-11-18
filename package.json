@@ -106,7 +106,13 @@
     "patchedDependencies": {
       "expo-router@6.0.23": "patches/expo-router@6.0.23.patch",
       "metro@0.83.3": "patches/metro@0.83.3.patch",
-      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
+      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch",
+      "picomatch@4.0.7": "patches/picomatch@4.0.7.patch",
+      "picomatch@2.3.2": "patches/picomatch@2.3.2.patch"
     }
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.0",
+    "@neon/env": "^2.1.3"
   }
 }

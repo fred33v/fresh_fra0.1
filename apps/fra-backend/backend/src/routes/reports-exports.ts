@@ -144,7 +144,6 @@ reportsExports.post('/webhooks/assessment-submitted', async (c) => {
     // Audit the webhook receipt
     await auditLog({
       eventType: 'webhook.assessment_submitted',
-      actorId: 'system',
       actorEmail: 'webhook@system',
       organisationId: body.organisationId,
       resourceType: 'assessment',

@@ -732,3 +732,86 @@ scope on 12 November 2026, with these recorded conditions:
 Acceptance does not merge anything. PR #69 still needs the owner's
 explicit approval to leave Draft and merge. The Phase 1 gate in
 sections 7 to 11 is satisfied once PR #69 is merged into `main`.
+
+## 19. picomatch ReDoS (GHSA-fc5q-39xc-vjpf)
+
+`picomatch` 4.0.7 and 2.3.2, both locked here, compile a repeated
+extglob whose branch holds a bare `*` (for example `+(*a)`) to a regular
+expression with nested unbounded quantifiers. A failed match then takes
+exponential time and blocks Node.js. 4.0.7 is the latest release on npm,
+so there is no fixed version to upgrade to.
+
+### Reproduced
+
+Against `'a'` repeated 32 times followed by `'b'`, `+(*a)` does not
+finish in 10 seconds on either version (790 ms at 24 characters). The
+problem is wider than the two patterns in the advisory: a fuzz of 118
+repeated-extglob shapes found 24 that took over 100 ms on each version
+(`+(a*)c`, `+(*a|b)c` and `*(a|*b)` among them).
+
+### Exposure in this repository
+
+No source file imports a glob library. Every path to `picomatch` is
+build or test tooling. The deployed backend is built with
+`pnpm deploy --prod`, which leaves development dependencies out, and the
+dashboard ships only `dist/`. Nothing on a running server matches a
+pattern.
+
+For each of the 24 packages that reach `picomatch`, directly or through
+`micromatch`, `anymatch`, `readdirp`, `tinyglobby`, `fast-glob` or
+`chokidar`, the call sites were read to find where the patterns come
+from. Vitest, Tailwind and Metro's file map were read at their call
+sites and config options only, not through their whole code paths:
+
+- **Written by us:** Jest (`testMatch`, coverage and ignore globs),
+  Vitest (`include`, `exclude`, coverage), Tailwind (`content`),
+  lint-staged (the two globs in root `package.json`), `sucrase`, the
+  `@expo/cli` asset patterns (`assetBundlePatterns`) and its template
+  globs, Metro's file map, and the ESLint and `tsconfig.json`
+  `include` globs read by `eslint-import-resolver-typescript` and
+  `@typescript-eslint/typescript-estree`.
+- **Vite's `server.fs.deny`:** built once at startup from config.
+  Request paths are only the text being matched. The default patterns
+  contain no repeated extglob.
+- **Not written by us:** the `sideEffects` array in the `package.json`
+  of any package Vite or Expo's Metro config resolves, including
+  packages in `node_modules` and their dependencies. Both turn it into
+  `picomatch` patterns without checking it. A `tsconfig.json` that
+  extends a third-party base can also supply `include` globs.
+
+The `sideEffects` path was exercised. In a throwaway project, a
+dependency declaring `"sideEffects": ["+(*a)"]` and holding a file named
+`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaab.js` stalled `vite build` for 12.9 s with
+the unpatched `picomatch`, against 0.2 s with benign `sideEffects` and
+0.2 s with the patch. One more character doubles the time.
+
+So the risk is a build that hangs, not a running service, and it needs a
+dependency (or a dependency update) that carries a hostile
+`package.json`. A malicious package has other ways to harm a build, so
+this is not a new privilege, but it needs no code execution and a
+dependency-update pull request would trigger it in CI.
+
+### Fix
+
+`patches/picomatch@4.0.7.patch` and `patches/picomatch@2.3.2.patch`
+extend `analyzeRepeatedExtglob`, which already marks some repeated
+extglobs as risky: a `+(...)` or `*(...)` branch with a bare `*` is now
+risky too, and picomatch matches a risky pattern as literal text.
+
+- After the patch the same fuzz finds 0 slow shapes on both versions.
+- 900 ordinary pattern and input pairs match exactly as before on both
+  versions.
+- **Behaviour change:** `+(*.js)` no longer matches `a.js`; it matches
+  only the literal text `+(*.js)`. No pattern of this kind exists in
+  this repository's own configuration.
+
+`tests/security/picomatch-extglob-redos.test.cjs` checks every installed
+copy, running each hostile match in a child process so a regression
+fails instead of hanging. With the patch applied all of its tests pass;
+against unpatched copies, 26 fail. It also fails if an installed version
+is not 4.0.7 or 2.3.2, so the patch cannot silently stop applying.
+
+`pnpm audit` and Dependabot match on the version number and cannot see
+the patch, so they will keep reporting this advisory. It was not added
+to an audit ignore list. Remove both patches when a fixed release of
+each line is published.

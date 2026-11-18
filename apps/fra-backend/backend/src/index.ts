@@ -8,6 +8,7 @@ import { usingDevJwtSecret, jwtSecret, hasDatabase } from './helpers.js';
 import { checkProductionEnv } from './production-env.js';
 import { createLogger } from './logger.js';
 import { scheduleRetention } from './retention.js';
+import { scheduleWebhookDeliveries } from './webhook-deliveries.js';
 import { scheduleReassessmentReminders } from './reassessment.js';
 import { usingDevRefreshSecret, refreshSecret } from './types.js';
 import { applyGlobalMiddleware, applyApiMiddleware } from './middleware.js';
@@ -32,6 +33,7 @@ import certificatesRoutes from './routes/certificates.js';
 import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 import clientErrorRoutes from './routes/client-errors.js';
+import esignRoutes from './esign/routes.js';
 import { scheduleClientErrorMetrics } from './client-errors.js';
 
 const app = new Hono();
@@ -46,7 +48,7 @@ app.onError((err, c) => {
     rid: requestId,
     method: c.req.method,
     // Speak-up paths carry intake tokens (see the request log in middleware.ts)
-    path: c.req.path.startsWith('/api/v1/speak-up') ? '/api/v1/speak-up/[redacted]' : c.req.path,
+    path: c.req.path.startsWith('/api/v1/esign/sign/') ? '/api/v1/esign/sign/[redacted]' : c.req.path.startsWith('/api/v1/speak-up') ? '/api/v1/speak-up/[redacted]' : c.req.path,
     error: err.message,
     stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
   });
@@ -135,6 +137,7 @@ api.route('/', webhookEndpointRoutes);
 api.route('/', organisationRoutes);
 api.route('/', certificatesRoutes);
 api.route('/', clientErrorRoutes);
+api.route('/esign', esignRoutes);
 api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
 api.route('/workshop', workshop);
@@ -184,6 +187,7 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const server = serve({ fetch: app.fetch, port, hostname });
   // Daily data-retention job (dry run unless RETENTION_ENABLED=true); needs the database
   const stopRetention = hasDatabase() ? scheduleRetention() : () => {};
+  const stopWebhookDeliveries = scheduleWebhookDeliveries();
   // Daily quarterly-reassessment reminders (audit trail and reassessment.due webhooks)
   const stopReminders = scheduleReassessmentReminders();
   // Frontend error count to CloudWatch once a minute (production only)
@@ -192,9 +196,11 @@ if (!process.env.JEST_WORKER_ID && process.env.NODE_ENV !== 'test') {
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully`);
     stopRetention();
+    const deliveriesStopped = stopWebhookDeliveries();
     stopReminders();
     stopClientErrorMetrics();
     server.close(async () => {
+      await deliveriesStopped;
       await closeDbPool();
       logger.info('Shutdown complete');
       process.exit(0);

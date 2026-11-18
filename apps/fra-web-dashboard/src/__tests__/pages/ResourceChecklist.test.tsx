@@ -15,9 +15,9 @@ vi.mock('@/components/layout/Layout', () => ({ Layout: ({ children }: { children
 
 const mockedApi = vi.mocked(api);
 
-function setup(training: boolean) {
+function setup(training: boolean, userId = 'u1') {
   vi.mocked(useAuth).mockReturnValue({
-    user: { id: 'u1', email: 'dana@example.com', name: 'Dana Boss', role: 'employer' },
+    user: { userId, email: 'dana@example.com', name: 'Dana Boss', role: 'employer' },
     profile: { organization_name: 'Exemple Ltd', full_name: 'Dana Boss' },
   } as never);
   vi.mocked(useEntitlements).mockReturnValue({ isLoading: false, entitlements: { features: { training } } } as never);
@@ -53,6 +53,21 @@ describe('ResourceChecklist', () => {
     unmount();
 
     renderPage('checklist');
+    expect(screen.getByText('1 of 27 ticked')).toBeInTheDocument();
+  });
+
+  it('keeps saved answers separate when the signed-in account changes', async () => {
+    setup(false, 'first');
+    const view = renderPage('checklist');
+    await userEvent.click(screen.getByLabelText(/A named board member or senior manager is accountable/));
+    expect(screen.getByText('1 of 27 ticked')).toBeInTheDocument();
+    setup(false, 'second');
+    view.rerender(<MemoryRouter><ResourceChecklist kind="checklist" /></MemoryRouter>);
+    expect(screen.getByText('0 of 27 ticked')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('fra:checklist:first')!).ticked).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem('fra:checklist:second')!).ticked).toHaveLength(0);
+    setup(false, 'first');
+    view.rerender(<MemoryRouter><ResourceChecklist kind="checklist" /></MemoryRouter>);
     expect(screen.getByText('1 of 27 ticked')).toBeInTheDocument();
   });
 

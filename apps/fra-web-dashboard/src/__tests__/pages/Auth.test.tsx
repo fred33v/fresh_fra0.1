@@ -57,6 +57,7 @@ function setupAuth(overrides?: Record<string, unknown>) {
     signIn: mockSignIn,
     signUp: mockSignUp,
     verifyEmail: mockVerifyEmail,
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn(),
     hasRole: vi.fn(),
     refreshProfile: vi.fn(),
@@ -239,7 +240,6 @@ describe('Auth', () => {
     });
 
     it('calls signUp with correct data on successful registration', async () => {
-      const { toast } = await import('sonner');
       const user = userEvent.setup();
       renderAuth('/auth?mode=signup');
 

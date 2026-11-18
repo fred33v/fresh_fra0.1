@@ -29,7 +29,13 @@ function fakeStripe() {
     return session;
   });
   const retrieve = jest.fn(async (id: string) => sessions.get(id)!);
-  const client = { checkout: { sessions: { create, retrieve } } } as unknown as Stripe;
+  const client = { checkout: { sessions: { create, retrieve } },
+    paymentIntents:{retrieve:async(id:string)=>{
+      const session=[...sessions.values()].find(s=>s.payment_intent===id)!;
+      return {id,status:'succeeded',amount:session.amount_total,amount_received:session.amount_total,currency:session.currency,metadata:session.metadata,
+        latest_charge:{id:'ch_test',payment_intent:id,paid:true,amount_captured:session.amount_total,currency:session.currency,created:Math.floor(Date.now()/1000),disputed:false}};
+    }},refunds:{list:()=>({autoPagingToArray:async()=>[]})},disputes:{list:()=>({autoPagingToArray:async()=>[]})}
+  } as unknown as Stripe;
   const pay = (id: string) => Object.assign(sessions.get(id)!, { status: 'complete', payment_status: 'paid', payment_intent: 'pi_test_paid' });
   return { client, sessions, create, retrieve, pay };
 }

@@ -51,6 +51,8 @@ function setupAuth(overrides?: Record<string, unknown>) {
     isLoading: false,
     signUp: vi.fn(),
     signIn: vi.fn(),
+    verifyEmail: vi.fn().mockResolvedValue({ error: null }),
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn(),
     hasRole: vi.fn().mockReturnValue(false),
     refreshProfile: vi.fn(),
@@ -182,6 +184,13 @@ describe('Header', () => {
       const link = screen.getByRole('link', { name: 'Facilitator Dashboard' });
       expect(link).toHaveAttribute('href', '/facilitator');
     });
+  });
+
+  it('hides the facilitator link for a workshop admin without facilitator authority', () => {
+    setupAuth({ user: makeUser({ role: 'employee' }), profile: makeProfile(),
+      hasRole: vi.fn().mockImplementation((role: string) => role === 'admin') });
+    renderHeader();
+    expect(screen.queryByRole('link', { name: 'Facilitator Dashboard' })).not.toBeInTheDocument();
   });
 
   // ── Authenticated — admin role ─────────────────

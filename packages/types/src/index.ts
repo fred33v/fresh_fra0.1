@@ -12,3 +12,5 @@ export * from './workshop';
 
 // Budget Guide types
 export * from './budget-guide';
+
+export * from './budget-planning.js';

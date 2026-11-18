@@ -1,3 +1,5 @@
+import type { DbExecutor } from '../db/transaction.js';
+import { withKeypassLock } from '../keypass-lock.js';
 import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import { getActiveWindows, getEntitlementWindows, hasDatabase, jsonError, requireAuth } from '../helpers.js';
@@ -18,20 +20,22 @@ import { sendVerificationLink } from './auth.js';
 import type { KeypassStatus } from '../types.js';
 import { issueTokens, publicUser } from '../auth-utils.js';
 import { getActiveKeypassAllowance, listOrgPurchases } from '../entitlements.js';
-import { emitOrgEvent } from '../webhooks-out.js';
+import { emitOrgEvent, enqueueOrgEvent } from '../webhooks-out.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('keypasses');
 
+class KeypassClaimConflict extends Error {}
+
 // ── Quota helper ────────────────────────────────────────────────
 
-async function getOrgKeypassQuota(orgId: string): Promise<{ allowance: number; used: number }> {
+async function getOrgKeypassQuota(orgId: string, db?: DbExecutor): Promise<{ allowance: number; used: number }> {
   // Allowance comes from the org's active (unexpired) packages; -1 = unlimited
-  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId));
+  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId, db), db);
 
   // Count existing keypasses (all statuses except revoked/expired count towards quota)
   const allKeypasses = hasDatabase()
-    ? await dbListKeypassesByOrganisation(orgId)
+    ? await dbListKeypassesByOrganisation(orgId, db)
     : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === orgId);
 
   const used = allKeypasses.filter((k) => k.status === 'available' || k.status === 'used').length;
@@ -49,8 +53,8 @@ async function getOrgKeypassQuota(orgId: string): Promise<{ allowance: number; u
  * bought alongside it: as soon as a package with an end date is active, codes stop at its end
  * (counting renewals already paid for, which start when the current term ends).
  */
-async function getPackageEnd(orgId: string, now: Date = new Date()): Promise<Date | null | undefined> {
-  const purchases = await listOrgPurchases(orgId);
+async function getPackageEnd(orgId: string, now: Date = new Date(), db?: DbExecutor): Promise<Date | null | undefined> {
+  const purchases = await listOrgPurchases(orgId, db);
   const active = getActiveWindows(purchases, now);
   if (active.length === 0) return undefined;
   const datedPackages = new Set(active.filter((w) => w.expiresAt !== null).map((w) => w.purchase.packageId));
@@ -66,11 +70,11 @@ async function getPackageEnd(orgId: string, now: Date = new Date()): Promise<Dat
  * a package that has since ended (Professional, 50 codes) must not keep working because a smaller
  * package (Starter, 1 code) is still active.
  */
-async function packageCoversAnotherJoin(orgId: string): Promise<boolean> {
-  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId));
+async function packageCoversAnotherJoin(orgId: string, db?: DbExecutor): Promise<boolean> {
+  const allowance = await getActiveKeypassAllowance(await listOrgPurchases(orgId, db), db);
   if (allowance < 0) return true;
   const all = hasDatabase()
-    ? await dbListKeypassesByOrganisation(orgId)
+    ? await dbListKeypassesByOrganisation(orgId, db)
     : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === orgId);
   return all.filter((k) => k.status === 'used').length < allowance;
 }
@@ -78,7 +82,7 @@ async function packageCoversAnotherJoin(orgId: string): Promise<boolean> {
 // ── Keypass creation helper ──────────────────────────────────────
 
 async function createKeypasses(
-  orgId: string, quantity: number, expiresInDays: number, packageEnd: Date | null, invitedEmails?: string[],
+  orgId: string, quantity: number, expiresInDays: number, packageEnd: Date | null, invitedEmails?: string[], db?: DbExecutor,
 ): Promise<{ codes: string[]; expiresAt: string }> {
   const now = Date.now();
   // A code never outlives the package that paid for it
@@ -91,7 +95,7 @@ async function createKeypasses(
     let code = generateKeypassCode();
     // Ensure uniqueness (check both in-memory and DB)
     if (hasDatabase()) {
-      while (await dbGetKeypassByCode(code)) code = generateKeypassCode();
+      while (await dbGetKeypassByCode(code, db)) code = generateKeypassCode();
     } else {
       while (keypassesByCode.has(code)) code = generateKeypassCode();
     }
@@ -104,7 +108,7 @@ async function createKeypasses(
   }
 
   if (hasDatabase()) {
-    await dbInsertKeypassBatch(keypasses);
+    await dbInsertKeypassBatch(keypasses, db);
   } else {
     for (const kp of keypasses) {
       keypassesByCode.set(kp.code, kp);
@@ -131,34 +135,36 @@ async function issueKeypasses(c: Context, kind: 'generate' | 'allocate') {
   const parsed = keypassGenerateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', `Invalid keypass ${kind} payload`);
 
-  const quota = await getOrgKeypassQuota(auth.organisationId);
-  if (quota.allowance === 0) {
-    return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
-  }
-  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
-  if (parsed.data.quantity > remaining) {
-    return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
-  }
+  return withKeypassLock(auth.organisationId, async (db) => {
+    const quota = await getOrgKeypassQuota(auth.organisationId, db);
+    if (quota.allowance === 0) {
+      return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
+    }
+    const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
+    if (parsed.data.quantity > remaining) {
+      return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${parsed.data.quantity}`);
+    }
 
-  const packageEnd = (await getPackageEnd(auth.organisationId)) ?? null;
-  const { codes, expiresAt } = await createKeypasses(auth.organisationId, parsed.data.quantity, parsed.data.expiresInDays, packageEnd);
+    const packageEnd = (await getPackageEnd(auth.organisationId, new Date(), db)) ?? null;
+    const { codes, expiresAt } = await createKeypasses(auth.organisationId, parsed.data.quantity, parsed.data.expiresInDays, packageEnd, undefined, db);
 
-  await auditLog({
-    eventType: `keypass.${kind}`, actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'keypass',
-    details: { quantity: parsed.data.quantity }, ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
+    await auditLog({
+      eventType: `keypass.${kind}`, actorId: auth.userId, actorEmail: auth.email,
+      organisationId: auth.organisationId, resourceType: 'keypass',
+      details: { quantity: parsed.data.quantity }, ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    }, db);
+
+    return c.json({ success: true, data: { organisationId: auth.organisationId, expiresAt, codes } });
   });
-
-  return c.json({ success: true, data: { organisationId: auth.organisationId, expiresAt, codes } });
 }
 
 keypasses.post('/keypasses/generate', (c) => issueKeypasses(c, 'generate'));
 // Same behaviour under the name the mobile app calls
 keypasses.post('/keypasses/allocate', (c) => issueKeypasses(c, 'allocate'));
 
-async function organisationName(orgId: string): Promise<string> {
-  const org = hasDatabase() ? await dbGetOrganisationById(orgId) : organisationsById.get(orgId);
+async function organisationName(orgId: string, db?: DbExecutor): Promise<string> {
+  const org = hasDatabase() ? await dbGetOrganisationById(orgId, db) : organisationsById.get(orgId);
   return org?.name ?? 'Your organisation';
 }
 
@@ -177,47 +183,49 @@ keypasses.post('/keypasses/invite', async (c) => {
   const parsed = keypassInviteSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Enter valid email addresses, at most 100 at a time');
 
-  const skipped: Array<{ email: string; reason: 'account_exists' | 'already_invited' | 'duplicate' }> = [];
-  const existingCodes = hasDatabase()
-    ? await dbListKeypassesByOrganisation(auth.organisationId)
-    : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === auth.organisationId);
-  const pendingInvites = new Set(existingCodes.filter((k) => k.status === 'available' && k.invitedEmail).map((k) => k.invitedEmail));
-  const seen = new Set<string>();
-  const toInvite: string[] = [];
-  for (const email of parsed.data.emails) {
-    if (seen.has(email)) { skipped.push({ email, reason: 'duplicate' }); continue; }
-    seen.add(email);
-    if (pendingInvites.has(email)) { skipped.push({ email, reason: 'already_invited' }); continue; }
-    const user = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
-    if (user) { skipped.push({ email, reason: 'account_exists' }); continue; }
-    toInvite.push(email);
-  }
+  return withKeypassLock(auth.organisationId, async (db, afterCommit) => {
+    const skipped: Array<{ email: string; reason: 'account_exists' | 'already_invited' | 'duplicate' }> = [];
+    const existingCodes = hasDatabase()
+      ? await dbListKeypassesByOrganisation(auth.organisationId, db)
+      : Array.from(keypassesByCode.values()).filter((k) => k.organisationId === auth.organisationId);
+    const pendingInvites = new Set(existingCodes.filter((k) => k.status === 'available' && k.invitedEmail).map((k) => k.invitedEmail));
+    const seen = new Set<string>();
+    const toInvite: string[] = [];
+    for (const email of parsed.data.emails) {
+      if (seen.has(email)) { skipped.push({ email, reason: 'duplicate' }); continue; }
+      seen.add(email);
+      if (pendingInvites.has(email)) { skipped.push({ email, reason: 'already_invited' }); continue; }
+      const user = hasDatabase() ? await dbGetUserByEmail(email, db) : usersByEmail.get(email);
+      if (user) { skipped.push({ email, reason: 'account_exists' }); continue; }
+      toInvite.push(email);
+    }
 
-  if (toInvite.length === 0) return c.json({ success: true, data: { invited: [], skipped, emailSent: emailConfigured() } });
+    if (toInvite.length === 0) return c.json({ success: true, data: { invited: [], skipped, emailSent: emailConfigured() } });
 
-  const quota = await getOrgKeypassQuota(auth.organisationId);
-  if (quota.allowance === 0) return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
-  const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
-  if (toInvite.length > remaining) {
-    return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${toInvite.length}`);
-  }
+    const quota = await getOrgKeypassQuota(auth.organisationId, db);
+    if (quota.allowance === 0) return jsonError(c, 403, 'NO_PACKAGE', 'No active package with keypass allowance');
+    const remaining = quota.allowance < 0 ? Infinity : quota.allowance - quota.used;
+    if (toInvite.length > remaining) {
+      return jsonError(c, 400, 'QUOTA_EXCEEDED', `Keypass quota exceeded. Remaining: ${remaining}, requested: ${toInvite.length}`);
+    }
 
-  const packageEnd = (await getPackageEnd(auth.organisationId)) ?? null;
-  const { codes, expiresAt } = await createKeypasses(auth.organisationId, toInvite.length, parsed.data.expiresInDays, packageEnd, toInvite);
-  const orgName = await organisationName(auth.organisationId);
-  const invited = toInvite.map((email, i) => ({ email, code: codes[i], expiresAt }));
-  for (const inv of invited) {
-    sendEmailInBackground(keypassInviteEmail(inv.email, orgName, inv.code, expiresAt), { organisationId: auth.organisationId, kind: 'keypass_invite' });
-  }
+    const packageEnd = (await getPackageEnd(auth.organisationId, new Date(), db)) ?? null;
+    const { codes, expiresAt } = await createKeypasses(auth.organisationId, toInvite.length, parsed.data.expiresInDays, packageEnd, toInvite, db);
+    const orgName = await organisationName(auth.organisationId, db);
+    const invited = toInvite.map((email, i) => ({ email, code: codes[i], expiresAt }));
+    for (const inv of invited) {
+      afterCommit(() => sendEmailInBackground(keypassInviteEmail(inv.email, orgName, inv.code, expiresAt), { organisationId: auth.organisationId, kind: 'keypass_invite' }));
+    }
 
-  await auditLog({
-    eventType: 'keypass.invite', actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'keypass',
-    details: { invited: invited.length, skipped: skipped.length }, ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
+    await auditLog({
+      eventType: 'keypass.invite', actorId: auth.userId, actorEmail: auth.email,
+      organisationId: auth.organisationId, resourceType: 'keypass',
+      details: { invited: invited.length, skipped: skipped.length }, ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    }, db);
+
+    return c.json({ success: true, data: { invited, skipped, emailSent: emailConfigured() } });
   });
-
-  return c.json({ success: true, data: { invited, skipped, emailSent: emailConfigured() } });
 });
 
 keypasses.post('/keypasses/:code/resend', async (c) => {
@@ -258,143 +266,155 @@ keypasses.post('/keypasses/use', async (c) => {
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid keypass use payload');
 
   const code = parsed.data.code.toUpperCase();
-  const kp = hasDatabase() ? await dbGetKeypassByCode(code) : keypassesByCode.get(code);
-  if (!kp) return jsonError(c, 404, 'NOT_FOUND', 'Keypass not found');
+  const initial = hasDatabase() ? await dbGetKeypassByCode(code) : keypassesByCode.get(code);
+  if (!initial) return jsonError(c, 404, 'NOT_FOUND', 'Keypass not found');
+  try {
+    return await withKeypassLock(initial.organisationId, async (db, afterCommit) => {
+      const writeAudit = (event: Parameters<typeof auditLog>[0]) => auditLog(event, db);
+      const kp = hasDatabase() ? await dbGetKeypassByCode(code, db) : keypassesByCode.get(code);
+      if (!kp) return jsonError(c, 404, 'NOT_FOUND', 'Keypass not found');
 
-  const now = new Date().toISOString();
+      const now = new Date().toISOString();
 
-  // Check expiry before status so expired keypasses get the specific "EXPIRED" error
-  const expiresAt = new Date(kp.expiresAt).getTime();
-  const graceEnd = expiresAt + KEYPASS_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
-  const nowMs = Date.now();
+      // Check expiry before status so expired keypasses get the specific "EXPIRED" error
+      const expiresAt = new Date(kp.expiresAt).getTime();
+      const graceEnd = expiresAt + KEYPASS_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
 
-  if (nowMs > graceEnd) {
-    // Past grace period — hard expired
-    if (kp.status === 'available') {
-      if (hasDatabase()) {
-        await dbUpdateKeypassStatus(code, 'expired');
-      } else {
-        kp.status = 'expired';
+      if (nowMs > graceEnd) {
+        // Past grace period — hard expired
+        if (kp.status === 'available') {
+          if (hasDatabase()) {
+            await dbUpdateKeypassStatus(code, 'expired', undefined, undefined, db);
+          } else {
+            kp.status = 'expired';
+          }
+        }
+        return jsonError(c, 400, 'EXPIRED', 'Keypass is expired');
       }
+
+      if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
+
+      // A code only works while a package covers it, even inside the grace period
+      if ((await getPackageEnd(kp.organisationId, new Date(), db)) === undefined || !(await packageCoversAnotherJoin(kp.organisationId, db))) {
+        await writeAudit({
+          eventType: 'keypass.use_rejected', actorEmail: parsed.data.email.toLowerCase(),
+          organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+          details: { reason: 'package_inactive' }, ipAddress: getClientIp(c),
+          userAgent: c.req.header('user-agent'),
+        });
+        return jsonError(c, 403, 'PACKAGE_INACTIVE', "This organisation's package is no longer active");
+      }
+
+      const email = parsed.data.email.toLowerCase();
+      const name = parsed.data.name ?? email.split('@')[0];
+
+      // An emailed key-pass belongs to the person it was sent to
+      if (kp.invitedEmail && kp.invitedEmail !== email) {
+        await writeAudit({
+          eventType: 'keypass.use_rejected', actorEmail: email,
+          organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+          details: { reason: 'email_mismatch' }, ipAddress: getClientIp(c),
+          userAgent: c.req.header('user-agent'),
+        });
+        return jsonError(c, 403, 'EMAIL_MISMATCH', 'This key-pass was sent to a different email address. Use the address the invitation was sent to.');
+      }
+
+      // A keypass only ever creates a new employee account. Issuing tokens for an existing
+      // account here would let anyone holding a keypass sign in as any user by email.
+      const existing = hasDatabase() ? await dbGetUserByEmail(email, db) : usersByEmail.get(email);
+      if (existing) {
+        await writeAudit({
+          eventType: 'keypass.use_rejected', actorEmail: email,
+          organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
+          details: { reason: 'account_exists' }, ipAddress: getClientIp(c),
+          userAgent: c.req.header('user-agent'),
+        });
+        return jsonError(c, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Please sign in instead.');
+      }
+
+      if (nowMs > expiresAt) {
+        // Within grace period — allow but log warning
+        logger.warn('Keypass used during grace period', { code, expiresAt: kp.expiresAt });
+      }
+
+      const user: User = {
+        id: crypto.randomUUID(),
+        email,
+        name,
+        passwordHash: await bcrypt.hash(parsed.data.password, 12),
+        role: 'employee',
+        organisationId: kp.organisationId,
+        createdAt: now,
+        // The invitation link reached this inbox, which proves the address. A key-pass passed on
+        // any other way proves nothing about it, so the address is confirmed like any sign-up.
+        emailVerifiedAt: kp.invitedEmail ? now : null,
+      };
+      if (hasDatabase()) {
+        await dbInsertUser(user, db);
+      } else {
+        kp.status = 'used';
+        kp.usedAt = now;
+        usersByEmail.set(email, user);
+      }
+
+      if (!hasDatabase()) kp.usedByUserId = user.id;
+
+      if (hasDatabase()) {
+        const claimed = await dbClaimKeypass(code, now, user.id, db);
+        if (!claimed) throw new KeypassClaimConflict();
+      }
+
+      const { accessToken, refreshToken } = issueTokens(user);
+      if (hasDatabase()) {
+        await dbUpsertRefreshToken(refreshToken, user.id, db);
+      }
+      // They can start now; they confirm the address before they next sign in
+      const emailConfirmationRequired = !kp.invitedEmail;
+      if (emailConfirmationRequired) afterCommit(() => { void sendVerificationLink(user); });
+
+      let orgName = 'Organisation';
+      if (hasDatabase()) {
+        const org = await dbGetOrganisationById(user.organisationId, db);
+        if (org) orgName = org.name;
+      } else {
+        const org = organisationsById.get(user.organisationId);
+        if (org) orgName = org.name;
+      }
+
+      await writeAudit({
+        eventType: 'keypass.use', actorId: user.id, actorEmail: user.email,
+        organisationId: user.organisationId, resourceType: 'keypass', resourceId: code,
+        ipAddress: getClientIp(c),
+        userAgent: c.req.header('user-agent'),
+      });
+      const eventData={userId:user.id,email:user.email,keypass:`****${code.slice(-4)}`,usedAt:now};
+      if(db)await enqueueOrgEvent(user.organisationId,'keypass.used',eventData,db);
+      else afterCommit(()=>{void emitOrgEvent(user.organisationId,'keypass.used',eventData);});
+
+      return c.json({
+        success: true,
+        data: {
+          user: publicUser(user),
+          organisation: { organisationId: user.organisationId, name: orgName },
+          accessToken,
+          refreshToken,
+          keypass: { code: kp.code, usedAt: now },
+          emailConfirmationRequired,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof KeypassClaimConflict) {
+      return jsonError(c, 409, 'ALREADY_USED', 'Keypass has already been used');
     }
-    return jsonError(c, 400, 'EXPIRED', 'Keypass is expired');
+    // Signup can race a redemption in another organisation on the same email.
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
+      && 'constraint' in error && error.constraint === 'users_email_key') {
+      return jsonError(c, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Please sign in instead.');
+    }
+    throw error;
   }
-
-  if (kp.status !== 'available') return jsonError(c, 400, 'NOT_AVAILABLE', 'Keypass is not available');
-
-  // A code only works while a package covers it, even inside the grace period
-  if ((await getPackageEnd(kp.organisationId)) === undefined || !(await packageCoversAnotherJoin(kp.organisationId))) {
-    await auditLog({
-      eventType: 'keypass.use_rejected', actorEmail: parsed.data.email.toLowerCase(),
-      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
-      details: { reason: 'package_inactive' }, ipAddress: getClientIp(c),
-      userAgent: c.req.header('user-agent'),
-    });
-    return jsonError(c, 403, 'PACKAGE_INACTIVE', "This organisation's package is no longer active");
-  }
-
-  const email = parsed.data.email.toLowerCase();
-  const name = parsed.data.name ?? email.split('@')[0];
-
-  // An emailed key-pass belongs to the person it was sent to
-  if (kp.invitedEmail && kp.invitedEmail !== email) {
-    await auditLog({
-      eventType: 'keypass.use_rejected', actorEmail: email,
-      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
-      details: { reason: 'email_mismatch' }, ipAddress: getClientIp(c),
-      userAgent: c.req.header('user-agent'),
-    });
-    return jsonError(c, 403, 'EMAIL_MISMATCH', 'This key-pass was sent to a different email address. Use the address the invitation was sent to.');
-  }
-
-  // A keypass only ever creates a new employee account. Issuing tokens for an existing
-  // account here would let anyone holding a keypass sign in as any user by email.
-  const existing = hasDatabase() ? await dbGetUserByEmail(email) : usersByEmail.get(email);
-  if (existing) {
-    await auditLog({
-      eventType: 'keypass.use_rejected', actorEmail: email,
-      organisationId: kp.organisationId, resourceType: 'keypass', resourceId: code,
-      details: { reason: 'account_exists' }, ipAddress: getClientIp(c),
-      userAgent: c.req.header('user-agent'),
-    });
-    return jsonError(c, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Please sign in instead.');
-  }
-
-  // In-memory path: claim immediately to prevent TOCTOU race across async gaps
-  // (bcrypt.hash below yields the event loop, allowing concurrent requests to pass the check)
-  if (!hasDatabase()) {
-    kp.status = 'used';
-    kp.usedAt = now;
-  }
-
-  if (nowMs > expiresAt) {
-    // Within grace period — allow but log warning
-    logger.warn('Keypass used during grace period', { code, expiresAt: kp.expiresAt });
-  }
-
-  const user: User = {
-    id: crypto.randomUUID(),
-    email,
-    name,
-    passwordHash: await bcrypt.hash(parsed.data.password, 12),
-    role: 'employee',
-    organisationId: kp.organisationId,
-    createdAt: now,
-    // The invitation link reached this inbox, which proves the address. A key-pass passed on
-    // any other way proves nothing about it, so the address is confirmed like any sign-up.
-    emailVerifiedAt: kp.invitedEmail ? now : null,
-  };
-  if (hasDatabase()) {
-    await dbInsertUser(user);
-  } else {
-    usersByEmail.set(email, user);
-  }
-
-  if (!hasDatabase()) kp.usedByUserId = user.id;
-
-  if (hasDatabase()) {
-    const claimed = await dbClaimKeypass(code, now, user.id);
-    if (!claimed) return jsonError(c, 409, 'ALREADY_USED', 'Keypass has already been used');
-  }
-
-  const { accessToken, refreshToken } = issueTokens(user);
-  if (hasDatabase()) {
-    await dbUpsertRefreshToken(refreshToken, user.id);
-  }
-  // They can start now; they confirm the address before they next sign in
-  const emailConfirmationRequired = !kp.invitedEmail;
-  if (emailConfirmationRequired) void sendVerificationLink(user);
-
-  let orgName = 'Organisation';
-  if (hasDatabase()) {
-    const org = await dbGetOrganisationById(user.organisationId);
-    if (org) orgName = org.name;
-  } else {
-    const org = organisationsById.get(user.organisationId);
-    if (org) orgName = org.name;
-  }
-
-  await auditLog({
-    eventType: 'keypass.use', actorId: user.id, actorEmail: user.email,
-    organisationId: user.organisationId, resourceType: 'keypass', resourceId: code,
-    ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
-  });
-  void emitOrgEvent(user.organisationId, 'keypass.used', {
-    userId: user.id, email: user.email, keypass: `****${code.slice(-4)}`, usedAt: now,
-  });
-
-  return c.json({
-    success: true,
-    data: {
-      user: publicUser(user),
-      organisation: { organisationId: user.organisationId, name: orgName },
-      accessToken,
-      refreshToken,
-      keypass: { code: kp.code, usedAt: now },
-      emailConfirmationRequired,
-    },
-  });
 });
 
 keypasses.post('/keypasses/revoke', async (c) => {
@@ -407,32 +427,34 @@ keypasses.post('/keypasses/revoke', async (c) => {
   const parsed = keypassValidateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid keypass revoke payload');
 
-  const code = parsed.data.code.toUpperCase();
-  const kp = hasDatabase() ? await dbGetKeypassByCode(code) : keypassesByCode.get(code);
-  if (!kp || kp.organisationId !== auth.organisationId) {
-    return jsonError(c, 404, 'NOT_FOUND', 'Keypass not found');
-  }
-  if (kp.status === 'used') {
-    return jsonError(c, 400, 'ALREADY_USED', 'Cannot revoke a keypass that has already been used');
-  }
-  if (kp.status === 'revoked') {
-    return jsonError(c, 400, 'ALREADY_REVOKED', 'Keypass is already revoked');
-  }
+  return withKeypassLock(auth.organisationId, async (db) => {
+    const code = parsed.data.code.toUpperCase();
+    const kp = hasDatabase() ? await dbGetKeypassByCode(code, db) : keypassesByCode.get(code);
+    if (!kp || kp.organisationId !== auth.organisationId) {
+      return jsonError(c, 404, 'NOT_FOUND', 'Keypass not found');
+    }
+    if (kp.status === 'used') {
+      return jsonError(c, 400, 'ALREADY_USED', 'Cannot revoke a keypass that has already been used');
+    }
+    if (kp.status === 'revoked') {
+      return jsonError(c, 400, 'ALREADY_REVOKED', 'Keypass is already revoked');
+    }
 
-  if (hasDatabase()) {
-    await dbUpdateKeypassStatus(code, 'revoked');
-  } else {
-    kp.status = 'revoked';
-  }
+    if (hasDatabase()) {
+      await dbUpdateKeypassStatus(code, 'revoked', undefined, undefined, db);
+    } else {
+      kp.status = 'revoked';
+    }
 
-  await auditLog({
-    eventType: 'keypass.revoke', actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'keypass', resourceId: code,
-    ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
+    await auditLog({
+      eventType: 'keypass.revoke', actorId: auth.userId, actorEmail: auth.email,
+      organisationId: auth.organisationId, resourceType: 'keypass', resourceId: code,
+      ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    }, db);
+
+    return c.json({ success: true });
   });
-
-  return c.json({ success: true });
 });
 
 keypasses.get('/keypasses/organisation/:orgId', async (c) => {
@@ -575,46 +597,48 @@ keypasses.post('/keypasses/bulk-revoke', async (c) => {
   const parsed = keypassBulkSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid bulk revoke payload');
 
-  const results: { code: string; revoked: boolean; reason?: string }[] = [];
+  return withKeypassLock(auth.organisationId, async (db) => {
+    const results: { code: string; revoked: boolean; reason?: string }[] = [];
 
-  for (const rawCode of parsed.data.codes) {
-    const code = rawCode.toUpperCase();
-    const kp = hasDatabase() ? await dbGetKeypassByCode(code) : keypassesByCode.get(code);
+    for (const rawCode of parsed.data.codes) {
+      const code = rawCode.toUpperCase();
+      const kp = hasDatabase() ? await dbGetKeypassByCode(code, db) : keypassesByCode.get(code);
 
-    if (!kp || kp.organisationId !== auth.organisationId) {
-      results.push({ code, revoked: false, reason: 'not_found' });
-      continue;
+      if (!kp || kp.organisationId !== auth.organisationId) {
+        results.push({ code, revoked: false, reason: 'not_found' });
+        continue;
+      }
+
+      if (kp.status === 'revoked') {
+        results.push({ code, revoked: false, reason: 'already_revoked' });
+        continue;
+      }
+
+      // A redeemed code belongs to an employee; revoking it would free a slot past the package allowance
+      if (kp.status === 'used') {
+        results.push({ code, revoked: false, reason: 'already_used' });
+        continue;
+      }
+
+      if (hasDatabase()) {
+        await dbUpdateKeypassStatus(code, 'revoked', undefined, undefined, db);
+      } else {
+        kp.status = 'revoked';
+      }
+
+      results.push({ code, revoked: true });
     }
 
-    if (kp.status === 'revoked') {
-      results.push({ code, revoked: false, reason: 'already_revoked' });
-      continue;
-    }
+    await auditLog({
+      eventType: 'keypass.bulk_revoke', actorId: auth.userId, actorEmail: auth.email,
+      organisationId: auth.organisationId, resourceType: 'keypass',
+      details: { count: results.filter((r) => r.revoked).length, total: parsed.data.codes.length },
+      ipAddress: getClientIp(c),
+      userAgent: c.req.header('user-agent'),
+    }, db);
 
-    // A redeemed code belongs to an employee; revoking it would free a slot past the package allowance
-    if (kp.status === 'used') {
-      results.push({ code, revoked: false, reason: 'already_used' });
-      continue;
-    }
-
-    if (hasDatabase()) {
-      await dbUpdateKeypassStatus(code, 'revoked');
-    } else {
-      kp.status = 'revoked';
-    }
-
-    results.push({ code, revoked: true });
-  }
-
-  await auditLog({
-    eventType: 'keypass.bulk_revoke', actorId: auth.userId, actorEmail: auth.email,
-    organisationId: auth.organisationId, resourceType: 'keypass',
-    details: { count: results.filter((r) => r.revoked).length, total: parsed.data.codes.length },
-    ipAddress: getClientIp(c),
-    userAgent: c.req.header('user-agent'),
+    return c.json({ success: true, data: { results } });
   });
-
-  return c.json({ success: true, data: { results } });
 });
 
 keypasses.post('/keypasses/bulk-validate', async (c) => {

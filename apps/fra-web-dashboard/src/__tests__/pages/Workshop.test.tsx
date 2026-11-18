@@ -95,6 +95,8 @@ function setupAuth(overrides?: Record<string, unknown>) {
     isLoading: false,
     signUp: vi.fn(),
     signIn: vi.fn(),
+    verifyEmail: vi.fn().mockResolvedValue({ error: null }),
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn(),
     hasRole: vi.fn(),
     refreshProfile: vi.fn(),
@@ -134,7 +136,9 @@ function setupSession(overrides?: Record<string, unknown>) {
     error: null,
     joinSession: mockJoinSession,
     submitPollResponse: vi.fn(),
-    askQuestion: vi.fn(),
+    submitQuestion: vi.fn(),
+    upvoteQuestion: vi.fn(),
+    refreshSession: vi.fn(),
     ...overrides,
   } as ReturnType<typeof useSession>);
 }
@@ -158,7 +162,7 @@ function setupPackage(hasFinishedAssessment = true) {
       assessments: { allowed: true, limit: 4, used: 0 },
     },
   });
-  vi.mocked(useOrgAssessments).mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment });
+  vi.mocked(useOrgAssessments).mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment, latestResult: vi.fn().mockReturnValue(null) });
 }
 
 beforeEach(() => {

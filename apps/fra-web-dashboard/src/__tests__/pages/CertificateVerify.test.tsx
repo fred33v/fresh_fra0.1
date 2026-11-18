@@ -69,4 +69,17 @@ describe('CertificateVerify', () => {
     expect(await screen.findByText('Not verified')).toBeInTheDocument();
     expect(screen.getByText(/No certificate has this number/)).toBeInTheDocument();
   });
+  it('shows revocation instead of a valid badge', async () => {
+    mockAnonGet.mockResolvedValue({ ...training, valid: false, status: 'revoked' });
+    renderAt('/certificate/verify?n=FRA-1A2B-3C4D-5E6F');
+    expect(await screen.findByText('Certificate has been revoked')).toBeInTheDocument();
+    expect(screen.queryByText('Certificate is valid')).not.toBeInTheDocument();
+  });
+  it('distinguishes legacy reconstructed records and completion dates', async () => {
+    mockAnonGet.mockResolvedValue({ ...training, snapshotOrigin: 'legacy_reconstructed', completedAt: '2026-10-30T10:00:00Z' });
+    renderAt('/certificate/verify?n=FRA-1A2B-3C4D-5E6F');
+    expect(await screen.findByText(/Legacy record:/)).toBeInTheDocument();
+    expect(screen.getByText('30 October 2026')).toBeInTheDocument();
+  });
+
 });

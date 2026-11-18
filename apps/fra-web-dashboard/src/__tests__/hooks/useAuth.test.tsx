@@ -380,6 +380,34 @@ describe('AuthProvider', () => {
       expect(result.current.hasRole('facilitator')).toBe(true);
     });
 
+    it('allows account admins to facilitate without an assigned workshop role', async () => {
+      mockHasStoredTokens.mockReturnValue(true);
+      mockApi.get.mockResolvedValueOnce(makeMeResponse({ role: 'admin', workshopRoles: [] }));
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.hasRole('facilitator')).toBe(true);
+      expect(result.current.roles).toEqual([]);
+    });
+
+    it('drops implicit facilitator authority when the account role is refreshed', async () => {
+      mockHasStoredTokens.mockReturnValue(true);
+      mockApi.get.mockResolvedValueOnce(makeMeResponse({ role: 'admin', workshopRoles: [] }));
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.hasRole('facilitator')).toBe(true);
+      mockApi.get.mockResolvedValueOnce(makeMeResponse({ role: 'employee', workshopRoles: [] }));
+      await act(async () => { await result.current.refreshProfile(); });
+      expect(result.current.hasRole('facilitator')).toBe(false);
+    });
+
+    it('does not grant facilitator access for a workshop admin role alone', async () => {
+      mockHasStoredTokens.mockReturnValue(true);
+      mockApi.get.mockResolvedValueOnce(makeMeResponse({ role: 'employer', workshopRoles: ['admin'] }));
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.hasRole('facilitator')).toBe(false);
+    });
+
     it('returns false when user does not have the requested role', async () => {
       mockHasStoredTokens.mockReturnValue(true);
       mockApi.get.mockResolvedValueOnce(

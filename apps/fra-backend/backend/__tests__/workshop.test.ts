@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals';
-import { app, createPaidUser, authHeaders } from './helpers';
+import { app, createPaidUser, createWorkshopAdmin, authHeaders } from './helpers';
 
 describe('Workshop endpoints', () => {
   // ── GET /workshop/profile ───────────────────────────────────
@@ -156,8 +156,16 @@ describe('Workshop endpoints', () => {
       expect(json.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('creates a session with a join code without a database', async () => {
+    it('refuses an entitled employer without server-assigned delivery authority', async () => {
       const { accessToken } = await createPaidUser();
+      const res = await app.request('http://localhost/api/v1/workshop/sessions', {
+        method: 'POST', headers: authHeaders(accessToken), body: JSON.stringify({ title: 'Unauthorised session' }),
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('creates a session with a join code without a database', async () => {
+      const { accessToken } = await createWorkshopAdmin();
       const res = await app.request('http://localhost/api/v1/workshop/sessions', {
         method: 'POST',
         headers: authHeaders(accessToken),

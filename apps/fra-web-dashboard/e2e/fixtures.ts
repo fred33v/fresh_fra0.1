@@ -78,11 +78,11 @@ export { expect };
  */
 export async function navigateToPage(page: Page, url: string, timeout = 10000): Promise<void> {
   try {
-    await page.goto(url, { waitUntil: 'load' });
+    await page.goto(url, { waitUntil: 'load', timeout });
   } catch (e) {
     // If navigation fails, try one more time
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
     } catch {
       // If both fail, just proceed - test will check if page loaded
       console.warn(`Failed to navigate to ${url}, proceeding with test`);

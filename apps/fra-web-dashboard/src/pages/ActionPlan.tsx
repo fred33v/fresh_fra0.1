@@ -38,7 +38,7 @@ export default function ActionPlan() {
   const { entitlements, isLoading: entitlementsLoading } = useEntitlements();
   const { isLoading: assessmentsLoading, hasFinishedAssessment, latestResult } = useOrgAssessments(!!entitlements?.features.assessment);
   // What the organisation's fraud risk assessment found (package 1) starts the plan
-  const assessmentResult = latestResult(user?.id);
+  const assessmentResult = latestResult(user?.userId);
   const navigate = useNavigate();
   const [actionPlan, setActionPlan] = useState<ActionPlanType | null>(null);
   const [isLoading, setIsLoading] = useState(true);

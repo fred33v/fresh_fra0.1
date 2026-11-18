@@ -1,3 +1,4 @@
+import type { DbExecutor } from './db/transaction.js';
 // ============================================================
 // Package entitlements — what each paid package unlocks
 // Pure date/tier logic lives in helpers.ts; this module adds data access.
@@ -22,21 +23,21 @@ const PACKAGE_NAMES: Record<string, string> = {
   pkg_full: 'Enterprise',
 };
 
-export async function listOrgPurchases(orgId: string): Promise<Purchase[]> {
+export async function listOrgPurchases(orgId: string, db?: DbExecutor): Promise<Purchase[]> {
   return hasDatabase()
-    ? dbListPurchasesByOrganisation(orgId)
+    ? dbListPurchasesByOrganisation(orgId, db)
     : Array.from(purchasesById.values()).filter((p) => p.organisationId === orgId);
 }
 
-async function listOrgAssessments(orgId: string): Promise<Assessment[]> {
+async function listOrgAssessments(orgId: string, db?: DbExecutor): Promise<Assessment[]> {
   return hasDatabase()
-    ? dbListAssessmentsByOrganisation(orgId)
+    ? dbListAssessmentsByOrganisation(orgId, db)
     : Array.from(assessmentsById.values()).filter((a) => a.organisationId === orgId);
 }
 
 /** Returns a 403 PACKAGE_REQUIRED response when the org lacks the package, otherwise null. */
-export async function requirePackage(c: Context, auth: AuthContext, packageId: string): Promise<Response | null> {
-  const purchases = await listOrgPurchases(auth.organisationId);
+export async function requirePackage(c: Context, auth: AuthContext, packageId: string, db?: DbExecutor): Promise<Response | null> {
+  const purchases = await listOrgPurchases(auth.organisationId, db);
   if (hasPackageEntitlement(purchases, packageId)) return null;
   return jsonError(c, 403, 'PACKAGE_REQUIRED', `${PACKAGE_NAMES[packageId] ?? packageId} package or higher required`);
 }
@@ -49,11 +50,11 @@ export async function requireAnyPaidPurchase(c: Context, auth: AuthContext): Pro
 }
 
 /** Key-pass allowance from the org's active packages; -1 means unlimited, 0 means none. */
-export async function getActiveKeypassAllowance(purchases: Purchase[]): Promise<number> {
+export async function getActiveKeypassAllowance(purchases: Purchase[], db?: DbExecutor): Promise<number> {
   let allowance = 0;
   for (const w of getActiveWindows(purchases)) {
     const pkg = hasDatabase()
-      ? await dbGetPackageById(w.purchase.packageId)
+      ? await dbGetPackageById(w.purchase.packageId, db)
       : FALLBACK_PACKAGES.find((fp) => fp.id === w.purchase.packageId) ?? null;
     if (!pkg) continue;
     if (pkg.keypassAllowance < 0) return -1;
@@ -75,14 +76,14 @@ export type AssessmentAllowance = {
  * - Professional: 4 per person per subscription year (quarterly reassessment)
  * - Enterprise: unlimited (continuous reassessment)
  */
-export async function getAssessmentAllowance(auth: AuthContext, now: Date = new Date()): Promise<AssessmentAllowance> {
-  const purchases = await listOrgPurchases(auth.organisationId);
+export async function getAssessmentAllowance(auth: AuthContext, now: Date = new Date(), db?: DbExecutor): Promise<AssessmentAllowance> {
+  const purchases = await listOrgPurchases(auth.organisationId, db);
   const tier = getActiveTier(purchases, now);
 
   if (tier === 0) return { allowed: false, limit: 0, used: 0, reason: 'No active package' };
   if (tier >= PACKAGE_TIER.pkg_full) return { allowed: true, limit: null, used: 0 };
 
-  const assessments = await listOrgAssessments(auth.organisationId);
+  const assessments = await listOrgAssessments(auth.organisationId, db);
 
   if (tier === PACKAGE_TIER.pkg_basic) {
     const limit = purchases.filter((p) => p.status === 'succeeded' && p.packageId === 'pkg_basic').length;

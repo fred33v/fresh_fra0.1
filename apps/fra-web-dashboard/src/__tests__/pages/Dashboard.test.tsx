@@ -46,7 +46,7 @@ const mockedUseEntitlements = vi.mocked(useEntitlements);
 const mockedUseOrgAssessments = vi.mocked(useOrgAssessments);
 
 function setupAssessments(hasFinishedAssessment: boolean) {
-  mockedUseOrgAssessments.mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment });
+  mockedUseOrgAssessments.mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment, latestResult: vi.fn().mockReturnValue(null) });
 }
 
 const PACKAGE_FEATURES = {
@@ -118,6 +118,8 @@ function setupAuth(overrides?: Record<string, unknown>) {
     isLoading: false,
     signUp: vi.fn(),
     signIn: vi.fn(),
+    verifyEmail: vi.fn().mockResolvedValue({ error: null }),
+    joinWithKeypass: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn(),
     hasRole: vi.fn(),
     refreshProfile: vi.fn(),
@@ -132,7 +134,7 @@ function setupProgress(overrides?: Record<string, unknown>) {
     error: null,
     updateSection: vi.fn(),
     completeSection: vi.fn(),
-    saveQuizScore: vi.fn(),
+    saveQuizAnswer: vi.fn(),
     saveScenarioChoice: vi.fn(),
     markComplete: vi.fn(),
     refreshProgress: vi.fn(),
@@ -410,7 +412,7 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       renderDashboard();
 
-      await user.click(screen.getByText('Resources').closest('[role="button"]')!);
+      await user.click(screen.getByText('Resources').closest<HTMLElement>('[role="button"]')!);
 
       expect(mockNavigate).toHaveBeenCalledWith('/resources');
     });
@@ -419,7 +421,7 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       renderDashboard();
 
-      await user.click(screen.getByText('Action Plan').closest('[role="button"]')!);
+      await user.click(screen.getByText('Action Plan').closest<HTMLElement>('[role="button"]')!);
 
       expect(mockNavigate).toHaveBeenCalledWith('/action-plan');
     });
@@ -428,7 +430,7 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       renderDashboard();
 
-      const resourcesCard = screen.getByText('Resources').closest('[role="button"]')!;
+      const resourcesCard = screen.getByText('Resources').closest<HTMLElement>('[role="button"]')!;
       resourcesCard.focus();
       await user.keyboard('{Enter}');
 

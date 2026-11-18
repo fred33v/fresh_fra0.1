@@ -34,3 +34,13 @@ export async function deleteEmailVerificationToken(token: string): Promise<void>
     emailVerificationTokens.delete(token);
   }
 }
+
+/** Atomically claim a link. A failed account operation requires a fresh link. */
+export async function consumeEmailVerificationToken(token: string): Promise<string | null> {
+  const redis = getRedis();
+  if (redis) return redis.getdel<string>(`${EMAIL_VERIFY_PREFIX}${token}`);
+  const key = token;
+  const entry = emailVerificationTokens.get(key);
+  emailVerificationTokens.delete(key);
+  return entry && entry.expiresAt > Date.now() ? entry.userId : null;
+}

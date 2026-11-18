@@ -86,12 +86,18 @@ describe('checkProductionEnv', () => {
     expect(warnings.join('\n')).toMatch(/test key/);
   });
 
-  it('only warns when the database URL has no sslmode, EMAIL_FROM or S3_BUCKET is missing', () => {
+  it('enforces TLS implicitly when sslmode is omitted and warns for optional settings', () => {
     expect(check({ DATABASE_URL: 'postgres://u:p@db.example.test/app' })).toMatchObject({ errors: [] });
     expect(check({ EMAIL_FROM: undefined }).errors).toEqual([]);
     expect(check({ EMAIL_FROM: undefined }).warnings.join('\n')).toMatch(/EMAIL_FROM/);
     expect(check({ S3_BUCKET: undefined }).errors).toEqual([]);
     expect(check({ S3_BUCKET: undefined }).warnings.join('\n')).toMatch(/S3_BUCKET/);
+  });
+
+  it('refuses explicitly insecure database TLS settings', () => {
+    for (const setting of ['sslmode=disable', 'sslmode=no-verify', 'sslmode=prefer', 'ssl=false']) {
+      expect(check({ DATABASE_URL: `postgres://u:p@db.example.test/app?${setting}` }).errors.join('\n')).toContain('DATABASE_URL');
+    }
   });
 
   it('lists every problem at once, not only the first', () => {

@@ -1,3 +1,5 @@
+import { withTransaction } from './transaction.js';
+import type { DbExecutor } from './transaction.js';
 import crypto from 'node:crypto';
 import { getDbPool } from '../db.js';
 
@@ -9,8 +11,8 @@ export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export async function dbUpsertRefreshToken(token: string, userId: string): Promise<void> {
-  const pool = getDbPool();
+export async function dbUpsertRefreshToken(token: string, userId: string, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query(
     'insert into public.refresh_tokens (token, user_id) values ($1,$2) on conflict (token) do update set user_id = excluded.user_id',
     [hashToken(token), userId]
@@ -28,7 +30,23 @@ export async function dbDeleteRefreshToken(token: string): Promise<void> {
   await pool.query('delete from public.refresh_tokens where token = $1', [hashToken(token)]);
 }
 
-export async function dbDeleteAllRefreshTokensForUser(userId: string): Promise<void> {
-  const pool = getDbPool();
+export async function dbDeleteAllRefreshTokensForUser(userId: string, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query('delete from public.refresh_tokens where user_id = $1', [userId]);
+}
+
+/** Consume exactly once and store the replacement on the same connection. */
+export async function dbRotateRefreshToken(oldToken: string, newToken: string, userId: string): Promise<boolean> {
+  return withTransaction(async (client) => {
+    // Serialize rotation with password-reset session invalidation.
+    const user = await client.query('SELECT id FROM public.users WHERE id=$1 FOR UPDATE', [userId]);
+    if (!user.rowCount) return false;
+    const consumed = await client.query(
+      'delete from public.refresh_tokens where token = $1 and user_id = $2 returning token',
+      [hashToken(oldToken), userId],
+    );
+    if (!consumed.rowCount) return false;
+    await dbUpsertRefreshToken(newToken, userId, client);
+    return true;
+  });
 }

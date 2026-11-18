@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
       await hydrateFromMe();
-      return { error: null, emailConfirmationRequired: !!data.emailConfirmationRequired };
+      return { error: null };
     } catch (err: unknown) {
       return { error: err as Error };
     }
@@ -216,7 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles([]);
   }, []);
 
-  const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
+  // Match workshop creation on the API: account admins or assigned facilitators.
+  const hasRole = useCallback((role: AppRole) =>
+    (role === 'facilitator' && user?.role === 'admin') || roles.includes(role), [roles, user?.role]);
 
   const value = useMemo(() => ({
     user,

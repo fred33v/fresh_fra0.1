@@ -1,7 +1,11 @@
 /// <reference types="jest" />
 
 import { describe, expect, it, jest } from '@jest/globals';
-import { app, createAuthenticatedUser, authHeaders, seedPurchase } from '../helpers';
+import { app, authHeaders, seedPurchase } from '../helpers';
+
+import { usersByEmail, organisationsById } from '../../src/stores';
+import { issueTokens } from '../../src/auth-utils';
+import type { User } from '../../src/types';
 
 // Increase timeout for load tests
 jest.setTimeout(30000);
@@ -9,9 +13,34 @@ jest.setTimeout(30000);
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 async function withEnterprise() {
-  const user = await createAuthenticatedUser();
-  seedPurchase(user.organisationId, user.userId, 'pkg_full');
-  return user;
+  // Measure compliance requests after authentication. Password hashing/signup are
+  // covered separately and must not consume this endpoint's load-test deadline.
+  const now = new Date().toISOString();
+  const user: User = {
+    id: crypto.randomUUID(),
+    email: `load-${crypto.randomUUID()}@example.test`,
+    name: 'Load fixture',
+    passwordHash: 'not-a-login-hash',
+    role: 'employer',
+    organisationId: crypto.randomUUID(),
+    createdAt: now,
+    emailVerifiedAt: now,
+  };
+  usersByEmail.set(user.email, user);
+  organisationsById.set(user.organisationId, {
+    id: user.organisationId,
+    name: 'Load fixture',
+    createdByUserId: user.id,
+    createdAt: now,
+    updatedAt: now,
+  });
+  seedPurchase(user.organisationId, user.id, 'pkg_full');
+  return {
+    ...issueTokens(user),
+    userId: user.id,
+    organisationId: user.organisationId,
+    email: user.email,
+  };
 }
 
 // ── In-process response time thresholds ───────────────────────────────────
@@ -114,9 +143,7 @@ describe('Compliance endpoints — concurrent requests (single user)', () => {
 describe('Compliance endpoints — Enterprise scale (simulated 50-user org)', () => {
   it('handles 50 concurrent users each calling /report', async () => {
     // Provision 50 enterprise users in parallel
-    const users = await Promise.all(
-      Array.from({ length: 50 }).map(() => withEnterprise())
-    );
+    const users = await Promise.all(Array.from({ length: 50 }).map(() => withEnterprise()));
 
     const start = Date.now();
     const responses = await Promise.all(
@@ -142,9 +169,7 @@ describe('Compliance endpoints — Enterprise scale (simulated 50-user org)', ()
   });
 
   it('handles 50 concurrent users each calling /audit-trail', async () => {
-    const users = await Promise.all(
-      Array.from({ length: 50 }).map(() => withEnterprise())
-    );
+    const users = await Promise.all(Array.from({ length: 50 }).map(() => withEnterprise()));
 
     const responses = await Promise.all(
       users.map((u) =>
@@ -167,9 +192,7 @@ describe('Compliance endpoints — Enterprise scale (simulated 50-user org)', ()
 
 describe('Compliance endpoints — mixed burst across all endpoints', () => {
   it('handles simultaneous requests to all 8 endpoints', async () => {
-    const users = await Promise.all(
-      Array.from({ length: 8 }).map(() => withEnterprise())
-    );
+    const users = await Promise.all(Array.from({ length: 8 }).map(() => withEnterprise()));
 
     const endpoints = [
       '/api/v1/compliance/report',

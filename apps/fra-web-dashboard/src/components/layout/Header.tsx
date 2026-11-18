@@ -50,7 +50,7 @@ export function Header() {
                   <Link to="/employer">Organisation</Link>
                 </Button>
               )}
-              {(hasRole('facilitator') || hasRole('admin')) && (
+              {hasRole('facilitator') && (
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/facilitator">Facilitator Dashboard</Link>
                 </Button>
@@ -74,6 +74,7 @@ export function Header() {
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
+                  {user.role === 'admin' && <DropdownMenuItem asChild><Link to="/certificate/manage">Manage certificates</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/profile">Profile</Link>

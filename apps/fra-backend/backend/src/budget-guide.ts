@@ -4,6 +4,7 @@
 // ============================================================
 
 import { Hono } from 'hono';
+import planning from './budget-planning.js';
 import { z } from 'zod';
 import { getDbPool } from './db.js';
 import { hasDatabase, jsonError, requireAuth } from './helpers.js';
@@ -13,6 +14,7 @@ import { rateLimit } from './middleware.js';
 // ── Budget Guide Hono App ────────────────────────────────────
 
 const budgetGuide = new Hono();
+budgetGuide.route('/plans',planning);
 
 // ── Progress ─────────────────────────────────────────────────
 
