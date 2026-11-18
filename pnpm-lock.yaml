@@ -70,6 +70,12 @@ patchedDependencies:
   metro@0.83.3:
     hash: hbvtoejxeh6r4tkt3ig527cxcq
     path: patches/metro@0.83.3.patch
+  picomatch@2.3.2:
+    hash: pueansw2ddxvmozazw67ivy6we
+    path: patches/picomatch@2.3.2.patch
+  picomatch@4.0.7:
+    hash: cndcr2bolen6ye4idonddqgpue
+    path: patches/picomatch@4.0.7.patch
 
 importers:
 
@@ -10738,7 +10744,7 @@ snapshots:
       node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       pretty-bytes: 5.6.0
       pretty-format: 29.7.0
       progress: 2.0.3
@@ -10952,7 +10958,7 @@ snapshots:
       hermes-parser: 0.29.1
       jsc-safe-url: 0.2.4
       lightningcss: 1.31.1
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       postcss: 8.5.30
       resolve-from: 5.0.0
     optionalDependencies:
@@ -13342,7 +13348,7 @@ snapshots:
   anymatch@3.1.3:
     dependencies:
       normalize-path: 3.0.0
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=pueansw2ddxvmozazw67ivy6we)
 
   arg@5.0.2: {}
 
@@ -15067,9 +15073,9 @@ snapshots:
       pend: 1.2.0
     optional: true
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
 
   fflate@0.8.3: {}
 
@@ -15809,7 +15815,7 @@ snapshots:
       jest-regex-util: 30.0.1
       jest-util: 30.3.0
       jest-worker: 30.3.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       walker: 1.0.8
     optionalDependencies:
       fsevents: 2.3.3
@@ -15852,7 +15858,7 @@ snapshots:
       '@types/stack-utils': 2.0.3
       chalk: 4.1.2
       graceful-fs: 4.2.11
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       pretty-format: 30.3.0
       slash: 3.0.0
       stack-utils: 2.0.6
@@ -16007,7 +16013,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=pueansw2ddxvmozazw67ivy6we)
 
   jest-util@30.3.0:
     dependencies:
@@ -16016,7 +16022,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
 
   jest-validate@29.7.0:
     dependencies:
@@ -16587,7 +16593,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=pueansw2ddxvmozazw67ivy6we)
 
   mime-db@1.52.0: {}
 
@@ -16938,9 +16944,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=pueansw2ddxvmozazw67ivy6we): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue): {}
 
   pidtree@0.6.0: {}
 
@@ -17382,7 +17388,7 @@ snapshots:
 
   readdirp@3.6.0:
     dependencies:
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=pueansw2ddxvmozazw67ivy6we)
 
   recharts-scale@0.4.5:
     dependencies:
@@ -18002,13 +18008,13 @@ snapshots:
 
   tinyglobby@0.2.15:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
 
   tinyrainbow@3.2.0: {}
 
@@ -18321,8 +18327,8 @@ snapshots:
   vite@6.4.6(@types/node@22.19.7)(jiti@1.21.7)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.1):
     dependencies:
       esbuild: 0.25.12
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       postcss: 8.5.32
       rollup: 4.68.0
       tinyglobby: 0.2.17
@@ -18338,8 +18344,8 @@ snapshots:
   vite@6.4.6(@types/node@22.19.7)(jiti@2.7.0)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.1):
     dependencies:
       esbuild: 0.25.12
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue))
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       postcss: 8.5.32
       rollup: 4.68.0
       tinyglobby: 0.2.17
@@ -18366,7 +18372,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1
@@ -18395,7 +18401,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=cndcr2bolen6ye4idonddqgpue)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1

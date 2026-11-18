@@ -1,0 +1,65 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index caa2b86aa5a567df33cef4bda3c7a97794f439f8..7f4db4d12b60a3698266f6f86af44ff71fa36cd6 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -280,6 +280,49 @@ const repeatedExtglobRecursion = pattern => {
+   return depth;
+ };
+ 
++// A bare `*` is an unbounded wildcard (`[^/]*?`). Repeating a branch that contains one,
++// such as `+(*a)` or `*(a*b)`, nests two unbounded quantifiers, so a failed match
++// backtracks exponentially. A `*` that opens a nested extglob (`*(`) is left to the
++// recursion check.
++const hasBareStar = branch => {
++  let bracket = 0;
++  let quote = 0;
++
++  for (let i = 0; i < branch.length; i++) {
++    const ch = branch[i];
++
++    if (ch === '\\') {
++      i++;
++      continue;
++    }
++
++    if (ch === '"') {
++      quote = quote === 1 ? 0 : 1;
++      continue;
++    }
++
++    if (quote === 1) {
++      continue;
++    }
++
++    if (ch === '[') {
++      bracket++;
++      continue;
++    }
++
++    if (ch === ']' && bracket > 0) {
++      bracket--;
++      continue;
++    }
++
++    if (bracket === 0 && ch === '*' && branch[i + 1] !== '(') {
++      return true;
++    }
++  }
++
++  return false;
++};
++
+ const analyzeRepeatedExtglob = (body, options) => {
+   if (options.maxExtglobRecursion === false) {
+     return { risky: false };
+@@ -308,6 +351,10 @@ const analyzeRepeatedExtglob = (body, options) => {
+       return { risky: true, safeOutput };
+     }
+ 
++    if (hasBareStar(branch)) {
++      return { risky: true };
++    }
++
+     if (repeatedExtglobRecursion(branch) > max) {
+       return { risky: true };
+     }
