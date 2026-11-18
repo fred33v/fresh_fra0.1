@@ -851,8 +851,29 @@ The patch is tied to `rollup@4.68.0`. A Rollup update makes
 dropped, which also stops it being applied silently to code it was not
 written for. Drop it when a Rollup release bundles a fixed picomatch.
 
-**Still unpatched:** Prettier 3.8.1, Playwright 1.58.2, tsx 4.21.0 and
-resolve-workspace-root 2.0.1. They were not tested. Their patterns are
-expected to come from our own config files and the command line, which
-has not been verified. None of them is in the production backend package
-or the dashboard `dist/`; both were checked.
+**Not patched in this PR:** Prettier 3.8.1, Playwright 1.58.2, tsx 4.21.0
+and resolve-workspace-root 2.0.1 bundle older engines that have none of
+picomatch's repeated-extglob guards. Two were tested, and both are
+vulnerable.
+
+- **Prettier:** a `.prettierrc` with `"overrides": [{"files": "+(*a)"}]`
+  and a file named `a` repeated 26 times then `b.json` took 4.2 s, against
+  0.1 s for a benign override. The patterns come from `overrides[].files`
+  in a Prettier config, and a shared config named in `package.json` can
+  come from an npm package. This repository's `.prettierrc` has no
+  `overrides` and names no shared config.
+- **Playwright:** `testMatch: '+(*a)'` with a file named `a` repeated 28
+  times then `b.spec.ts` took 5.1 s, and 17.6 s at 30, against 1.1 s for a
+  benign `testMatch`. The patterns come from `testMatch` and `testIgnore`
+  in the config. This repository's Playwright config only sets `testDir`.
+- **tsx and resolve-workspace-root:** not tested. Both ship minified
+  bundles whose call sites were not read. tsx runs only the backend's own
+  scripts here, and resolve-workspace-root reads workspace globs from the
+  root `package.json` or `pnpm-workspace.yaml`, but neither has been
+  verified.
+
+None of the four is in the production backend package or the dashboard
+`dist/`; both were checked. Whether to patch these as well is a separate
+decision: each patch would be tied to a tool version that updates often,
+and the patterns come from configuration files in this repository, not
+from dependencies' data.
