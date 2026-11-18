@@ -757,9 +757,11 @@ build or test tooling. The deployed backend is built with
 dashboard ships only `dist/`. Nothing on a running server matches a
 pattern.
 
-All 24 packages that reach `picomatch`, directly or through
+For each of the 24 packages that reach `picomatch`, directly or through
 `micromatch`, `anymatch`, `readdirp`, `tinyglobby`, `fast-glob` or
-`chokidar`, were read for where their patterns come from:
+`chokidar`, the call sites were read to find where the patterns come
+from. Vitest, Tailwind and Metro's file map were read at their call
+sites and config options only, not through their whole code paths:
 
 - **Written by us:** Jest (`testMatch`, coverage and ignore globs),
   Vitest (`include`, `exclude`, coverage), Tailwind (`content`),
