@@ -732,3 +732,54 @@ scope on 12 November 2026, with these recorded conditions:
 Acceptance does not merge anything. PR #69 still needs the owner's
 explicit approval to leave Draft and merge. The Phase 1 gate in
 sections 7 to 11 is satisfied once PR #69 is merged into `main`.
+
+## 19. picomatch ReDoS (GHSA-fc5q-39xc-vjpf)
+
+`picomatch` 4.0.7 and 2.3.2, both locked here, compile a repeated
+extglob whose branch holds a bare `*` (for example `+(*a)`) to a regular
+expression with nested unbounded quantifiers. A failed match then takes
+exponential time and blocks Node.js. 4.0.7 is the latest release on npm,
+so there is no fixed version to upgrade to.
+
+### Reproduced
+
+Against `'a'` repeated 32 times followed by `'b'`, `+(*a)` does not
+finish in 10 seconds on either version (790 ms at 24 characters). The
+problem is wider than the two patterns in the advisory: a fuzz of 118
+repeated-extglob shapes found 24 that took over 100 ms on each version
+(`+(a*)c`, `+(*a|b)c` and `*(a|*b)` among them).
+
+### Exposure in this repository
+
+No source file imports a glob library. Every path to `picomatch` is
+build or test tooling (Vite, Vitest, Jest, Expo CLI, Tailwind, ESLint,
+lint-staged). The deployed backend is built with `pnpm deploy --prod`,
+which leaves development dependencies out, and the dashboard ships only
+`dist/`. The glob patterns in our own configs are literals. Whether
+Vite, Vitest, Jest or Expo pass untrusted strings to `picomatch` as
+patterns has not been verified, so exploitability is not ruled out.
+
+### Fix
+
+`patches/picomatch@4.0.7.patch` and `patches/picomatch@2.3.2.patch`
+extend `analyzeRepeatedExtglob`, which already marks some repeated
+extglobs as risky: a `+(...)` or `*(...)` branch with a bare `*` is now
+risky too, and picomatch matches a risky pattern as literal text.
+
+- After the patch the same fuzz finds 0 slow shapes on both versions.
+- 900 ordinary pattern and input pairs match exactly as before on both
+  versions.
+- **Behaviour change:** `+(*.js)` no longer matches `a.js`; it matches
+  only the literal text `+(*.js)`. No pattern of this kind exists in
+  this repository's own configuration.
+
+`tests/security/picomatch-extglob-redos.test.cjs` checks every installed
+copy, running each hostile match in a child process so a regression
+fails instead of hanging. With the patch applied all of its tests pass;
+against unpatched copies, 26 fail. It also fails if an installed version
+is not 4.0.7 or 2.3.2, so the patch cannot silently stop applying.
+
+`pnpm audit` and Dependabot match on the version number and cannot see
+the patch, so they will keep reporting this advisory. It was not added
+to an audit ignore list. Remove both patches when a fixed release of
+each line is published.
