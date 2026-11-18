@@ -35,3 +35,15 @@ Keep `ESIGN_PUBLIC_URL=http://localhost:3080` for local signing invitations. Pro
 - Real PDF canvas/worker and responsive sender journey against a mock API: `pnpm --filter @stopfra/web-dashboard test:e2e:signing`. Install Playwright Chromium first; optionally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for a local system installation.
 - The existing disposable PostgreSQL integration checks now cover organisation-scoped document listing and pagination validation, plus real-browser error recovery from an invalid email code. Its email and storage transports remain captured/doubled; it never uses live SMTP or AWS.
 - GitHub database CI also runs the sender UI journey after installing Chromium.
+
+## Access to the account created by the local demo
+
+The demo's random password remains in a private, ignored `.local/esign/demo-account-*.json` file on the Mac that ran the demo. Do not paste that file or password into chat. From that backend folder, run:
+
+```bash
+npm run esign:access -- development-team@fraud-risk.co.uk
+```
+
+Use the email actually passed to `esign:demo`. On macOS this copies the existing password directly to the clipboard without printing it; paste it into the normal sign-in form with Command+V. It never creates a user, resets a password or changes a role. It requires development mode, a loopback signing origin and the isolated `fresh_fra_esign_dev` database. `--check` only checks for the account file, without copying. If the password has since changed or the private file is unavailable, use the normal **Forgot your password** email flow instead.
+
+The generated navy/gold mark is shared by the login, application header and home page. PNG/ICO favicons and an Apple touch icon replace the old browser-tab icon. The generated source artwork is retained in the execution artifacts; the application uses small optimised derivatives.

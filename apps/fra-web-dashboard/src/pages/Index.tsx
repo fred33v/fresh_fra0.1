@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
+import { BrandMark } from '@/components/BrandMark';
 import { Layout } from '@/components/layout/Layout';
 import {
   Shield,
@@ -81,7 +82,7 @@ export default function Index() {
           <div className="bg-[#0b0c0c]">
             <div className="container flex h-10 items-center justify-between">
               <Link to="/" className="flex items-center gap-2 text-white no-underline">
-                <Shield className="h-5 w-5 text-white" aria-hidden="true" />
+                <BrandMark className="h-7 w-7" />
                 <span className="text-sm font-bold tracking-wide">FRAUD-RISK.CO.UK</span>
               </Link>
               <nav aria-label="Main navigation" className="flex items-center gap-3">
@@ -202,7 +203,7 @@ export default function Index() {
 
               <div className="border-t border-[#505a5f] pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-white" aria-hidden="true" />
+                  <BrandMark className="h-7 w-7" />
                   <span className="font-bold text-white">FRAUD-RISK.CO.UK</span>
                 </div>
                 <nav aria-label="Legal" className="flex gap-4 text-sm">

@@ -15,7 +15,8 @@
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest -c jest.config.cjs --watch",
     "db:check": "node --import tsx scripts/check-production-connection.mjs",
     "esign:check": "node --import tsx scripts/check-esign.mjs",
-    "esign:demo": "node --import tsx scripts/esign-live-demo.mjs"
+    "esign:demo": "node --import tsx scripts/esign-live-demo.mjs",
+    "esign:access": "node --import tsx scripts/esign-local-access.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1152.0",
