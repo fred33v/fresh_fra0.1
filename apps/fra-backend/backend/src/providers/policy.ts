@@ -27,8 +27,12 @@ export const providerProfileSchema = z
           .url()
           .max(2048)
           .refine((value) => {
-            const url = new URL(value);
-            return url.protocol === 'https:' && !url.username && !url.password;
+            try {
+              const url = new URL(value);
+              return url.protocol === 'https:' && !url.username && !url.password;
+            } catch {
+              return false;
+            }
           }, 'Use an HTTPS website without embedded credentials'),
       ])
       .default(''),

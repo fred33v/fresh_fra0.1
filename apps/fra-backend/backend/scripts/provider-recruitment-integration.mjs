@@ -153,6 +153,10 @@ try {
     (await call('POST', '/me', { ...submission(), acknowledged: false }, applicant)).status,
     400
   );
+  assert.equal(
+    (await call('POST', '/me', submission(0, { website: 'not-a-url' }), applicant)).status,
+    400
+  );
   pass('feature, verified-account, API-key and server-owned policy gates');
   let response = await call('POST', '/me', submission(), applicant);
   assert.equal(response.status, 201, JSON.stringify(response.body));

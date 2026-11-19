@@ -33,15 +33,18 @@ describe('provider programme policy', () => {
       }).success
     ).toBe(false);
   });
-  it.each(['javascript:alert(1)', 'http://example.test', 'https://owner:password@example.test'])(
-    'rejects unsafe website %s',
-    (website) => {
-      expect(
-        providerSubmissionSchema.safeParse({ ...valid, profile: { ...valid.profile, website } })
-          .success
-      ).toBe(false);
-    }
-  );
+  it.each([
+    'not-a-url',
+    'https://',
+    'javascript:alert(1)',
+    'http://example.test',
+    'https://owner:password@example.test',
+  ])('rejects unsafe website %s', (website) => {
+    expect(
+      providerSubmissionSchema.safeParse({ ...valid, profile: { ...valid.profile, website } })
+        .success
+    ).toBe(false);
+  });
   it('requires experience, unique areas and valid recipient details without collecting payout secrets', () => {
     expect(
       providerSubmissionSchema.safeParse({
