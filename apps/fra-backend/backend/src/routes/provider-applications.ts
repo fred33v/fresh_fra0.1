@@ -257,6 +257,14 @@ routes.post('/:id/assignments/:assignmentId/close', async (c) => {
   }));
 });
 
+/**
+ * A statement only reads. One snapshot keeps its balances, entries and payouts consistent without locking the
+ * provider row, which payment reconciliation and checkout also take. Must be the transaction's first statement.
+ */
+async function snapshotRead(db: { query: (sql: string) => Promise<unknown> }) {
+  await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+}
+
 async function commissionStatement(db: Parameters<typeof providerBalance>[0], id: string) {
   const currencies = (await db.query(`SELECT DISTINCT currency FROM public.provider_commission_entries WHERE application_id=$1
     UNION SELECT currency FROM public.provider_payouts WHERE application_id=$1`,[id])).rows;
@@ -273,8 +281,9 @@ routes.get('/me/statement', async c => {
   const auth = await applicant(c);
   if (auth instanceof Response) return auth;
   return recruitmentResponse(c,()=>withTransaction(async db=>{
+    await snapshotRead(db);
     await recruitmentIdentity(db,auth);
-    const {rows:[a]}=await db.query(`SELECT id FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2 FOR UPDATE`,[auth.userId,auth.organisationId]);
+    const {rows:[a]}=await db.query(`SELECT id FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2`,[auth.userId,auth.organisationId]);
     if (!a) throw new RecruitmentError(404,'Application not found');
     return commissionStatement(db,a.id);
   }));
@@ -284,8 +293,9 @@ routes.get('/:id/statement', async c => {
   if (auth instanceof Response) return auth;
   if(!z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid provider');
   return recruitmentResponse(c,()=>withTransaction(async db=>{
+    await snapshotRead(db);
     await recruitmentIdentity(db,auth,true);
-    const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
+    const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
     return commissionStatement(db,a.id);
   }));

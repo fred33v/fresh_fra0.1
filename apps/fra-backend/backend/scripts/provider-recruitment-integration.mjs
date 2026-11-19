@@ -39,20 +39,22 @@ async function call(actor, path, body, expected = 200, method = body ? 'POST' : 
   assert.equal(r.status, expected, JSON.stringify(data)); checks++;
   return data.data;
 }
-async function agreement(a, org = operatorOrg) {
+async function agreement(a, org = operatorOrg, { title = 'Provider agreement', extraSigner = false } = {}) {
   const id = randomUUID();
   const hash = 'a'.repeat(64);
   // Completed retained fixture; normal application clients cannot insert signing evidence.
   await pool.query(`INSERT INTO public.esign_documents(id,organisation_id,created_by,title,
     original_pdf,original_sha256,source_pdf,source_sha256,pages,status,final_key,final_version,final_sha256)
-    VALUES($1,$2,$3,'Provider agreement','fixture',encode(sha256('fixture'::bytea),'hex'),
-    'fixture',encode(sha256('fixture'::bytea),'hex'),'[]','draft','retained','v1',$4)`, [id,org,a.id,hash]);
+    VALUES($1,$2,$3,$5,'fixture',encode(sha256('fixture'::bytea),'hex'),
+    'fixture',encode(sha256('fixture'::bytea),'hex'),'[]','draft','retained','v1',$4)`, [id,org,a.id,hash,title]);
   // Build retained fixture in the same state order as signing, without disabling integrity triggers.
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
     await db.query(`INSERT INTO public.esign_signers(id,document_id,email,name,status,consent_text,consent_at,signature_text,signed_at)
       VALUES($1,$2,$3,'Recruitment test','signed','fixture',now(),'Fixture',now())`, [randomUUID(),id,a.email]);
+    if (extraSigner) await db.query(`INSERT INTO public.esign_signers(id,document_id,email,name,status,consent_text,consent_at,signature_text,signed_at)
+      VALUES($1,$2,$3,'Other party','signed','fixture',now(),'Fixture',now())`, [randomUUID(),id,`other-${id}@example.test`]);
     await db.query("UPDATE public.esign_documents SET status='sent' WHERE id=$1",[id]);
     await db.query("UPDATE public.esign_documents SET status='completed' WHERE id=$1",[id]);
     await db.query('COMMIT');
@@ -80,6 +82,11 @@ try {
   await call(admin, `/${application.id}/review`, review,400);
   const wrong = await agreement(other);
   await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:wrong },400);
+  // A completed, retained, applicant-signed document is not enough: it must be the provider agreement, signed only by the applicant.
+  const consent = await agreement(applicant, operatorOrg, { title: 'Consent form' });
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:consent },400);
+  const shared = await agreement(applicant, operatorOrg, { extraSigner: true });
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:shared },400);
   const own = await call(admin, '/me', {companyName:'Operator company',serviceInterest:'sales'},201);
   await call(admin, `/${own.id}/review`,review,403);
   await call(admin, '/review?page=-1',null,400);
@@ -88,6 +95,20 @@ try {
   await call(admin, `/${application.id}/review`,noEvidence,400);
   const approved = await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:doc });
   assert.equal(approved.status,'approved'); assert.match(approved.providerCode,/^PRV-[a-f0-9]{32}$/);
+  // Statements are reads: a lock held on the provider row (as reconciliation/checkout hold it) must not stall them.
+  {
+    const lock = await pool.connect();
+    try {
+      await lock.query('BEGIN');
+      await lock.query('SELECT id FROM public.provider_applications WHERE id=$1 FOR UPDATE',[application.id]);
+      const stalled = Symbol('stalled');
+      const timeout = () => new Promise(r => setTimeout(() => r(stalled), 3000));
+      for (const read of [() => call(applicant,'/me/statement'), () => call(admin,`/${application.id}/statement`)]) {
+        const result = await Promise.race([read(), timeout()]);
+        assert.notEqual(result, stalled, 'statement endpoint blocked behind a provider-row lock');
+      }
+    } finally { await lock.query('ROLLBACK'); lock.release(); }
+  }
   await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:doc },409);
   const offer = { packageId:'pkg_basic',reference:randomUUID(),service:'training' };
   const assignment = await call(admin, `/${application.id}/assignments`,offer);
