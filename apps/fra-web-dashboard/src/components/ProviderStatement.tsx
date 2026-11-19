@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 type Statement = {
   balances: {currency:string;earned:number;recorded:number;reserved:number;available:number}[];
   entries: {id:number;deltaCents:number;currency:string;reason:string;createdAt:string}[];
-  payouts: {id:string;amountCents:number;currency:string;status:string;settlementReference:string|null;preparedBy:string;createdAt:string}[];
+  payouts: {id:string;amountCents:number;currency:string;status:string;settlementReference:string|null;preparedBy?:string;createdAt:string}[];
 };
 const money=(cents:number,currency:string)=>new Intl.NumberFormat('en-GB',{style:'currency',currency}).format(cents/100);
 export function ProviderStatement({ applicationId }: { applicationId?: string }) {
@@ -43,7 +43,7 @@ export function ProviderStatement({ applicationId }: { applicationId?: string })
     </div>)}
     {applicationId&&<div className="space-y-3">
       <h3 className="font-semibold">Prepare a GBP bank payout</h3>
-      <p>Preparation reserves commission. A different operator reviewer must approve it. Your finance team sends the bank payment separately and records its reference here.</p>
+      <p>Preparation reserves commission. A reviewer other than the preparer must approve it. The bank payment is sent outside this app, then a reviewer other than the preparer (the approver may do this) records its reference here.</p>
       <Label htmlFor={`${applicationId}-amount`}>Amount in GBP</Label>
       <Input id={`${applicationId}-amount`} inputMode="decimal" value={amount} onChange={e=>{setAmount(e.target.value);setRequestKey(crypto.randomUUID());}} />
       <Label htmlFor={`${applicationId}-payout-reason`}>Finance review reason</Label>
