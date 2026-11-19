@@ -37,7 +37,13 @@ export const RETENTION_RULES: RetentionRule[] = [
   },
   // Messages go with their case (ON DELETE CASCADE); open cases are never removed
   { table: 'public.speak_up_reports', label: 'Closed speak-up cases', keepFor: '6 years', expiredWhen: "status = 'closed' AND closed_at < $1" },
-  { table: 'public.purchases', label: 'Payment records', keepFor: '7 years', expiredWhen: 'created_at < $1' },
+  {
+    // A purchase that earned a provider commission is evidence for that ledger (ON DELETE RESTRICT) and is kept.
+    // Without this exclusion the first such record to expire would make the whole DELETE fail, and no expired
+    // payment record would ever be removed again.
+    table: 'public.purchases', label: 'Payment records', keepFor: '7 years',
+    expiredWhen: 'created_at < $1 AND NOT EXISTS (SELECT 1 FROM public.provider_sale_attributions a WHERE a.purchase_id = public.purchases.id)',
+  },
   { table: 'public.keypasses', label: 'Expired key-passes', keepFor: '2 years', expiredWhen: 'expires_at < $1' },
   { table: 'public.workshop_feedback', label: 'Workshop feedback', keepFor: '2 years', expiredWhen: 'created_at < $1' },
   { table: 'public.refresh_tokens', label: 'Session tokens', keepFor: '90 days', expiredWhen: 'created_at < $1' },

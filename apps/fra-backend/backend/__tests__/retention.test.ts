@@ -53,6 +53,13 @@ describe('data retention', () => {
     expect(rule('public.counter_fraud_records')).toContain("data->>'status' = 'ended'");
   });
 
+  it('never selects a purchase that has a provider commission attribution', () => {
+    // provider_sale_attributions references purchases with ON DELETE RESTRICT: one expired attributed sale would
+    // otherwise abort the whole DELETE and stop all payment-record retention.
+    const rule = RETENTION_RULES.find((r) => r.table === 'public.purchases')!.expiredWhen;
+    expect(rule).toMatch(/NOT EXISTS \(SELECT 1 FROM public\.provider_sale_attributions/);
+  });
+
   it('only counts by default, without deleting anything', async () => {
     const result = await runRetention({ now: NOW });
 
