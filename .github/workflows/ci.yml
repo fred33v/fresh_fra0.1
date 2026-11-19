@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run the same gates for feature-to-feature PRs used by reviewed stacks.
+    branches: [main, 'feat/**']
 
 # On pull requests a new push cancels the run it replaces. On main every merge
 # gets its own group (keyed by commit), so each one is tested to the end even
