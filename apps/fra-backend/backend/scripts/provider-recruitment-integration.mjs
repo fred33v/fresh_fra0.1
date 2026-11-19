@@ -122,7 +122,7 @@ try {
   await call(admin,`/${declined.id}/assignments`,{...offer,reference:randomUUID()},409);
   await assert.rejects(pool.query('DELETE FROM public.provider_recruitment_audit WHERE application_id=$1',[application.id])); checks++;
   // Financial integration: real PostgreSQL and the existing isolated Stripe snapshot fixture.
-  const { attributeProviderSale, commissionTarget } = await import('../src/provider-commissions.ts');
+  const { attributeProviderSale, commissionTarget, reconcileProviderCommission, refreshProviderPayments } = await import('../src/provider-commissions.ts');
   const { withTransaction } = await import('../src/db/transaction.ts');
   const { dbInsertPurchase } = await import('../src/db/purchases.ts');
   const { reconcilePaidPurchase } = await import('../src/payment-lifecycle.ts');
@@ -152,6 +152,17 @@ try {
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);
   provider.dispute('won');await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-dispute-won');
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,8500);
+  // A provider with more sales than the full-check limit skips sales verified moments ago. A stale sale is
+  // still checked, a Stripe failure is reported rather than hidden, and a spent time budget asks for a retry.
+  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin'};
+  provider.state.unavailable=true;
+  await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // verified seconds ago: Stripe is not called
+  await pool.query("UPDATE public.purchases SET payment_reconciled_at=now()-interval '10 minutes' WHERE id=$1",[sale.id]);
+  await assert.rejects(refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}),/could not be verified for 1 sale/);
+  provider.state.unavailable=false;
+  await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // stale sale checked and refreshed
+  await assert.rejects(refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0,maxAgeSeconds:0,budgetMs:-1}),/still running/);
+  checks+=4;
   const second=await actor('admin',operatorOrg);
   const request={requestKey:randomUUID(),currency:'gbp',amountCents:8500,reason:'Finance verified customer receipt'};
   provider.state.unavailable=true;
@@ -177,6 +188,12 @@ try {
   await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:1},409);
   await assert.rejects(pool.query('DELETE FROM public.provider_commission_entries WHERE purchase_id=$1',[sale.id]));
   await assert.rejects(pool.query("UPDATE public.provider_payouts SET settlement_reference='rewritten' WHERE id=$1",[corrected.id]));
+  checks+=2;
+  // A refund larger than the payment is inconsistent data. It must lower commission, never throw inside payment reconciliation.
+  const entriesBefore=(await call(applicant,'/me/statement')).entries.length;
+  await pool.query('UPDATE public.purchases SET refunded_amount_cents=refunded_amount_cents+50000 WHERE id=$1',[sale.id]);
+  await withTransaction(db=>reconcileProviderCommission(db,sale.id));
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);assert.equal(statement.entries.length,entriesBefore);
   checks+=2;
   const selfSale={...sale,id:randomUUID(),userId:applicant.id,organisationId:applicant.org};
   await assert.rejects(withTransaction(async db=>{
