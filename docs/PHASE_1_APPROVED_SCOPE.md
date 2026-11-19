@@ -1,6 +1,6 @@
 # Phase 1 — approved scope and external test gates
 
-Updated 2026-11-16. This records the owner's decisions, not an assertion that the features are implemented.
+Updated 2026-11-19. This records the owner's decisions, not an assertion that the features are implemented.
 
 ## Scope
 
@@ -16,7 +16,7 @@ Updated 2026-11-16. This records the owner's decisions, not an assertion that th
 
 The owner confirmed the Stripe reference account and authorised the CLI browser flow. The subsequent local `stripe whoami --format json` still reports `authenticated: false`. Separate development and CI sandboxes have **not** been provisioned; no test credential or successful external Connect transfer is claimed.
 
-The current plan is the internal signing module described in [ESIGN_SETUP.md](ESIGN_SETUP.md). The owner confirmed that a P12/PFX seal and dedicated S3 Object Lock bucket still need to be configured and requested step-by-step guidance. The feature defaults to disabled. No paid provider account or real production signature is authorised. An internal platform seal must not be labelled an advanced/qualified signer signature.
+The current plan is the internal signing module described in [ESIGN_SETUP.md](ESIGN_SETUP.md). The owner configured a development P12 seal and the London bucket `fresh-fra-s`, with versioning, Object Lock and blocked public access. On 17 November the owner verified actual email-code signing, completed status, exact-version S3 download, COMPLIANCE retention, legal hold ON, matching SHA-256 and OpenSSL CMS verification on their Mac. The feature defaults to disabled. No paid provider account or real production signature is authorised. An internal platform seal must not be labelled an advanced/qualified signer signature.
 
 Credentials belong in server-side secrets, never source control, browser bundles, logs or chat. Sandbox signing is a test and must not be displayed as a legally effective production signature.
 
@@ -26,4 +26,13 @@ Compliance endpoints now check the persisted user role and organisation on every
 
 Validation: three dedicated unit cases, the existing compliance-evidence suite (25 targeted tests total), backend TypeScript, and the disposable PostgreSQL domain/budget integration suite (11 scenarios, including stale-role and stale-tenant rejection). The complete backend suite also passed: 58 suites, 749 tests (327.604 seconds). `npm run build` passed; backend ESLint reported zero errors and five existing warnings in unrelated files. No production database was changed.
 
-The overall Phase 1 is still open until recruitment, Connect commissions, the agreed signature assurance and real-service activation, preservation/visibility controls and their end-to-end acceptance checks are implemented and verified. PR #78 remains a draft; no merge or production deployment is implied.
+The overall Phase 1 is still open until recruitment, Connect commissions, the agreed signature assurance and real-service activation, preservation/visibility controls and their end-to-end acceptance checks are implemented and verified. PR #78 was merged into main after the owner requested it. PR #79 adds the signing UI, logo and guarded local account access; it remains a draft. These changes do not imply production deployment.
+
+
+## Next increment resumed — 19 November 2026
+
+The Phase 0 baseline was reread and PR #69 was confirmed merged. The signing workflow remains preserved and AWS deployment stays deferred at the owner's request.
+
+Provider/professional recruitment is implemented on `feat/phase1-provider-recruitment` as the next Phase 1 increment: verified-account applications, retained revision history, explicitly appointed administrator reviews, no self-review, revision-safe decisions, rejection/resubmission and suspension/reinstatement. Migration 037 is additive, the module defaults to disabled, and no new evidence is included in an automatic purge rule. See [provider recruitment](PHASE_1_PROVIDER_RECRUITMENT.md) for validation and activation details.
+
+The 17% VAT-exclusive referral policy is recorded as 1700 basis points. **No commission has been earned, calculated, attributed or paid by this increment.** Stripe Connect onboarding, checkout attribution, reversal/recovery handling and sandbox end-to-end commission validation remain the next financial increment. Programme approval is not Stripe verification or qualification verification, and payouts remain inactive.

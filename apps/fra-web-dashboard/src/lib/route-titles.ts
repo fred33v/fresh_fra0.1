@@ -30,6 +30,8 @@ const TITLES: [RegExp, string][] = [
   [/^\/risk-register\b/, 'Risk register'],
   [/^\/compliance\b/, 'Compliance'],
   [/^\/integrations\b/, 'Integrations'],
+  [/^\/partners\/review\b/, 'Review partner applications'],
+  [/^\/partners\b/, 'Partner programme'],
   [/^\/signing\b/, 'Documents to sign'],
   [/^\/profile\b/, 'Your profile'],
   [/^\/speak-up\b/, 'Speak up'],
