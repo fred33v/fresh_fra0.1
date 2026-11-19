@@ -52,7 +52,8 @@ export default function ProviderApplication() {
   return (
     <Layout>
       <main className="container max-w-2xl space-y-6 py-10">
-        <h1 className="text-2xl font-bold">Apply to become a provider</h1>
+        <h1 className="text-2xl font-bold">{application.data?.status === 'approved' ? 'Your provider portal' :
+          application.data ? 'Your provider application' : 'Apply to become a provider'}</h1>
         <p>
           Apply to sell packages or deliver training while working at your company. The referral
           commission rate is 17% of the VAT-exclusive value of eligible paid package sales you bring.
@@ -147,11 +148,37 @@ function Assignments({ providerCode }: { providerCode: string }) {
     {decision.isError && <p role="alert">{decision.error.message}</p>}
     {query.data?.map(a => <article key={a.id} className="space-y-2 rounded border p-3">
       <h3>{a.packageName} — {a.service}</h3><p>{a.reference}: {a.status}</p>
-      {a.service === 'sales' && ['accepted','completed'].includes(a.status) && <Link className="underline" to={`/checkout?package=${encodeURIComponent(a.packageName)}&provider=${encodeURIComponent(providerCode)}`}>Open referral checkout for {a.packageName}</Link>}
+      {a.service === 'sales' && ['accepted','completed'].includes(a.status) && providerCode &&
+        <CustomerReferralLink assignmentId={a.id} reference={a.reference} packageName={a.packageName} providerCode={providerCode} />}
       {a.status === 'offered' && <div className="flex gap-3">
         <Button disabled={decision.isPending} onClick={() => decision.mutate({ id: a.id, status: 'accepted' })}>Accept {a.reference}</Button>
         <Button variant="outline" disabled={decision.isPending} onClick={() => decision.mutate({ id: a.id, status: 'refused' })}>Refuse {a.reference}</Button>
       </div>}
     </article>)}
   </section>;
+}
+
+function CustomerReferralLink({ assignmentId, reference, packageName, providerCode }: {
+  assignmentId: string; reference: string; packageName: string; providerCode: string;
+}) {
+  const [message, setMessage] = useState('');
+  const params = new URLSearchParams({ package: packageName, provider: providerCode });
+  const customerLink = new URL(`/checkout?${params.toString()}`, window.location.origin).href;
+  async function copyLink() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(customerLink);
+      setMessage('Customer link copied.');
+    } catch {
+      setMessage('Copy unavailable. Select and copy the customer link above.');
+    }
+  }
+  return <div className="space-y-2">
+    <p>Share this link with your customer. They must sign in using their own organisation account.
+      Purchases by you or your organisation are not eligible for referral commission.</p>
+    <Label htmlFor={`referral-${assignmentId}`}>Customer referral link for {reference}</Label>
+    <Input id={`referral-${assignmentId}`} value={customerLink} readOnly onFocus={event => event.currentTarget.select()} />
+    <Button variant="outline" onClick={() => void copyLink()}>Copy customer link for {reference}</Button>
+    {message && <p role="status">{message}</p>}
+  </div>;
 }

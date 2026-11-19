@@ -70,8 +70,11 @@ export default function Checkout() {
       if (code === 'DUPLICATE_PURCHASE') {
         setPaymentError('You already have an active subscription for this package.');
       } else if (code === 'UNAUTHORIZED') {
+        const returnParams = new URLSearchParams({ package: packageName });
+        if (providerCode.trim()) returnParams.set('provider', providerCode.trim());
+        const returnTo = `/checkout?${returnParams.toString()}`;
         setPaymentError(
-          <>Sign in or create your organisation account to continue. <Link className="underline font-medium" to={`/auth?package=${encodeURIComponent(packageName)}`}>Sign in</Link></>,
+          <>Sign in or create your organisation account to continue. <Link className="underline font-medium" to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}>Sign in</Link></>,
         );
       } else if (['ATTRIBUTION_ERROR','ATTRIBUTION_LOCKED','ATTRIBUTION_UNAVAILABLE'].includes(code)) {
         setPaymentError(err instanceof Error ? err.message : 'Provider reference could not be verified.');
