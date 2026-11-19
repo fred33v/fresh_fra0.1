@@ -81,6 +81,23 @@ beforeEach(() => {
 });
 
 describe('Auth', () => {
+  it('passes the referral checkout to registration and verification resends', async () => {
+    const returnTo = '/checkout?package=Starter&provider=PRV-' + 'a'.repeat(32);
+    const user = userEvent.setup();
+    renderAuth('/auth?mode=signup&returnTo=' + encodeURIComponent(returnTo));
+    await user.type(screen.getByLabelText('Full Name'),'New Customer');
+    await user.type(screen.getByLabelText('Organisation Name'),'Customer Ltd');
+    await user.type(screen.getByLabelText('Email'),'new@example.test');
+    await user.type(screen.getByLabelText('Password'),'StrongPass123');
+    await user.type(screen.getByLabelText('Confirm Password'),'StrongPass123');
+    await user.click(screen.getByRole('button',{name:/Create Account/i}));
+    await screen.findByText('Check your email');
+    expect(mockSignUp).toHaveBeenCalledWith('new@example.test','StrongPass123',expect.objectContaining({returnTo}));
+    await user.click(screen.getByRole('button',{name:/Send a new link/i}));
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith('/api/v1/auth/resend-verification',{
+      email:'new@example.test',returnTo,
+    }));
+  });
   // ── Redirect if authenticated ─────────────────
 
   describe('redirect if authenticated', () => {

@@ -409,6 +409,7 @@ export const signupSchema = z.object({
   organisationName: z.string().min(1).max(200).optional(),
   jobTitle: z.string().max(200).optional(),
   sector: z.enum(['public', 'charity', 'private']).optional(),
+  returnTo: z.string().max(500).optional(),
   // No workshopRole: everyone signs up as a participant. Facilitators skip the training
   // package gate, so that role must never be self-selected.
 });
@@ -416,6 +417,7 @@ export const signupSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+  returnTo: z.string().max(500).optional(),
 });
 
 export const refreshSchema = z.object({

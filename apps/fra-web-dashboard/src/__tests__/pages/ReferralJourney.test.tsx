@@ -18,7 +18,7 @@ vi.mock('@/hooks/useAuth', async () => {
     return {
       user: signedIn ? {userId:'customer',organisationId:'customer-org',role:'employer'} : null,
       signIn: async () => { setSignedIn(true); return {error:null}; },
-      signUp: vi.fn(), verifyEmail: vi.fn(),
+      signUp: vi.fn(), verifyEmail: async () => { setSignedIn(true); return {error:null}; },
     };
   } };
 });
@@ -52,4 +52,18 @@ it('keeps an edited referral through checkout, real auth navigation and the retr
     packageId:'pkg_training',client:'web',providerCode:code,
   }));
   expect(api.post).toHaveBeenNthCalledWith(3,'/api/v1/purchases/purchase/confirm',{paymentIntentId:undefined});
+});
+
+it('opens an emailed verification link in a fresh page and resumes its referral checkout', async () => {
+  const code = 'PRV-' + 'b'.repeat(32);
+  const returnTo = '/checkout?package=Starter&provider=' + code;
+  const user = userEvent.setup();
+  vi.mocked(api.post).mockReset().mockResolvedValueOnce({purchaseId:'new-customer',checkoutUrl:null,simulated:true}).mockResolvedValueOnce({});
+  render(<MemoryRouter initialEntries={['/auth?mode=verify&token=emailed-token&returnTo=' + encodeURIComponent(returnTo)]}><Routes>
+    <Route path="/auth" element={<Auth/>}/><Route path="/checkout" element={<Checkout/>}/>
+  </Routes></MemoryRouter>);
+  expect(await screen.findByLabelText('Provider referral reference (optional)')).toHaveValue(code);
+  await user.click(screen.getByRole('button',{name:/Continue to payment/}));
+  await screen.findByRole('heading',{name:'Payment Successful!'});
+  expect(api.post).toHaveBeenNthCalledWith(1,'/api/v1/purchases',{packageId:'pkg_basic',client:'web',providerCode:code});
 });

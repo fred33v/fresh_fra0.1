@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db.js';
@@ -120,11 +121,11 @@ async function clearFailedLogins(email: string, ip: string): Promise<void> {
 // ── Email confirmation ─────────────────────────────────────────
 
 /** Issues a confirmation link and emails it. Returns the token (shown to developers outside production). */
-export async function sendVerificationLink(user: User): Promise<string | undefined> {
+export async function sendVerificationLink(user: User, returnTo?: string): Promise<string | undefined> {
   const token = crypto.randomUUID();
   try {
     await setEmailVerificationToken(token, user.id);
-    sendEmailInBackground(verifyEmailEmail(user.email, user.name, token), { userId: user.id, kind: 'verify_email' });
+    sendEmailInBackground(verifyEmailEmail(user.email, user.name, token, returnTo), { userId: user.id, kind: 'verify_email' });
     return token;
   } catch (err: unknown) {
     logger.error('Could not issue an email confirmation link', { userId: user.id, error: String(err) });
@@ -167,7 +168,7 @@ auth.post('/auth/signup', async (c) => {
     // Same reply as a new sign-up, so the form cannot be used to find out who has an
     // account. The owner gets an email telling them, or a fresh link if never confirmed.
     if (existing.emailVerifiedAt === null) {
-      void sendVerificationLink(existing);
+      void sendVerificationLink(existing, parsed.data.returnTo);
     } else {
       sendEmailInBackground(accountExistsEmail(existing.email, existing.name), { userId: existing.id, kind: 'account_exists' });
     }
@@ -242,7 +243,7 @@ auth.post('/auth/signup', async (c) => {
     userAgent: c.req.header('user-agent'),
   });
 
-  const verificationToken = await sendVerificationLink(user);
+  const verificationToken = await sendVerificationLink(user, parsed.data.returnTo);
   return signupPendingResponse(c, emailLc, verificationToken);
 });
 
@@ -293,7 +294,7 @@ auth.post('/auth/login', async (c) => {
 
   // The right password proves who they are, so saying the email is unconfirmed reveals nothing
   if (user.emailVerifiedAt === null) {
-    void sendVerificationLink(user);
+    void sendVerificationLink(user, parsed.data.returnTo);
     return jsonError(c, 403, 'EMAIL_NOT_VERIFIED', 'Please confirm your email address first. We have sent you a new link.');
   }
 
@@ -533,14 +534,14 @@ auth.post('/auth/resend-verification', async (c) => {
   const limited = await rateLimit('auth:resend-verification', { windowMs: AUTH_WINDOW_MS, max: FORGOT_PASSWORD_MAX })(c);
   if (limited instanceof Response) return limited;
 
-  const parsed = forgotPasswordSchema.safeParse(await c.req.json().catch(() => null));
+  const parsed = forgotPasswordSchema.extend({ returnTo: z.string().max(500).optional() }).safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid resend-verification payload');
 
   const emailLc = parsed.data.email.toLowerCase();
   // Looked up and sent in the background: the reply is the same whether or not the account exists
   void (async () => {
     const user = hasDatabase() ? await dbGetUserByEmail(emailLc) : usersByEmail.get(emailLc);
-    if (user && user.emailVerifiedAt === null) await sendVerificationLink(user);
+    if (user && user.emailVerifiedAt === null) await sendVerificationLink(user, parsed.data.returnTo);
   })().catch((err: unknown) => logger.error('Resend verification failed', { error: String(err) }));
 
   return c.json({

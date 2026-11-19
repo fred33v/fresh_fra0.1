@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Profile from '@/pages/Profile';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
@@ -10,7 +11,7 @@ import { api } from '@/lib/api';
 vi.mock('@/hooks/useAuth');
 
 vi.mock('@/lib/api', () => ({
-  api: { patch: vi.fn() },
+  api: { patch: vi.fn(), get: vi.fn() },
 }));
 
 vi.mock('@/components/layout/Layout', () => ({
@@ -73,7 +74,9 @@ function setupAuth(overrides?: Record<string, unknown>) {
 function renderProfile() {
   return render(
     <MemoryRouter>
+      <QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>
       <Profile />
+      </QueryClientProvider>
     </MemoryRouter>,
   );
 }
@@ -83,6 +86,7 @@ function renderProfile() {
 beforeEach(() => {
   vi.resetAllMocks();
   setupAuth();
+  mockedApi.get.mockResolvedValue(null);
   // Prevent actual page reload
   Object.defineProperty(window, 'location', {
     value: { ...window.location, reload: vi.fn() },
@@ -91,6 +95,25 @@ beforeEach(() => {
 });
 
 describe('Profile', () => {
+  it.each([
+    [null,'Apply to become a provider'],
+    [{status:'approved'},'Open provider portal'],
+    [{status:'submitted'},'View provider application'],
+    [{status:'declined'},'View provider application'],
+    [{status:'suspended'},'View provider application'],
+  ])('uses the persisted provider status %j for navigation', async (application,label) => {
+    mockedApi.get.mockResolvedValue(application);
+    renderProfile();
+    expect(await screen.findByRole('link',{name:label as string})).toHaveAttribute('href','/provider-application');
+  });
+
+  it('keeps neutral navigation when application status cannot be read', async () => {
+    mockedApi.get.mockRejectedValue(new Error('Unavailable'));
+    renderProfile();
+    await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/v1/provider-applications/me'));
+    expect(screen.getByRole('link',{name:'Provider application and portal'})).toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Apply to become a provider'})).not.toBeInTheDocument();
+  });
   // ── Auth guard ──────────────────────────────────
 
   describe('auth guard', () => {

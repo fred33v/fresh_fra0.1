@@ -18,7 +18,15 @@ The backend remains the authority for verified accounts, current reviewer author
 - A component journey exercises checkout → sign-in → checkout → simulated purchase retry and checks that the referral reaches purchase creation. API responses and authentication are controlled test doubles; no real Stripe payment or server-side commission is proved by this test.
 - The regression cases fail on the original frontend. Existing authentication return-path protections and the purchase server's eligibility checks remain in force.
 
-The current increment does not establish the entire onboarding journey: a newly registered customer's separate email-verification tab, profile navigation for every application status, and the full deployed provider/reviewer/customer journey need their own acceptance checks.
+## Verification-email handoff and profile navigation
+
+Sign-up, repeated unverified sign-up, an unverified login and verification resends can now carry an optional `returnTo`. The email builder only retains a canonical checkout path for Starter, Professional or Enterprise, with an optional valid provider reference. External destinations, duplicate/extra query parameters, fragments, control characters and invalid references are omitted. Existing requests without this field retain their behaviour. This is navigation context, not trusted sale attribution or a change to verification-token authority.
+
+The destination is embedded in the email URL rather than relying on the original browser tab or browser storage. Backend tests capture each email, check its destination and redeem the real verification token in the test API. A fresh-page frontend journey follows that URL to checkout and verifies the referral in a simulated purchase. Registration, login and resend forwarding are covered separately. Real email delivery and Stripe payment are not exercised by these tests.
+
+Profile navigation reads the current user's application using a user/organisation-scoped query: no application offers Apply; an approved application offers Open provider portal; submitted, declined and suspended applications offer View provider application. While loading or on failure, the link remains neutral instead of claiming there is no application. All destinations still require the existing backend checks.
+
+The separate verification-email handoff and status-specific profile entry are now covered in isolated tests. The full deployed provider/reviewer/customer journey still needs target-environment acceptance; these increments do not establish production readiness.
 
 ## Open acceptance gates
 
