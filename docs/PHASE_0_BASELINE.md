@@ -735,6 +735,17 @@ sections 7 to 11 is satisfied once PR #69 is merged into `main`.
 
 ## 19. picomatch ReDoS (GHSA-fc5q-39xc-vjpf)
 
+**Status, 19 November 2026:** a reviewer reported that
+GHSA-fc5q-39xc-vjpf / CVE-2026-112366 was withdrawn on 18 November 2026.
+That could not be confirmed from the build environment, which cannot read
+GitHub's advisory database. What was checked: `pnpm audit` against the npm
+registry lists 7 advisories, all for Hono, and none for `picomatch`. The
+behaviour described below does not depend on the advisory: on unpatched
+`picomatch` 4.0.7 and 2.3.2, `+(*a)` still takes exponential time on a
+failing file name. So the patches remain a local mitigation, not the
+answer to a confirmed High-severity vulnerability, and keeping them is a
+maintenance choice (see the end of this section).
+
 `picomatch` 4.0.7 and 2.3.2, both locked here, compile a repeated
 extglob whose branch holds a bare `*` (for example `+(*a)`) to a regular
 expression with nested unbounded quantifiers. A failed match then takes
@@ -811,10 +822,14 @@ fails instead of hanging. With the patch applied all of its tests pass;
 against unpatched copies, 26 fail. It also fails if an installed version
 is not 4.0.7 or 2.3.2, so the patch cannot silently stop applying.
 
-`pnpm audit` and Dependabot match on the version number and cannot see
-the patch, so they will keep reporting this advisory. It was not added
-to an audit ignore list. Remove both patches when a fixed release of
-each line is published.
+No audit ignore was added. `pnpm audit` and Dependabot match on version
+numbers and cannot see the patch; as of 19 November `pnpm audit` does
+not report this advisory at all. Remove both patches when a fixed
+release of each line is published, or earlier if the maintenance cost
+outweighs the protection: the patched behaviour is a deliberate change
+(`+(*a)` no longer matches `aa`), and the patterns that reach
+`picomatch` here come from configuration written by us, apart from the
+`sideEffects` route described below.
 
 ### Bundled copies of picomatch
 
