@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { Shield, LogOut, User } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,9 +35,7 @@ export function Header() {
     <header className="print:hidden sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <BrandMark className="h-10 w-10" />
           <span className="hidden font-semibold sm:inline-block">
             Fraud Risk Awareness
           </span>
@@ -74,6 +73,7 @@ export function Header() {
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
+                  {(user.role === 'admin' || user.role === 'employer') && <DropdownMenuItem asChild><Link to="/signing">Documents to sign</Link></DropdownMenuItem>}
                   {user.role === 'admin' && <DropdownMenuItem asChild><Link to="/certificate/manage">Manage certificates</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>

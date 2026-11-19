@@ -7,12 +7,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
+import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Shield, ArrowLeft, Loader2, CheckCircle2, MailCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle2, MailCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { checkoutPath, getPackage } from '@/data/packages';
 
@@ -257,9 +258,7 @@ export default function Auth() {
 
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
-              <Shield className="h-7 w-7 text-accent-foreground" aria-hidden="true" />
-            </div>
+            <BrandMark className="h-14 w-14" />
             <h1 className="text-3xl font-bold text-primary-foreground">
               Fraud Risk Awareness
             </h1>
@@ -299,6 +298,7 @@ export default function Auth() {
             Back
           </Button>
 
+          <div className="mb-6 flex items-center gap-3 lg:hidden"><BrandMark /><span className="text-sm font-semibold tracking-wide">FRAUD-RISK.CO.UK</span></div>
           <AnimatePresence mode="wait">
             {mode === 'signin' ? (
               <motion.div

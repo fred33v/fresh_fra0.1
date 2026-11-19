@@ -18,6 +18,7 @@ import { rateLimit, getClientIp } from '../middleware.js';
 import { appendAudit, verifyAudit } from './audit.js';
 import { CONSENT, newToken, newCode, codeHash, equalHash, sha256 } from './crypto.js';
 import { esignOrigin } from './origin.js';
+import { signingPage, signingStyles, escapeSigningHtml } from './presentation.js';
 // Keep PDF/certificate libraries out of unrelated API startup and disabled deployments.
 type PdfServices = typeof import('./finalise.js');
 const checkFinalisation: PdfServices['checkFinalisation'] = async () =>
@@ -42,13 +43,25 @@ export function createEsignRoutes(
     .min(1)
     .max(120)
     .regex(/^[\x20-\x7e\u00a0-\u00ff]+$/, 'Use printable Latin characters for PDF text');
-  const escape = (s: string) =>
-    s.replace(
-      /[&<>"']/g,
-      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!
+  const escape = escapeSigningHtml;
+  const page = signingPage;
+  function signerError(
+    c: Context,
+    status: 400 | 403 | 409 | 429 | 503,
+    code: string,
+    message: string
+  ): Response {
+    if (!c.req.header('accept')?.includes('text/html')) return jsonError(c, status, code, message);
+    const token = c.req.param('token') ?? c.req.path.split('/')[5];
+    const link = token && /^[A-Za-z0-9_-]+$/.test(token) ? `/api/v1/esign/sign/${token}` : '';
+    return c.html(
+      page(
+        'We could not complete that step',
+        `<p role="alert" class="error-detail">${escape(message)}</p><p>If your code has expired, return to the invitation and request a new one. Keep using the same browser and the original invitation address.</p>${link ? `<a class="back-link" href="${link}">Return to signing</a>` : ''}<p>Reference: <code>${escape(code)}</code></p>`
+      ),
+      status
     );
-  const page = (title: string, content: string) =>
-    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(title)}</title><body><main><h1>${escape(title)}</h1>${content}</main></body></html>`;
+  }
   const success = (c: Context, data: unknown, status: 200 | 201 = 200) =>
     c.json({ success: true, data }, status);
   function origin(): string {
@@ -97,10 +110,20 @@ export function createEsignRoutes(
           typeof body.csrf !== 'string' ||
           !equalHash(body.csrf, csrfValue(c))
         )
-          return jsonError(c, 403, 'ORIGIN_REJECTED', 'Signing origin mismatch');
+          return signerError(
+            c,
+            403,
+            'ORIGIN_REJECTED',
+            'This form was opened from a different address or an older browser session. Reopen the original invitation before trying again.'
+          );
       }
     }
     return next();
+  });
+
+  routes.get('/assets/signing.css', (c) => {
+    c.header('Content-Type', 'text/css; charset=utf-8');
+    return c.body(signingStyles);
   });
 
   // Step 1: multipart fields title and file. Existing API body limit remains in force.
@@ -159,6 +182,23 @@ export function createEsignRoutes(
       201
     );
   });
+  routes.get('/documents', async (c) => {
+    const auth = await manager(c);
+    if (auth instanceof Response) return auth;
+    const query = z
+      .object({ offset: z.coerce.number().int().min(0).max(1000000).default(0) })
+      .safeParse({ offset: c.req.query('offset') });
+    if (!query.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid page');
+    const { rows } = await getDbPool().query(
+      `SELECT d.id,d.title,d.status,d.created_at,d.expires_at,
+        (SELECT count(*)::int FROM public.esign_signers s WHERE s.document_id=d.id) AS signer_count,
+        (SELECT count(*)::int FROM public.esign_signers s WHERE s.document_id=d.id AND s.status='signed') AS signed_count
+       FROM public.esign_documents d WHERE d.organisation_id=$1
+       ORDER BY d.created_at DESC,d.id DESC LIMIT 26 OFFSET $2`,
+      [auth.organisationId, query.data.offset]
+    );
+    return success(c, { documents: rows.slice(0, 25), hasMore: rows.length > 25 });
+  });
   routes.get('/documents/:id', async (c) => {
     const auth = await manager(c);
     if (auth instanceof Response) return auth;
@@ -181,6 +221,8 @@ export function createEsignRoutes(
       signers: signers.rows,
       fields: fields.rows,
       finalSha256: doc.final_sha256,
+      createdAt: doc.created_at,
+      expiresAt: doc.expires_at,
     });
   });
   routes.get('/documents/:id/source', async (c) => {
@@ -498,7 +540,7 @@ export function createEsignRoutes(
       return c.html(
         page(
           'Verify your email',
-          `<p>Request a one-time code at the email address invited by the sender.</p><form method="post" action="${signBase(c)}/code">${csrfField(c)}<button>Send email code</button></form><form method="post" action="${signBase(c)}/verify">${csrfField(c)}<label>One-time code <input name="code" inputmode="numeric" pattern="[0-9]{6}" required autocomplete="one-time-code"></label><button>Verify</button></form>`
+          `${c.req.query('notice') === 'code-sent' ? '<p role="status" class="notice">A code has been sent to your invited email address. Check your inbox and spam folder. It expires in 10 minutes.</p>' : ''}<p>Confirm your email to review and sign this document. Request a one-time code using the button below.</p><form method="post" action="${signBase(c)}/code">${csrfField(c)}<button>Send email code</button></form><form method="post" action="${signBase(c)}/verify">${csrfField(c)}<label>One-time code <input name="code" inputmode="numeric" pattern="[0-9]{6}" required autocomplete="one-time-code"></label><button>Verify</button></form>`
         )
       );
     return c.html(
@@ -530,7 +572,7 @@ export function createEsignRoutes(
       return p;
     });
     if (!p)
-      return jsonError(
+      return signerError(
         c,
         429,
         'CODE_UNAVAILABLE',
@@ -544,9 +586,14 @@ export function createEsignRoutes(
         html: `<p>Your document signing code is <strong>${code}</strong>. It expires in 10 minutes.</p>`,
       });
     } catch {
-      return jsonError(c, 503, 'EMAIL_FAILED', 'Code delivery failed; retry after one minute');
+      return signerError(
+        c,
+        503,
+        'EMAIL_FAILED',
+        'Code delivery failed. Return to signing and retry after one minute.'
+      );
     }
-    return c.redirect(signBase(c), 303);
+    return c.redirect(`${signBase(c)}?notice=code-sent`, 303);
   });
   routes.post('/sign/:token/verify', async (c) => {
     const limited = await rateLimit('esign:verify', { windowMs: 600_000, max: 15 })(c);
@@ -578,7 +625,13 @@ export function createEsignRoutes(
       await appendAudit(db, p.doc.id, 'email_code.verified', p.s.id);
       return true;
     });
-    if (!valid) return jsonError(c, 403, 'INVALID_CODE', 'Invalid, expired or already used code');
+    if (!valid)
+      return signerError(
+        c,
+        403,
+        'INVALID_CODE',
+        'This code is invalid, expired or already used. Request a new code and enter the latest one from your email.'
+      );
     setCookie(c, 'esign_session', session, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -603,7 +656,7 @@ export function createEsignRoutes(
       return jsonError(c, 400, 'VALIDATION_ERROR', 'Choose sign or decline');
     const signature = readable.safeParse(body.signature);
     if (decision === 'sign' && (body.consent !== 'yes' || !signature.success))
-      return jsonError(
+      return signerError(
         c,
         400,
         'CONSENT_REQUIRED',
@@ -643,7 +696,7 @@ export function createEsignRoutes(
       return p.doc.id;
     });
     if (!id)
-      return jsonError(
+      return signerError(
         c,
         409,
         'DECISION_UNAVAILABLE',

@@ -329,6 +329,10 @@ export default function EmployerDashboard() {
             <p className="text-muted-foreground">Fraud risk, compliance and staff coverage across your organisation</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/signing')}>
+              <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
+              Documents to sign
+            </Button>
             {isEnterprise && (<>
             <Button variant="outline" size="sm" onClick={() => navigate('/compliance')}>
               <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
