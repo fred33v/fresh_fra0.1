@@ -43,12 +43,14 @@ function Review({ application: a }: { application: Application }) {
   const [reason, setReason] = useState('');
   const [evidence, setEvidence] = useState(a.qualificationEvidence ?? '');
   const [agreement, setAgreement] = useState(a.agreementDocumentId ?? '');
-  const [status, setStatus] = useState(a.status === 'approved' ? 'suspended' : 'approved');
-  const [packageId, setPackageId] = useState('pkg_basic');
+  const [status, setStatus] = useState(a.status === 'approved' ? 'suspended' : a.status === 'declined' ? 'submitted' : 'approved');
+  const [chosenPackage, setPackageId] = useState('');
   const [reference, setReference] = useState('');
   const [service, setService] = useState(a.serviceInterest === 'training' ? 'training' : 'sales');
   const packages = useQuery({ queryKey: ['provider-package-catalog'],
     queryFn: () => api.get<{ id: string; name: string }[]>('/api/v1/packages') });
+  // Default to the first package actually on offer; a fixed id may be inactive and missing from the list.
+  const packageId = packages.data?.some(p => p.id === chosenPackage) ? chosenPackage : packages.data?.[0]?.id ?? '';
   const mutation = useMutation({ mutationFn: () => api.post(`${endpoint}/${a.id}/review`, {
     revision: a.revision, status, reason,
     qualificationEvidence: status === 'approved' && a.serviceInterest !== 'sales' ? evidence : undefined,
@@ -68,10 +70,11 @@ function Review({ application: a }: { application: Application }) {
     <p>{a.applicantEmail} · {a.serviceInterest} · {a.status}</p>
     {a.trainingExperience && <p className="whitespace-pre-wrap">Training experience: {a.trainingExperience}</p>}
     {a.reviewReason && <p>Last decision: {a.reviewReason}</p>}
-    {a.status !== 'declined' && <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <Label htmlFor={`${a.id}-decision`}>Decision</Label>
       <select id={`${a.id}-decision`} value={status} onChange={e => setStatus(e.target.value)} className="block w-full rounded border bg-background p-2">
-        {a.status !== 'approved' && <option value="approved">Approve</option>}
+        {a.status === 'declined' && <option value="submitted">Reopen for review</option>}
+        {a.status !== 'approved' && a.status !== 'declined' && <option value="approved">Approve</option>}
         {a.status === 'submitted' && <option value="declined">Decline</option>}
         {a.status === 'approved' && <option value="suspended">Suspend access</option>}
       </select>
@@ -87,7 +90,7 @@ function Review({ application: a }: { application: Application }) {
       </>}
       {mutation.isError && <p role="alert">{mutation.error.message}</p>}
       <Button disabled={mutation.isPending}>Save review decision</Button>
-    </form>}
+    </form>
     {a.status === 'approved' && <form className="space-y-3" onSubmit={e => { e.preventDefault(); assignment.mutate(); }}>
       <h3 className="font-semibold">Offer a package assignment</h3>
       <Label htmlFor={`${a.id}-package`}>Package</Label>

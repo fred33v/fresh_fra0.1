@@ -104,7 +104,7 @@ export default routes;
 // Being an administrator of an applicant's company is not recruitment authority.
 const reviewSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
-  status: z.enum(['approved', 'declined', 'suspended']),
+  status: z.enum(['approved', 'declined', 'suspended', 'submitted']), // 'submitted' reopens a declined application
   reason: z.string().trim().min(10).max(2000),
   qualificationEvidence: z.string().trim().min(10).max(4000).optional(),
   agreementDocumentId: z.string().uuid().optional(),
@@ -265,7 +265,7 @@ async function snapshotRead(db: { query: (sql: string) => Promise<unknown> }) {
   await db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
 }
 
-async function commissionStatement(db: Parameters<typeof providerBalance>[0], id: string) {
+async function commissionStatement(db: Parameters<typeof providerBalance>[0], id: string, forReviewer: boolean) {
   const currencies = (await db.query(`SELECT DISTINCT currency FROM public.provider_commission_entries WHERE application_id=$1
     UNION SELECT currency FROM public.provider_payouts WHERE application_id=$1`,[id])).rows;
   const balances = [];
@@ -274,6 +274,8 @@ async function commissionStatement(db: Parameters<typeof providerBalance>[0], id
     FROM public.provider_commission_entries WHERE application_id=$1 ORDER BY id DESC LIMIT 200`,[id])).rows;
   const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",
     created_at AS "createdAt",prepared_by AS "preparedBy",approved_by AS "approvedBy" FROM public.provider_payouts WHERE application_id=$1 ORDER BY created_at DESC LIMIT 200`,[id])).rows;
+  // Operator staff identifiers are internal: only reviewers see who prepared or approved a payout.
+  if (!forReviewer) for (const payout of payouts) { delete payout.preparedBy; delete payout.approvedBy; }
   return {balances,entries,payouts};
 }
 
@@ -285,7 +287,7 @@ routes.get('/me/statement', async c => {
     await recruitmentIdentity(db,auth);
     const {rows:[a]}=await db.query(`SELECT id FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2`,[auth.userId,auth.organisationId]);
     if (!a) throw new RecruitmentError(404,'Application not found');
-    return commissionStatement(db,a.id);
+    return commissionStatement(db,a.id,false);
   }));
 });
 routes.get('/:id/statement', async c => {
@@ -297,7 +299,7 @@ routes.get('/:id/statement', async c => {
     await recruitmentIdentity(db,auth,true);
     const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
-    return commissionStatement(db,a.id);
+    return commissionStatement(db,a.id,true);
   }));
 });
 

@@ -141,6 +141,14 @@ try {
   const declined = await call(declinedUser,'/me',{companyName:'Another company',serviceInterest:'sales'},201);
   await call(admin,`/${declined.id}/review`,{revision:0,status:'declined',reason:'Application does not meet requirements'});
   await call(admin,`/${declined.id}/assignments`,{...offer,reference:randomUUID()},409);
+  // A declined applicant is not stuck: a reviewer can reopen the application, but cannot approve it directly.
+  const reopenReason='Evidence supplied after the decision';
+  await call(admin,`/${declined.id}/review`,{revision:1,status:'approved',reason:reopenReason},409);
+  await call(declinedUser,`/${declined.id}/review`,{revision:1,status:'submitted',reason:reopenReason},403);
+  const reopened=await call(admin,`/${declined.id}/review`,{revision:1,status:'submitted',reason:reopenReason});
+  assert.equal(reopened.status,'submitted');
+  await call(admin,`/${declined.id}/review`,{revision:2,status:'submitted',reason:reopenReason},409);
+  await call(admin,`/${declined.id}/review`,{revision:2,status:'declined',reason:'Application still does not meet requirements'});
   await assert.rejects(pool.query('DELETE FROM public.provider_recruitment_audit WHERE application_id=$1',[application.id])); checks++;
   // Financial integration: real PostgreSQL and the existing isolated Stripe snapshot fixture.
   const { attributeProviderSale, commissionTarget, reconcileProviderCommission, refreshProviderPayments } = await import('../src/provider-commissions.ts');
@@ -204,6 +212,10 @@ try {
   await call(second,`/payouts/${corrected.id}/action`,record);
   await call(second,`/payouts/${corrected.id}/action`,record); // Idempotent replay.
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].recorded,4250);assert.equal(statement.balances[0].available,0);
+  // Operator staff identifiers are for reviewers only; the provider's own statement must not carry them.
+  assert(statement.payouts.length>0 && statement.payouts.every(p=>!('preparedBy' in p) && !('approvedBy' in p)));
+  const staffView=await call(admin,`/${application.id}/statement`);
+  assert(staffView.payouts.length>0 && staffView.payouts.every(p=>p.preparedBy));
   provider.refund(30000);await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-full-refund');
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);assert.equal(statement.balances[0].available,-4250);
   await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:1},409);

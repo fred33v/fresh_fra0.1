@@ -32,7 +32,7 @@ export async function recruitmentAudit(db: DbExecutor, id: string, actor: string
 }
 
 export type ReviewDecision = {
-  revision: number; status: 'approved' | 'declined' | 'suspended'; reason: string;
+  revision: number; status: 'approved' | 'declined' | 'suspended' | 'submitted'; reason: string;
   qualificationEvidence?: string; agreementDocumentId?: string;
 };
 
@@ -44,6 +44,8 @@ export async function reviewProvider(db: PoolClient, auth: AuthContext, id: stri
   if (application.revision !== decision.revision) throw new RecruitmentError(409, 'Application changed; reload before reviewing');
   if (decision.status === 'suspended' && application.status !== 'approved')
     throw new RecruitmentError(409, 'Only approved providers can be suspended');
+  if (decision.status === 'submitted' && application.status !== 'declined')
+    throw new RecruitmentError(409, 'Only declined applications can be reopened');
   if (decision.status === 'declined' && application.status !== 'submitted')
     throw new RecruitmentError(409, 'Only submitted applications can be declined');
   if (decision.status === 'approved' && !['submitted', 'suspended'].includes(application.status))
@@ -79,7 +81,7 @@ export async function reviewProvider(db: PoolClient, auth: AuthContext, id: stri
     await db.query(`UPDATE public.provider_assignments SET status='cancelled',decided_at=now()
       WHERE application_id=$1 AND status IN ('offered','accepted')`, [id]);
   }
-  await recruitmentAudit(db, id, auth.userId, `application.${decision.status}`, {
+  await recruitmentAudit(db, id, auth.userId, decision.status === 'submitted' ? 'application.reopened' : `application.${decision.status}`, {
     revision: saved.revision, reason: decision.reason, agreementDocumentId: saved.agreement_document_id,
     qualificationEvidence: decision.qualificationEvidence ?? null,
   });

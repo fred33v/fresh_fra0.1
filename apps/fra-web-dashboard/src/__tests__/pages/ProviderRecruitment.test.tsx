@@ -55,3 +55,30 @@ it('submits an approval with concurrency revision, agreement and qualification e
     revision:3,status:'approved',reason:'Checked references and agreement',qualificationEvidence:'Register verified and demo observed',agreementDocumentId:'agreement-id',
   }));
 });
+const reviewQueue = (application: object, packages: object[] = []) => vi.mocked(api.get).mockImplementation(async path =>
+  path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} : path.includes('/review?') ? [application] :
+  path.endsWith('/api/v1/packages') ? packages : []);
+it('lets a reviewer reopen a declined application instead of leaving it stuck', async () => {
+  reviewQueue({id:'application',applicantName:'Alice',applicantEmail:'alice@example.test',companyName:'Sales Ltd',
+    serviceInterest:'sales',status:'declined',revision:2});
+  vi.mocked(api.post).mockResolvedValue({});
+  page(<ProviderReview />);
+  const decision = await screen.findByLabelText('Decision');
+  expect(decision).toHaveValue('submitted');
+  expect(screen.queryByRole('option',{name:'Approve'})).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Decision reason (visible to applicant)'),{target:{value:'Evidence supplied later'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save review decision'}));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/v1/provider-applications/application/review',
+    {revision:2,status:'submitted',reason:'Evidence supplied later'}));
+});
+it('offers the first package in the catalogue, not a fixed id that may be inactive', async () => {
+  reviewQueue({id:'application',applicantName:'Alice',applicantEmail:'alice@example.test',companyName:'Sales Ltd',
+    serviceInterest:'sales',status:'approved',revision:1},[{id:'pkg_pro',name:'Professional'},{id:'pkg_plus',name:'Plus'}]);
+  vi.mocked(api.post).mockResolvedValue({});
+  page(<ProviderReview />);
+  await screen.findByRole('option',{name:'Professional'});
+  fireEvent.change(screen.getByLabelText('Unique work reference'),{target:{value:'WORK-1'}});
+  fireEvent.click(screen.getByRole('button',{name:'Offer assignment'}));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/v1/provider-applications/application/assignments',
+    {packageId:'pkg_pro',reference:'WORK-1',service:'sales'}));
+});
