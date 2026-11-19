@@ -230,7 +230,8 @@ describe('Checkout', () => {
       await user.click(screen.getByRole('button', { name: /Continue to payment/ }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent('Sign in or create your organisation account to continue.');
-      expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth?package=Professional');
+      expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href',
+        '/auth?returnTo=' + encodeURIComponent('/checkout?package=Professional'));
       expect(screen.getByRole('button', { name: /Continue to payment/ })).toBeEnabled();
     });
 

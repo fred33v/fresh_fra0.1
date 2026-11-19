@@ -23,7 +23,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: Error | null }>;
   /** Confirms the email from the link's token and signs the user in */
   verifyEmail: (token: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string, returnTo?: string) => Promise<{ error: Error | null }>;
   /** Redeems an employer's access code: creates the employee account and signs the new user in */
   joinWithKeypass: (input: { code: string; email: string; password: string; name?: string }) => Promise<{ error: Error | null; emailConfirmationRequired?: boolean }>;
   signOut: () => Promise<void>;
@@ -36,6 +36,7 @@ interface SignUpMetadata {
   organization_name: string;
   sector: 'public' | 'charity' | 'private';
   job_title?: string;
+  returnTo?: string;
 }
 
 type MeResponse = AuthUser & {
@@ -148,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         organisationName: metadata.organization_name,
         jobTitle: metadata.job_title,
         sector: metadata.sector,
+        ...(metadata.returnTo ? { returnTo: metadata.returnTo } : {}),
       });
       return { error: null };
     } catch (err: unknown) {
@@ -167,11 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, returnTo?: string) => {
     try {
       const data = await api.post<AuthResponse>('/api/v1/auth/login', {
         email,
         password,
+        ...(returnTo ? { returnTo } : {}),
       });
 
       setTokens(data.accessToken, data.refreshToken);

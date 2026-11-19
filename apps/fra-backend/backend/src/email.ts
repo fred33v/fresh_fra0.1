@@ -16,6 +16,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { createLogger } from './logger.js';
 import { EMAIL_VERIFY_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from './types.js';
 import { webAppUrl } from './stripe.js';
+import { checkoutReturnPath } from './checkout-return.js';
 
 const logger = createLogger('email');
 
@@ -96,8 +97,10 @@ export function passwordResetEmail(to: string, name: string, token: string): Ema
   };
 }
 
-export function verifyEmailEmail(to: string, name: string, token: string): Email {
-  const url = `${webAppUrl()}/auth?mode=verify&token=${encodeURIComponent(token)}`;
+export function verifyEmailEmail(to: string, name: string, token: string, returnTo?: string): Email {
+  const destination = checkoutReturnPath(returnTo);
+  const url = `${webAppUrl()}/auth?mode=verify&token=${encodeURIComponent(token)}` +
+    (destination ? `&returnTo=${encodeURIComponent(destination)}` : '');
   const hours = Math.round(EMAIL_VERIFY_TTL_SECONDS / 3600);
   const lines = [
     `Hello ${name},`,

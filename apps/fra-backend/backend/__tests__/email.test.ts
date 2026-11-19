@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { app, createAuthenticatedUser } from './helpers';
-import { sendEmail, setEmailTransport, passwordResetEmail, type Email } from '../src/email';
+import { sendEmail, setEmailTransport, passwordResetEmail, verifyEmailEmail, type Email } from '../src/email';
 
 const API = 'http://localhost/api/v1';
 const post = (path: string, body: unknown) =>
@@ -73,6 +73,35 @@ describe('Password reset email', () => {
 
 describe('Sign-up emails', () => {
   const signup = (email: string) => post('/auth/signup', { email, password: 'SecurePass123!', name: 'New Person' });
+
+  it.each(['signup', 'repeat-signup', 'login', 'resend'])('preserves checkout in a usable verification email from %s', async route => {
+    const email = `referral-${crypto.randomUUID()}@example.test`;
+    const returnTo = '/checkout?package=Professional&provider=PRV-' + 'a'.repeat(32);
+    if (route !== 'signup') { await signup(email); await flush(); sent.length = 0; }
+    const payload = {email,password:'SecurePass123!',name:'New Person',returnTo};
+    const response = await post(route === 'login' ? '/auth/login' : route === 'resend' ? '/auth/resend-verification' : '/auth/signup',payload);
+    expect(response.status).toBe(route === 'login' ? 403 : 200);
+    await flush();
+    expect(sent).toHaveLength(1);
+    const link = new URL(sent[0].text.match(/https?:\/\/[^\s]+/)![0]);
+    expect(link.origin).toBe('http://localhost:8080');
+    expect(link.searchParams.get('returnTo')).toBe(returnTo);
+    expect((await post('/auth/verify-email',{token:link.searchParams.get('token')})).status).toBe(200);
+  });
+
+  it.each([
+    'https://evil.example/checkout?package=Starter', '//evil.example/checkout?package=Starter',
+    '/checkout?package=Starter&provider=bad', '/checkout?package=Starter&package=Enterprise',
+    '/checkout?package=Starter&price=1', '/checkout?package=Unknown',
+    '/checkout?package=Starter#https://evil.example', '/auth?returnTo=//evil.example',
+    '/checkout?package=Starter\\evil', '/checkout?package=Starter\n',
+  ])('does not attach an unsafe or ambiguous destination (%s)', returnTo => {
+    const mail = verifyEmailEmail('customer@example.test','Customer','token',returnTo);
+    const link = new URL(mail.text.match(/https?:\/\/[^\s]+/)![0]);
+    expect(link.origin).toBe('http://localhost:8080');
+    expect(link.pathname).toBe('/auth');
+    expect(link.searchParams.has('returnTo')).toBe(false);
+  });
 
   it('emails a confirmation link that opens the app with the token', async () => {
     const email = `new-${crypto.randomUUID()}@example.test`;

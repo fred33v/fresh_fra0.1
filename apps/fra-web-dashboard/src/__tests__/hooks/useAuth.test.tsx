@@ -187,6 +187,17 @@ describe('AuthProvider', () => {
   // ── signUp ──────────────────────────────────────
 
   describe('signUp', () => {
+    it('passes a checkout destination to signup without authenticating the pending user', async () => {
+      const {result} = renderHook(() => useAuth(), {wrapper});
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      const returnTo = '/checkout?package=Starter&provider=PRV-' + 'a'.repeat(32);
+      mockApi.post.mockResolvedValueOnce({pendingVerification:true});
+      await act(async () => { await result.current.signUp('new@example.test','StrongPass123',{
+        full_name:'New Customer',organization_name:'Customer Ltd',sector:'private',returnTo,
+      }); });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/auth/signup',expect.objectContaining({returnTo}));
+      expect(mockSetTokens).not.toHaveBeenCalled();
+    });
     it('calls /auth/signup and does not sign in until the email is confirmed', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -279,6 +290,16 @@ describe('AuthProvider', () => {
   // ── signIn ──────────────────────────────────────
 
   describe('signIn', () => {
+    it('passes checkout context when login needs to reissue a verification email', async () => {
+      const {result} = renderHook(() => useAuth(), {wrapper});
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      const returnTo = '/checkout?package=Starter';
+      mockApi.post.mockRejectedValueOnce(new Error('Email not verified'));
+      await act(async () => { await result.current.signIn('new@example.test','StrongPass123',returnTo); });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/auth/login',{
+        email:'new@example.test',password:'StrongPass123',returnTo,
+      });
+    });
     it('calls /auth/login, sets tokens, then hydrates from /me', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.isLoading).toBe(false));

@@ -87,6 +87,7 @@ export default function Auth() {
   // Back to the page that asked for sign-in, if it is a page on this site
   const returnTo = safeReturnPath(searchParams.get('returnTo'));
   const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? '/dashboard';
+  const checkoutReturn = afterAuthPath.startsWith('/checkout?') ? afterAuthPath : undefined;
 
   useEffect(() => {
     if (user) {
@@ -167,7 +168,7 @@ export default function Auth() {
   const resendConfirmation = async (email: string) => {
     setIsLoading(true);
     try {
-      await api.post('/api/v1/auth/resend-verification', { email });
+      await api.post('/api/v1/auth/resend-verification', { email, ...(checkoutReturn ? { returnTo: checkoutReturn } : {}) });
     } catch (_err) {
       // The reply is the same either way, so there is nothing more to show
     }
@@ -198,7 +199,9 @@ export default function Auth() {
 
   const handleSignIn = async (data: SignInFormData) => {
     setIsLoading(true);
-    const { error } = await signIn(data.email, data.password);
+    const { error } = checkoutReturn
+      ? await signIn(data.email, data.password, checkoutReturn)
+      : await signIn(data.email, data.password);
     
     if (error) {
       if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
@@ -226,6 +229,7 @@ export default function Auth() {
       organization_name: data.organization_name,
       sector: data.sector,
       job_title: data.job_title,
+      ...(checkoutReturn ? { returnTo: checkoutReturn } : {}),
     });
     
     if (error) {

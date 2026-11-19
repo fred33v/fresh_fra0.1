@@ -11,6 +11,33 @@ function page(component: React.ReactNode) {
   return render(<MemoryRouter><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}>{component}</QueryClientProvider></MemoryRouter>);
 }
 beforeEach(() => vi.resetAllMocks());
+it('gives an approved provider a customer link to copy without opening their own checkout', async () => {
+  const code = 'PRV-' + 'a'.repeat(32);
+  vi.mocked(api.get).mockImplementation(async path => path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} :
+    path.endsWith('/assignments') ? [{id:'work',packageName:'Professional',reference:'SALE-1',service:'sales',status:'accepted'}] :
+    {companyName:'Sales Ltd',status:'approved',providerCode:code});
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {configurable:true,value:{writeText}});
+  try {
+    page(<ProviderApplication />);
+    expect(await screen.findByRole('heading',{name:'Your provider portal'})).toBeInTheDocument();
+    const link = await screen.findByLabelText('Customer referral link for SALE-1');
+    const expected = new URL('/checkout?package=Professional&provider=' + code, window.location.origin).href;
+    expect(link).toHaveValue(expected);
+    expect(screen.queryByRole('link',{name:/Open referral checkout/})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Copy customer link for SALE-1'}));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
+    expect(await screen.findByText('Customer link copied.')).toBeInTheDocument();
+    writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
+    fireEvent.click(screen.getByRole('button',{name:'Copy customer link for SALE-1'}));
+    expect(await screen.findByText('Copy unavailable. Select and copy the customer link above.')).toBeInTheDocument();
+    expect(link).toHaveValue(expected);
+  } finally {
+    if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
 it('submits a training application with experience and verified identity supplied by server', async () => {
   vi.mocked(api.get).mockImplementation(async path => path.endsWith('/statement') ? {balances:[],entries:[],payouts:[]} : null);
   vi.mocked(api.post).mockResolvedValue({companyName:'Training Ltd',status:'submitted'});

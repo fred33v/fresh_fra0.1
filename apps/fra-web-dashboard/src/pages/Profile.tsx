@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
@@ -28,6 +29,15 @@ export default function Profile() {
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const application = useQuery<{status:string} | null>({
+    queryKey: ['provider-application', user?.userId, user?.organisationId],
+    queryFn: () => api.get('/api/v1/provider-applications/me'),
+    enabled: !!user,
+    retry: false,
+  });
+  const providerEntry = application.data?.status === 'approved' ? 'Open provider portal' :
+    application.data ? 'View provider application' :
+    application.isSuccess ? 'Apply to become a provider' : 'Provider application and portal';
 
   if (!user) return null;
 
@@ -81,7 +91,7 @@ export default function Profile() {
           </div>
           <h1 className="text-2xl font-bold">{displayName}</h1>
           <Badge variant="secondary" className="mt-2">{roleBadge}</Badge>
-          <Link to="/provider-application" className="mt-3 block text-sm text-primary underline">Apply to become a provider</Link>
+          <Link to="/provider-application" className="mt-3 block text-sm text-primary underline">{providerEntry}</Link>
         </div>
 
         <Card className="mb-6">
