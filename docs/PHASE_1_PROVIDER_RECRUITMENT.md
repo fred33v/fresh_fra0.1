@@ -45,7 +45,7 @@ The Web dashboard needs its usual `VITE_API_URL` pointing to that backend. Open 
 | POST | `/me` | Submit/revise own application with `version`, `profile`, `acknowledged: true` |
 | GET | `/admin/applications?status=submitted&offset=0` | Appointed current administrator; 25 per page |
 | GET | `/admin/applications/:id` | Appointed current administrator; includes self-review restriction |
-| POST | `/admin/applications/:id/review` | Appointed non-self reviewer; `version`, `status`, applicant-visible `message` |
+| POST | `/admin/applications/:id/review` | Appointed non-self reviewer; `version`, `status`, applicant-visible `message`; approval also requires `engagementReviewed: true` |
 
 The server owns status, contact email, 1700 basis points, acknowledgement time and terms version (`provider-programme-2026-11`). Extra fields and invalid state transitions are rejected. The fixed commercial rule is not a payout entitlement or signed service contract.
 
@@ -54,7 +54,7 @@ The server owns status, contact email, 1700 basis points, acknowledgement time a
 - Pure policy tests cover acknowledgement, server-owned rate/status, website schemes/credentials, profile limits and review requirements.
 - React tests cover submission, disabled service, historical visibility, no self-review and confirmation cancellation.
 - `scripts/provider-recruitment-integration.mjs` requires `PROVIDER_TEST_DATABASE=1`, loopback PostgreSQL and the dedicated database name `provider_recruitment_test`. It never contacts Stripe, SMTP, AWS or production.
-- Eight database scenarios cover gates, private/appointee access, revision preservation, concurrent reviews, suspension/reinstatement, stale authority, resubmission, rollback on injected event failure, duplicate creation and immutable retention boundaries.
+- Nine database scenarios cover gates, private/appointee access, revision preservation, concurrent reviews, suspension/reinstatement, stale authority, resubmission, rollback on injected event failure, duplicate creation and immutable retention boundaries.
 - Optional `PROVIDER_BROWSER_TEST=1` adds a real Chromium applicant/reviewer journey against the same real API and PostgreSQL. Only loopback API traffic is forwarded to the isolated API; no API responses are mocked. Fixture JWTs identify verified disposable database users. An optional `PROVIDER_BROWSER_ARTIFACTS` directory captures synthetic screenshots, not passwords/tokens.
 - Database CI creates a separate `provider_recruitment_test` database, applies all migrations, runs the scenarios, and runs the browser journey after installing Chromium. Nothing is run on the owner's local application database or Neon production database.
 
@@ -67,3 +67,26 @@ The server owns status, contact email, 1700 basis points, acknowledgement time a
 5. Sandbox end-to-end acceptance, then a separate production readiness decision.
 
 The existing local signing result and owner-approved retention policy remain in force. No purge, live payout, live charge or deployment was performed here.
+
+
+## Owner-confirmed independent model and candidate forms — 19 November 2026
+
+The owner clarified the intended model as **independent services, with no guaranteed minimum work or income**, paid by the existing **17% VAT-exclusive referred-package-sales** rule. It is not a payroll zero-hours employment contract. This records the intended commercial arrangement, not a legal determination about any individual.
+
+New/revised applications require:
+
+- Business legal structure; company/LLP registration number where applicable; business correspondence address and declared VAT registration/number.
+- Availability and factual proposed arrangements: ability to decline assignments, control over delivery method, other clients and personal-service/substitution arrangements. Uncertainty is accepted for human discussion and never converted into an automatic status verdict.
+- Separate acknowledgements of no guaranteed minimum, the 17% referral basis and accuracy, plus a typed declaration name matching the application name.
+
+No bank details, National Insurance number or personal UTR are requested by the forms. The VAT field records a claim, not verification, and a candidate's own invoice VAT is separate from the VAT-exclusive package-revenue basis. The forms are an application declaration, not an executed services agreement or a qualified signature.
+
+The actual working arrangement still needs appropriate employment-rights/tax consideration before engagement. GOV.UK distinguishes tax status from employment-rights status; HMRC's CEST guidance addresses a specific actual/expected engagement. The application does not replace either assessment: [self-employed and contractor status](https://www.gov.uk/employment-status/selfemployed-contractor), [HMRC CEST guidance](https://www.gov.uk/guidance/check-employment-status-for-tax).
+
+Versioned data is stored in `profile.engagement` (`model: independent_no_minimum`, `formVersion: independent-engagement-2026-11-v1`) and the existing retained revision snapshots. Migration 037 already provides the JSON storage; no applied migration is rewritten and no extra migration/backfill is needed. Legacy records remain readable with an explicit missing-forms notice. Missing forms block new approval; the reviewer requests a revision rather than fabricating historical declarations or erasing an earlier decision.
+
+Approval now also requires an explicit reviewer acknowledgement of reading the independent-engagement information. Its version and reviewer confirmation are retained in the approval event. This acknowledgement is administrative review, not tax-status determination or contract execution. Programme approval and completed forms still leave payouts inactive.
+
+Validation was extended to incomplete/contradictory declarations, matching names, conditional company/VAT details, legacy read/resubmission and approval gates. The real-browser journey fills the new candidate forms and records reviewer acknowledgement against the isolated real API/PostgreSQL.
+
+Before financial activation, review the actual working arrangements and applicable employment/tax status, and execute the appropriate services agreement. Candidate declarations and programme approval do not complete these steps.

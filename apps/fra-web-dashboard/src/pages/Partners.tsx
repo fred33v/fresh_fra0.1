@@ -18,9 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import IndependentEngagementForm from '@/components/providers/IndependentEngagementForm';
 import { ProviderDetails, ProviderHistory } from '@/components/providers/ProviderDetails';
 import {
   emptyProviderProfile,
+  independentForm,
+  independentDeclarationsReady,
   providerExpertiseLabels,
   providerKindLabels,
   type ProviderApplication,
@@ -46,14 +49,16 @@ export default function Partners() {
     staleTime: 0,
   });
   const application = query.data?.application;
-  const [profile, setProfile] = useState<ProviderProfile>(emptyProviderProfile);
+  const [profile, setProfile] = useState<ProviderProfile>(() =>
+    independentForm(emptyProviderProfile)
+  );
   const [acknowledged, setAcknowledged] = useState(false),
     [editing, setEditing] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   useEffect(() => {
-    setProfile(application?.profile ?? emptyProviderProfile);
+    setProfile(independentForm(application?.profile ?? emptyProviderProfile));
     setAcknowledged(false);
   }, [application]);
   const change = <K extends keyof ProviderProfile>(key: K, value: ProviderProfile[K]) =>
@@ -112,8 +117,8 @@ export default function Partners() {
           </p>
           <h2 className="text-2xl font-medium">Build stronger prevention, together.</h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">
-            Apply as a professional, a package referrer, or both. Applications are reviewed by our
-            team before programme approval.
+            Apply as an independent professional, a package referrer, or both, with no guaranteed
+            minimum work or income. Applications are reviewed by our team before programme approval.
           </p>
           <p className="mt-4 max-w-2xl border-t border-white/15 pt-4 text-sm text-slate-200">
             The provider or referrer receives{' '}
@@ -165,6 +170,8 @@ export default function Partners() {
                     {editable && (
                       <Button
                         onClick={() => {
+                          setProfile(independentForm(application.profile));
+                          setAcknowledged(false);
                           setEditing(true);
                           setError('');
                         }}
@@ -317,6 +324,13 @@ export default function Partners() {
                         />
                         <p className="mt-1 text-xs text-muted-foreground">30–3,000 characters.</p>
                       </div>
+                      {profile.engagement && (
+                        <IndependentEngagementForm
+                          value={profile.engagement}
+                          onChange={(engagement) => change('engagement', engagement)}
+                          country={profile.country}
+                        />
+                      )}
                       <label className="flex items-start gap-3 rounded-lg bg-muted/30 p-4 text-sm">
                         <input
                           type="checkbox"
@@ -345,7 +359,14 @@ export default function Partners() {
                             Cancel
                           </Button>
                         )}
-                        <Button disabled={busy || !acknowledged || !profile.expertise.length}>
+                        <Button
+                          disabled={
+                            busy ||
+                            !acknowledged ||
+                            !profile.expertise.length ||
+                            !independentDeclarationsReady(profile)
+                          }
+                        >
                           {busy
                             ? 'Submitting…'
                             : application

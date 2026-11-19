@@ -7,6 +7,8 @@ import { hasDatabase, jsonError, requireAuth } from '../helpers.js';
 import { rateLimit } from '../middleware.js';
 import {
   PROVIDER_COMMISSION_BPS,
+  PROVIDER_ENGAGEMENT_VERSION,
+  hasCompleteIndependentEngagement,
   PROVIDER_TERMS_VERSION,
   PROVIDER_STATUSES,
   providerSubmissionSchema,
@@ -87,10 +89,26 @@ async function administrator(
       ? user
       : jsonError(c, 403, 'FORBIDDEN', 'Current appointed programme reviewer authority required');
 }
-async function evidence(db: DbExecutor, application: Application, by: Actor, event: string) {
+async function evidence(
+  db: DbExecutor,
+  application: Application,
+  by: Actor,
+  event: string,
+  reviewConfirmation?: { engagementReviewed: boolean; engagementVersion: string | null }
+) {
   await db.query(
     'INSERT INTO public.provider_application_events(application_id,version,actor_id,actor_role,event,snapshot) VALUES($1,$2,$3,$4,$5,$6)',
-    [application.id, application.version, by.id, by.role, event, application]
+    [
+      application.id,
+      application.version,
+      by.id,
+      by.role,
+      event,
+      {
+        ...application,
+        ...(reviewConfirmation ? { review_confirmation: reviewConfirmation } : {}),
+      },
+    ]
   );
 }
 function present(application: Application) {
@@ -107,6 +125,7 @@ function present(application: Application) {
     reviewedAt: application.reviewed_at,
     reviewMessage: application.review_message,
     payoutsActive: false,
+    independentEngagementComplete: hasCompleteIndependentEngagement(application.profile),
   };
 }
 async function detail(db: DbExecutor, application: Application) {
@@ -126,6 +145,8 @@ async function detail(db: DbExecutor, application: Application) {
       contactEmail: row.snapshot.contact_email,
       status: row.snapshot.status,
       message: row.snapshot.review_message,
+      engagementReviewed: row.snapshot.review_confirmation?.engagementReviewed === true,
+      engagementVersion: row.snapshot.review_confirmation?.engagementVersion ?? null,
     })),
   };
 }
@@ -160,6 +181,8 @@ routes.get('/me', async (c) => {
       termsVersion: PROVIDER_TERMS_VERSION,
       payoutsActive: false,
       canReview: programmeReviewer(user),
+      engagementModel: 'independent_no_minimum',
+      engagementVersion: PROVIDER_ENGAGEMENT_VERSION,
     },
   });
 });
@@ -308,13 +331,23 @@ routes.post('/admin/applications/:id/review', async (c) => {
         'APPLICATION_CHANGED',
         'This application has changed or the decision is unavailable. Refresh before reviewing'
       );
+    if (parsed.data.status === 'approved' && !hasCompleteIndependentEngagement(application.profile))
+      return jsonError(
+        c,
+        409,
+        'ENGAGEMENT_FORM_REQUIRED',
+        'The candidate must complete the independent engagement forms before approval. Request a revised application.'
+      );
     const updated = (
       await db.query<Application>(
         `UPDATE public.provider_applications SET status=$2,version=version+1,review_message=$3,reviewed_by=$4,reviewed_at=now(),updated_at=now() WHERE id=$1 RETURNING *`,
         [application.id, parsed.data.status, parsed.data.message, user.id]
       )
     ).rows[0];
-    await evidence(db, updated, user, `application.${parsed.data.status}`);
+    await evidence(db, updated, user, `application.${parsed.data.status}`, {
+      engagementReviewed: parsed.data.status === 'approved' && parsed.data.engagementReviewed,
+      engagementVersion: parsed.data.status === 'approved' ? PROVIDER_ENGAGEMENT_VERSION : null,
+    });
     return success(c, { application: await detail(db, updated), canReview: true });
   });
 });

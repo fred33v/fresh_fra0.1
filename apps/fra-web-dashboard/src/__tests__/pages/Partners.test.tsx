@@ -44,6 +44,29 @@ beforeEach(() => {
     id: 'app-1',
     profile: {
       fullName: 'Alex Morgan',
+      engagement: {
+        model: 'independent_no_minimum',
+        formVersion: 'independent-engagement-2026-11-v1',
+        legalStructure: 'sole_trader',
+        companyNumber: '',
+        businessAddress: {
+          line1: '10 Example Street',
+          line2: '',
+          city: 'London',
+          postalCode: 'SW1A 1AA',
+        },
+        vatRegistered: 'no',
+        vatNumber: '',
+        availability: 'Available for independently agreed assignments on weekdays.',
+        declineAssignments: 'yes',
+        deliveryControl: 'self',
+        otherClients: 'yes',
+        personalService: 'substitution_by_agreement',
+        declarationName: 'Alex Morgan',
+        noMinimumAccepted: true,
+        commissionAccepted: true,
+        informationAccurate: true,
+      },
       businessName: 'Example Prevention',
       country: 'GB',
       kind: 'both',
@@ -61,6 +84,7 @@ beforeEach(() => {
     reviewedAt: null,
     reviewMessage: null,
     payoutsActive: false,
+    independentEngagementComplete: true,
     history: [],
   };
   mocked.get.mockResolvedValue({ application: null, policy });
@@ -78,6 +102,44 @@ it('requires explicit acknowledgement and submits only applicant-owned fields', 
     screen.getByLabelText('Experience and proposed contribution'),
     application.profile.experience
   );
+  await user.selectOptions(screen.getByLabelText('Business legal structure'), 'sole_trader');
+  await user.type(
+    screen.getByLabelText('Business correspondence address'),
+    application.profile.engagement!.businessAddress.line1
+  );
+  await user.type(
+    screen.getByLabelText('Town / city'),
+    application.profile.engagement!.businessAddress.city
+  );
+  await user.type(
+    screen.getByLabelText('Postcode / postal code'),
+    application.profile.engagement!.businessAddress.postalCode
+  );
+  await user.selectOptions(screen.getByLabelText('Are you VAT registered?'), 'no');
+  await user.type(
+    screen.getByLabelText('Availability and preferred working arrangements'),
+    application.profile.engagement!.availability
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Can you choose whether to accept a proposed assignment?'),
+    'yes'
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Who would normally decide how the agreed services are delivered?'),
+    'self'
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Do you currently provide services to other clients?'),
+    'yes'
+  );
+  await user.selectOptions(
+    screen.getByLabelText('What personal-service arrangement is proposed?'),
+    'substitution_by_agreement'
+  );
+  await user.click(screen.getByRole('checkbox', { name: /I understand that no minimum/ }));
+  await user.click(screen.getByRole('checkbox', { name: /I understand the 17%/ }));
+  await user.click(screen.getByRole('checkbox', { name: /I confirm the business information/ }));
+  await user.type(screen.getByLabelText('Declaration full name'), 'Alex Morgan');
   await user.click(screen.getByRole('checkbox', { name: /I confirm these details/ }));
   mocked.get.mockResolvedValue({ application, policy });
   await user.click(screen.getByRole('button', { name: 'Submit application' }));
@@ -144,6 +206,7 @@ it('honours confirmation cancellation and then records a versioned applicant-vis
     screen.getByLabelText('Message to the applicant'),
     'Reviewed for programme membership.'
   );
+  await user.click(screen.getByRole('checkbox', { name: /I have reviewed the candidate/ }));
   await user.click(screen.getByRole('button', { name: 'Record decision' }));
   await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
   expect(mocked.post).not.toHaveBeenCalled();
@@ -161,9 +224,38 @@ it('honours confirmation cancellation and then records a versioned applicant-vis
       version: 1,
       status: 'approved',
       message: 'Reviewed for programme membership.',
+      engagementReviewed: true,
     })
   );
   expect(
     await screen.findByText('Decision recorded. Payouts remain inactive.')
   ).toBeInTheDocument();
+});
+
+it('shows company and VAT fields only when relevant and clears a stale VAT declaration', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.selectOptions(
+    await screen.findByLabelText('Business legal structure'),
+    'limited_company'
+  );
+  expect(screen.getByLabelText('Company / LLP registration number')).toBeRequired();
+  await user.selectOptions(screen.getByLabelText('Are you VAT registered?'), 'yes');
+  await user.type(screen.getByLabelText('Declared VAT registration number'), 'GB123456789');
+  await user.selectOptions(screen.getByLabelText('Are you VAT registered?'), 'no');
+  expect(screen.queryByLabelText('Declared VAT registration number')).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText('Are you VAT registered?'), 'yes');
+  expect(screen.getByLabelText('Declared VAT registration number')).toHaveValue('');
+  expect(mocked.post).not.toHaveBeenCalled();
+});
+it('preserves a legacy application without inventing declarations or offering approval', async () => {
+  delete application.profile.engagement;
+  application.independentEngagementComplete = false;
+  mocked.get.mockResolvedValue({ application, canReview: true });
+  show('/partners/review/app-1');
+  expect(
+    await screen.findByText(/Independent engagement forms were not supplied at this revision/)
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Approved' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Declaration recorded as/)).not.toBeInTheDocument();
 });

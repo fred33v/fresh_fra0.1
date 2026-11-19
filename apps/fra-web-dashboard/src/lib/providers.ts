@@ -7,6 +7,7 @@ export interface ProviderProfile {
   website: string;
   expertise: string[];
   experience: string;
+  engagement?: IndependentEngagement;
 }
 export interface ProviderHistory {
   id: string;
@@ -18,6 +19,8 @@ export interface ProviderHistory {
   contactEmail: string;
   status: ProviderStatus;
   message: string | null;
+  engagementReviewed?: boolean;
+  engagementVersion?: string | null;
 }
 export interface ProviderApplication {
   id: string;
@@ -32,6 +35,7 @@ export interface ProviderApplication {
   reviewedAt: string | null;
   reviewMessage: string | null;
   payoutsActive: boolean;
+  independentEngagementComplete?: boolean;
   history?: ProviderHistory[];
 }
 export const providerStatusLabels: Record<ProviderStatus, string> = {
@@ -68,3 +72,64 @@ export const emptyProviderProfile: ProviderProfile = {
   expertise: [],
   experience: '',
 };
+
+export interface IndependentEngagement {
+  model: 'independent_no_minimum';
+  formVersion: 'independent-engagement-2026-11-v1';
+  legalStructure:
+    | ''
+    | 'sole_trader'
+    | 'limited_company'
+    | 'partnership'
+    | 'limited_liability_partnership';
+  companyNumber: string;
+  businessAddress: { line1: string; line2: string; city: string; postalCode: string };
+  vatRegistered: '' | 'yes' | 'no';
+  vatNumber: string;
+  availability: string;
+  declineAssignments: '' | 'yes' | 'no' | 'not_sure';
+  deliveryControl: '' | 'self' | 'client' | 'shared' | 'not_sure';
+  otherClients: '' | 'yes' | 'no' | 'not_sure';
+  personalService: '' | 'required' | 'substitution_by_agreement' | 'not_sure';
+  declarationName: string;
+  noMinimumAccepted: boolean;
+  commissionAccepted: boolean;
+  informationAccurate: boolean;
+}
+export function independentForm(profile: ProviderProfile): ProviderProfile {
+  const old = profile.engagement;
+  return {
+    ...profile,
+    engagement: {
+      legalStructure: '',
+      companyNumber: '',
+      businessAddress: { line1: '', line2: '', city: '', postalCode: '' },
+      vatRegistered: '',
+      vatNumber: '',
+      availability: '',
+      declineAssignments: '',
+      deliveryControl: '',
+      otherClients: '',
+      personalService: '',
+      ...old,
+      model: 'independent_no_minimum',
+      formVersion: 'independent-engagement-2026-11-v1',
+      declarationName: '',
+      noMinimumAccepted: false,
+      commissionAccepted: false,
+      informationAccurate: false,
+    },
+  };
+}
+export function independentDeclarationsReady(profile: ProviderProfile): boolean {
+  const e = profile.engagement;
+  const normalise = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-GB');
+  return (
+    !!e &&
+    e.noMinimumAccepted &&
+    e.commissionAccepted &&
+    e.informationAccurate &&
+    !!e.declarationName.trim() &&
+    normalise(e.declarationName) === normalise(profile.fullName)
+  );
+}

@@ -90,8 +90,32 @@ async function call(method, path, body, user) {
     cache: response.headers.get('cache-control'),
   };
 }
+const engagement = {
+  model: 'independent_no_minimum',
+  formVersion: 'independent-engagement-2026-11-v1',
+  legalStructure: 'sole_trader',
+  companyNumber: '',
+  businessAddress: {
+    line1: '10 Example Street',
+    line2: '',
+    city: 'London',
+    postalCode: 'SW1A 1AA',
+  },
+  vatRegistered: 'no',
+  vatNumber: '',
+  availability: 'Available for independently agreed assignments on weekdays.',
+  declineAssignments: 'yes',
+  deliveryControl: 'self',
+  otherClients: 'yes',
+  personalService: 'substitution_by_agreement',
+  declarationName: 'Alex Morgan',
+  noMinimumAccepted: true,
+  commissionAccepted: true,
+  informationAccurate: true,
+};
 const profile = {
   fullName: 'Alex Morgan',
+  engagement,
   businessName: 'Example Prevention Ltd',
   country: 'GB',
   kind: 'both',
@@ -118,7 +142,13 @@ const review = (
   status,
   message = 'Reviewed the supplied application information.',
   by = reviewer
-) => call('POST', `/admin/applications/${id}/review`, { version, status, message }, by);
+) =>
+  call(
+    'POST',
+    `/admin/applications/${id}/review`,
+    { version, status, message, engagementReviewed: status === 'approved' },
+    by
+  );
 let failureName;
 try {
   process.env.PROVIDERS_ENABLED = 'false';
@@ -350,6 +380,45 @@ try {
   pass(
     'new application evidence is append-only, retained and independent of legacy purge cascades'
   );
+  const legacy = await actor();
+  const legacyProfile = { ...profile };
+  delete legacyProfile.engagement;
+  const legacyId = randomUUID();
+  await pool.query(
+    `INSERT INTO public.provider_applications(id,user_id,organisation_id,contact_email,profile,terms_version,acknowledged_at) VALUES($1,$2,$3,$4,$5,'provider-programme-2026-11',now())`,
+    [legacyId, legacy.id, legacy.organisationId, legacy.email, legacyProfile]
+  );
+  await pool.query(
+    `INSERT INTO public.provider_application_events(application_id,version,actor_id,actor_role,event,snapshot) SELECT id,version,user_id,'employer','application.submitted',to_jsonb(a) FROM public.provider_applications a WHERE id=$1`,
+    [legacyId]
+  );
+  const beforeLegacy = await call('GET', '/me', undefined, legacy);
+  assert.equal(beforeLegacy.body.data.application.independentEngagementComplete, false);
+  assert.equal(beforeLegacy.body.data.application.history[0].profile.engagement, undefined);
+  assert.equal((await review(legacyId, 1, 'approved')).status, 409);
+  assert.equal(
+    (
+      await call(
+        'POST',
+        `/admin/applications/${legacyId}/review`,
+        { version: 1, status: 'approved', message: 'Needs explicit review confirmation.' },
+        reviewer
+      )
+    ).status,
+    400
+  );
+  const revisedLegacy = await call('POST', '/me', submission(1), legacy);
+  assert.equal(revisedLegacy.status, 200);
+  assert.equal(revisedLegacy.body.data.application.independentEngagementComplete, true);
+  assert.equal(revisedLegacy.body.data.application.history[0].profile.engagement, undefined);
+  const approvedLegacy = await review(legacyId, 2, 'approved');
+  assert.equal(approvedLegacy.status, 200);
+  assert.equal(approvedLegacy.body.data.application.history.at(-1).engagementReviewed, true);
+  assert.equal(approvedLegacy.body.data.application.payoutsActive, false);
+  pass(
+    'legacy records remain readable; independent candidate forms and reviewer confirmation gate new approvals'
+  );
+
   if (process.env.PROVIDER_BROWSER_TEST === '1') {
     const web = new URL(process.env.PROVIDER_BROWSER_URL ?? 'http://127.0.0.1:8080');
     assert(
@@ -399,6 +468,38 @@ try {
       await candidatePage
         .getByLabel('Experience and proposed contribution')
         .fill(profile.experience);
+      await candidatePage.getByLabel('Business legal structure').selectOption('sole_trader');
+      await candidatePage
+        .getByLabel('Business correspondence address', { exact: true })
+        .fill(engagement.businessAddress.line1);
+      await candidatePage
+        .getByLabel('Town / city', { exact: true })
+        .fill(engagement.businessAddress.city);
+      await candidatePage
+        .getByLabel('Postcode / postal code', { exact: true })
+        .fill(engagement.businessAddress.postalCode);
+      await candidatePage.getByLabel('Are you VAT registered?').selectOption('no');
+      await candidatePage
+        .getByLabel('Availability and preferred working arrangements')
+        .fill(engagement.availability);
+      await candidatePage
+        .getByLabel('Can you choose whether to accept a proposed assignment?')
+        .selectOption('yes');
+      await candidatePage
+        .getByLabel('Who would normally decide how the agreed services are delivered?')
+        .selectOption('self');
+      await candidatePage
+        .getByLabel('Do you currently provide services to other clients?')
+        .selectOption('yes');
+      await candidatePage
+        .getByLabel('What personal-service arrangement is proposed?')
+        .selectOption('substitution_by_agreement');
+      await candidatePage.getByRole('checkbox', { name: /I understand that no minimum/ }).check();
+      await candidatePage.getByRole('checkbox', { name: /I understand the 17%/ }).check();
+      await candidatePage
+        .getByRole('checkbox', { name: /I confirm the business information/ })
+        .check();
+      await candidatePage.getByLabel('Declaration full name').fill('Alex Morgan');
       await candidatePage.getByRole('checkbox', { name: /I confirm these details/ }).check();
       await candidatePage.getByRole('button', { name: 'Submit application', exact: true }).click();
       await candidatePage
@@ -412,6 +513,7 @@ try {
       await staffPage
         .getByLabel('Message to the applicant')
         .fill('Approved for the programme. Stripe recipient verification remains separate.');
+      await staffPage.getByRole('checkbox', { name: /I have reviewed the candidate/ }).check();
       await staffPage.getByRole('button', { name: 'Record decision', exact: true }).click();
       await staffPage
         .getByRole('alertdialog')

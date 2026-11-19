@@ -62,9 +62,16 @@ export default function PartnerReviews() {
     setMessage('');
     setDecision('');
   }, [application?.version]);
-  const options = application ? availableReviews[application.status] : [];
+  const [engagementReviewed, setEngagementReviewed] = useState(false);
+  useEffect(() => setEngagementReviewed(false), [id, application?.version]);
+  const options = application
+    ? availableReviews[application.status].filter(
+        (status) => status !== 'approved' || application.independentEngagementComplete
+      )
+    : [];
   const save = async () => {
-    if (!application || !decision || busy) return;
+    if (!application || !decision || busy || (decision === 'approved' && !engagementReviewed))
+      return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -82,6 +89,7 @@ export default function PartnerReviews() {
         version: application.version,
         status: decision,
         message: message.trim(),
+        engagementReviewed: decision === 'approved' && engagementReviewed,
       });
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['provider-review', user?.userId, id] }),
@@ -254,6 +262,12 @@ export default function PartnerReviews() {
                       {notice}
                     </p>
                   )}
+                  {!application.independentEngagementComplete && (
+                    <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
+                      The independent engagement forms are missing or incomplete. Request an updated
+                      application before approval. Existing history remains retained.
+                    </p>
+                  )}
                   {!detail.data?.canReview ? (
                     <p className="text-sm text-amber-800">
                       Another administrator must review your own application.
@@ -272,7 +286,10 @@ export default function PartnerReviews() {
                             id="review-decision"
                             className="mt-1 h-10 w-full rounded-md border bg-background px-2 text-sm"
                             value={decision}
-                            onChange={(e) => setDecision(e.target.value)}
+                            onChange={(e) => {
+                              setDecision(e.target.value);
+                              setEngagementReviewed(false);
+                            }}
                             required
                           >
                             <option value="">Choose a decision</option>
@@ -299,9 +316,30 @@ export default function PartnerReviews() {
                             Visible to the applicant and retained in the history.
                           </p>
                         </div>
+                        {decision === 'approved' && (
+                          <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              checked={engagementReviewed}
+                              onChange={(e) => setEngagementReviewed(e.target.checked)}
+                              required
+                            />
+                            <span>
+                              I have reviewed the candidate's independent engagement information.
+                              Programme approval does not execute a contract or replace an
+                              employment/tax status assessment.
+                            </span>
+                          </label>
+                        )}
                         <Button
                           className="w-full"
-                          disabled={busy || !decision || message.trim().length < 3}
+                          disabled={
+                            busy ||
+                            !decision ||
+                            message.trim().length < 3 ||
+                            (decision === 'approved' && !engagementReviewed)
+                          }
                         >
                           {busy ? 'Recording…' : 'Record decision'}
                         </Button>

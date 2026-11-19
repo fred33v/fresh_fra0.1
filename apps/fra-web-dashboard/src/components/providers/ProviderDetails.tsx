@@ -1,3 +1,4 @@
+import IndependentEngagementSummary from './IndependentEngagementSummary';
 import { Badge } from '@/components/ui/badge';
 import {
   providerStatusLabels,
@@ -63,6 +64,7 @@ export function ProviderDetails({ application }: { application: ProviderApplicat
           {profile.experience}
         </p>
       </div>
+      <IndependentEngagementSummary value={profile.engagement} />
       {application.reviewMessage && (
         <div className="rounded-lg border bg-muted/30 p-4">
           <h3 className="text-sm font-semibold">Message from the review team</h3>
@@ -115,6 +117,10 @@ export function ProviderHistory({ application }: { application: ProviderApplicat
                 </p>
                 {entry.profile.website && <p className="break-all">{entry.profile.website}</p>}
                 <p className="whitespace-pre-wrap break-words">{entry.profile.experience}</p>
+                <IndependentEngagementSummary value={entry.profile.engagement} />
+                {entry.engagementReviewed && (
+                  <p>Independent engagement information reviewed ({entry.engagementVersion}).</p>
+                )}
               </div>
             </details>
           </li>
