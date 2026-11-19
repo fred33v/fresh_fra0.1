@@ -3,6 +3,13 @@ import type { PoolClient } from 'pg';
 import type { DbExecutor } from './db/transaction.js';
 import type { AuthContext } from './helpers.js';
 
+/**
+ * E-sign documents have no type field; the title is the only immutable label (it is frozen once sent).
+ * Approval accepts only a document whose title starts with this, so an unrelated signed document
+ * (a consent form, an NDA) cannot stand in for the provider agreement.
+ */
+export const PROVIDER_AGREEMENT_TITLE = 'Provider agreement';
+
 export class RecruitmentError extends Error {
   constructor(public status: 400 | 403 | 404 | 409, message: string) { super(message); }
 }
@@ -51,11 +58,14 @@ export async function reviewProvider(db: PoolClient, auth: AuthContext, id: stri
       JOIN public.users u ON u.id=$4 AND u.organisation_id=$5
       JOIN public.esign_artifacts a ON a.document_id=d.id
       WHERE d.id=$1 AND d.organisation_id=$2 AND d.status='completed'
+      AND lower(d.title) LIKE $6
+      AND NOT EXISTS (SELECT 1 FROM public.esign_signers o WHERE o.document_id=d.id AND lower(o.email)<>lower($3))
       AND s.status='signed' AND lower(s.email)=lower($3) AND lower(s.email)=lower(u.email)
       AND u.email_verified_at IS NOT NULL`,
     [decision.agreementDocumentId ?? null, auth.organisationId, application.applicant_email,
-      application.applicant_id, application.organisation_id]);
-    if (!agreement) throw new RecruitmentError(400, 'A completed retained agreement signed by the applicant is required');
+      application.applicant_id, application.organisation_id, `${PROVIDER_AGREEMENT_TITLE.toLowerCase()}%`]);
+    if (!agreement) throw new RecruitmentError(400,
+      `A completed retained document titled "${PROVIDER_AGREEMENT_TITLE}…", signed only by the applicant, is required`);
   }
   const { rows: [saved] } = await db.query(`UPDATE public.provider_applications SET status=$2,
     revision=revision+1,review_reason=$3,qualification_evidence=COALESCE($4,qualification_evidence),

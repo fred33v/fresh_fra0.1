@@ -24,8 +24,8 @@ export default function ProviderReview() {
     queryFn: () => api.get<Application[]>(`${endpoint}/review?page=${page}`), retry: false });
   return <Layout><main className="container max-w-3xl space-y-6 py-10">
     <h1 className="text-2xl font-bold">Provider recruitment review</h1>
-    <p>Review experience and qualifications, complete the provider agreement through Electronic signing,
-      then record the completed document reference below. Approval does not create an employment contract or trigger payment.</p>
+    <p>Review experience and qualifications, complete the provider agreement through Electronic signing
+      (title it "Provider agreement …" with the applicant as the only signer), then record the completed document reference below. Approval does not create an employment contract or trigger payment.</p>
     {query.isPending && <p role="status">Loading applications…</p>}
     {query.isError && <p role="alert">{query.error.message}</p>}
     <Button variant="outline" onClick={() => void query.refetch()}>Refresh applications</Button>
