@@ -13,6 +13,10 @@ Updated 2026-11-19. This records the owner's decisions, not an assertion that th
 - Preserve all newly introduced Phase 1 data without automatic purging. Existing retention jobs must not indirectly delete new evidence through cascading foreign keys. Production deletion is outside this work.
 - Native applications remain preserved with development suspended.
 
+## Implementation order
+
+Owner instruction, 19 November 2026: defer Stripe onboarding, commission payment integration and external financial tests until the end. Continue the non-financial candidate and signing preparation first. This changes sequencing, not the agreed 17% VAT-exclusive referral rule.
+
 ## External prerequisites
 
 The owner confirmed the Stripe reference account and authorised the CLI browser flow. The subsequent local `stripe whoami --format json` still reports `authenticated: false`. Separate development and CI sandboxes have **not** been provisioned; no test credential or successful external Connect transfer is claimed.

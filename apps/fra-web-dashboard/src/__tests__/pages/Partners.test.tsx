@@ -259,3 +259,58 @@ it('preserves a legacy application without inventing declarations or offering ap
   expect(screen.queryByRole('option', { name: 'Approved' })).not.toBeInTheDocument();
   expect(screen.queryByText(/Declaration recorded as/)).not.toBeInTheDocument();
 });
+
+it('offers agreement preparation without claiming a signed contract or activating payouts', async () => {
+  mocked.get.mockResolvedValue({ application, policy });
+  show();
+  expect(
+    await screen.findByRole('button', { name: 'Download preparation dossier' })
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByText('Steps before starting work'));
+  expect(screen.getByText(/their completion is not recorded here/)).toBeInTheDocument();
+  expect(screen.getByText(/Programme approval is still required/)).toBeInTheDocument();
+});
+
+it('exports the current revision and preserves uncertain and missing declarations', async () => {
+  const { providerPreparationText } = await import('@/lib/providerPreparation');
+  application.profile.engagement!.deliveryControl = 'not_sure';
+  const text = providerPreparationText(application);
+  expect(text).toContain(`Revision: ${application.version}`);
+  expect(text).toContain('Delivery method control: Needs discussion');
+  expect(text).toContain('17% of VAT-exclusive package sales they bring');
+  expect(text).toContain('not a contract, signature certificate or status assessment');
+  delete application.profile.engagement;
+  application.independentEngagementComplete = false;
+  const legacy = providerPreparationText(application);
+  expect(legacy).toContain('No minimum guarantee: Not recorded');
+  expect(legacy).toContain('Declaration name: Not supplied');
+  expect(legacy).toContain('No — request an updated application');
+});
+
+it('downloads a private text dossier locally without posting it to the API', async () => {
+  const create = vi.fn().mockReturnValue('blob:preparation');
+  const revoke = vi.fn();
+  const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+  const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  vi.useFakeTimers();
+  try {
+    const { downloadProviderPreparation } = await import('@/lib/providerPreparation');
+    downloadProviderPreparation(application);
+    expect(create).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalledOnce();
+    expect(document.querySelector('a[download]')).toBeNull();
+    expect(mocked.post).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(revoke).toHaveBeenCalledWith('blob:preparation');
+  } finally {
+    vi.useRealTimers();
+    click.mockRestore();
+    if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate);
+    else Reflect.deleteProperty(URL, 'createObjectURL');
+    if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke);
+    else Reflect.deleteProperty(URL, 'revokeObjectURL');
+  }
+});

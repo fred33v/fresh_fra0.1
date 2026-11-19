@@ -90,3 +90,9 @@ Approval now also requires an explicit reviewer acknowledgement of reading the i
 Validation was extended to incomplete/contradictory declarations, matching names, conditional company/VAT details, legacy read/resubmission and approval gates. The real-browser journey fills the new candidate forms and records reviewer acknowledgement against the isolated real API/PostgreSQL.
 
 Before financial activation, review the actual working arrangements and applicable employment/tax status, and execute the appropriate services agreement. Candidate declarations and programme approval do not complete these steps.
+
+## Agreement preparation handover
+
+Both the applicant and appointed reviewer can download a private, current-revision text dossier from the application detail. It includes candidate declarations, missing-form notices, application/revision references, and the confirmed no-minimum/17% referral basis. It preserves uncertainty and does not invent legacy declarations. No network request, external share or server-side document is created by this download. The local file contains personal/business information and must be shared only with authorised reviewers.
+
+The preparation checklist identifies actual working-arrangement/status review, agreement of outstanding contract terms, preparation/review of a separate contract PDF, signing and verification of the retained PDF. It does not claim these steps are complete, generate a contract, or link an application to a signing record. An approved contract can use the existing Documents & signing workflow separately. Automated agreement linkage remains future work. Stripe integration is sequenced last at the owner's request.

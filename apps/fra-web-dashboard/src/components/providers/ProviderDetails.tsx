@@ -1,3 +1,4 @@
+import EngagementPreparation from './EngagementPreparation';
 import IndependentEngagementSummary from './IndependentEngagementSummary';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -65,6 +66,7 @@ export function ProviderDetails({ application }: { application: ProviderApplicat
         </p>
       </div>
       <IndependentEngagementSummary value={profile.engagement} />
+      <EngagementPreparation application={application} />
       {application.reviewMessage && (
         <div className="rounded-lg border bg-muted/30 p-4">
           <h3 className="text-sm font-semibold">Message from the review team</h3>
