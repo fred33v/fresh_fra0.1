@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { motion } from 'framer-motion';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layout } from '@/components/layout/Layout';
@@ -25,6 +27,7 @@ export default function Checkout() {
   const selectedPackage = getPackage(rawPackageName === 'Health-Check' ? 'Starter' : rawPackageName ?? '');
   const price = selectedPackage?.priceGbp ?? 0;
 
+  const [providerCode,setProviderCode] = useState(searchParams.get('provider') ?? '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<ReactNode | null>(null);
@@ -51,7 +54,7 @@ export default function Checkout() {
         checkoutUrl: string | null;
         simulated?: boolean;
         paymentIntentId?: string;
-      }>('/api/v1/purchases', { packageId: selectedPackage.id, client: 'web' });
+      }>('/api/v1/purchases', { packageId: selectedPackage.id, client: 'web', ...(providerCode.trim()?{providerCode:providerCode.trim()}:{}) });
 
       if (purchase.checkoutUrl) {
         window.location.assign(purchase.checkoutUrl);
@@ -70,6 +73,8 @@ export default function Checkout() {
         setPaymentError(
           <>Sign in or create your organisation account to continue. <Link className="underline font-medium" to={`/auth?package=${encodeURIComponent(packageName)}`}>Sign in</Link></>,
         );
+      } else if (['ATTRIBUTION_ERROR','ATTRIBUTION_LOCKED','ATTRIBUTION_UNAVAILABLE'].includes(code)) {
+        setPaymentError(err instanceof Error ? err.message : 'Provider reference could not be verified.');
       } else if (code === 'PAYMENTS_UNAVAILABLE' || code === 'PAYMENT_PROVIDER_ERROR') {
         setPaymentError('The secure payment page could not be opened. Please try again in a few minutes.');
       } else {
@@ -233,6 +238,11 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handlePayment} className="space-y-4" noValidate>
+                  <div className="space-y-2 mb-4">
+                    <Label htmlFor="checkout-provider">Provider referral reference (optional)</Label>
+                    <Input id="checkout-provider" value={providerCode} maxLength={36} onChange={e=>setProviderCode(e.target.value)} placeholder="PRV-…" />
+                    <p className="text-sm text-muted-foreground">Attribution is fixed when checkout starts. A reference does not change your price.</p>
+                  </div>
                     {cancelled && !paymentError && (
                       <div role="status" className="rounded-md border bg-muted/50 p-3 text-sm">
                         Payment was cancelled and you have not been charged. You can try again when you are ready.

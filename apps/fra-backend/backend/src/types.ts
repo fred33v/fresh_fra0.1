@@ -494,6 +494,7 @@ export const paymentCreateIntentSchema = z.object({
 
 export const purchasesCreateSchema = z.object({
   packageId: packageIdSchema,
+  providerCode: z.string().regex(/^PRV-[a-f0-9]{32}$/).optional(),
   /** Where Stripe returns the buyer: the web checkout page, or a page telling them to go back to the app */
   client: z.enum(['web', 'mobile']).optional(),
 });
