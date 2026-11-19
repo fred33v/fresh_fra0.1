@@ -111,8 +111,8 @@ function present(application: Application) {
 }
 async function detail(db: DbExecutor, application: Application) {
   const { rows } = await db.query(
-    'SELECT id::text,version,event,actor_role,created_at,snapshot FROM public.provider_application_events WHERE application_id=$1 ORDER BY version',
-    [application.id]
+    'SELECT id::text,version,event,actor_role,created_at,snapshot FROM public.provider_application_events WHERE application_id=$1 AND version <= $2 ORDER BY version',
+    [application.id, application.version]
   );
   return {
     ...present(application),
