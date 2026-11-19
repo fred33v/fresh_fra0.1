@@ -2,12 +2,20 @@ import { totalWithVat } from './stripe.js';
 import type { DbExecutor } from './db/transaction.js';
 import type { AuthContext } from './helpers.js';
 import { RecruitmentError, recruitmentAudit } from './provider-recruitment.js';
+import { createLogger } from './logger.js';
 
-/** Prices are VAT-exclusive; refunds supplied by reconciliation include VAT. Round once, half up. */
+const logger = createLogger('provider-commissions');
+
+/**
+ * Prices are VAT-exclusive; refunds supplied by reconciliation include VAT. Round once, half up.
+ * A refund that covers the whole payment, or more than it through inconsistent data, earns nothing.
+ * This runs inside payment reconciliation, so a payment problem must lower the commission to zero
+ * and never throw: a throw would roll back the payment update and leave the Stripe webhook failing.
+ */
 export function commissionTarget(net: number, gross: number, refunded: number, succeeded: boolean): number {
-  if (![net,gross,refunded].every(Number.isSafeInteger) || net < 0 || gross <= 0 || refunded < 0 || refunded > gross)
+  if (![net,gross,refunded].every(Number.isSafeInteger) || net < 0 || gross < 0 || refunded < 0)
     throw new Error('Invalid commission amounts');
-  if (!succeeded) return 0;
+  if (!succeeded || net === 0 || refunded >= gross) return 0;
   const numerator = BigInt(net) * 1700n * BigInt(gross-refunded);
   const denominator = 10000n * BigInt(gross);
   return Number((2n*numerator+denominator)/(2n*denominator));
@@ -41,7 +49,11 @@ export async function reconcileProviderCommission(db: DbExecutor, purchaseId: st
     JOIN public.purchases p ON p.id=a.purchase_id WHERE p.id=$1`,[purchaseId]);
   if (!sale || !sale.payment_reconciled_at) return; // Simulated/unverified payments never earn commission.
   await db.query('SELECT id FROM public.provider_applications WHERE id=$1 FOR UPDATE',[sale.application_id]);
-  const target = commissionTarget(sale.amount_cents,totalWithVat(sale.amount_cents),sale.refunded_amount_cents,sale.status==='succeeded');
+  const gross = totalWithVat(sale.amount_cents);
+  if (sale.refunded_amount_cents > gross)
+    logger.warn('Refund exceeds the payment value; commission set to zero for finance review',
+      { purchaseId, grossCents: gross, refundedCents: sale.refunded_amount_cents });
+  const target = commissionTarget(sale.amount_cents,gross,sale.refunded_amount_cents,sale.status==='succeeded');
   const { rows: [previous] } = await db.query(`SELECT COALESCE(sum(delta_cents),0)::integer AS amount
     FROM public.provider_commission_entries WHERE purchase_id=$1`,[purchaseId]);
   const delta = target-previous.amount;
@@ -59,29 +71,81 @@ export async function providerBalance(db: DbExecutor, id: string, currency: stri
   return { ...row, available: row.earned-row.recorded-row.reserved } as {earned:number;recorded:number;reserved:number;available:number};
 }
 
+/**
+ * How payment state is verified before staff authorise settlement. A provider with up to `fullCheckLimit`
+ * sales to check has every sale re-read from Stripe each time, so a refund whose webhook has not arrived
+ * yet is still caught. A larger provider skips sales verified within `maxAgeSeconds`, so the check can
+ * finish across a few short requests instead of failing for good.
+ */
+export const PAYMENT_VERIFICATION = {
+  fullCheckLimit: 300,
+  maxAgeSeconds: 300,
+  batch: 100,
+  concurrency: 5,
+  budgetMs: 20_000,
+};
+export type PaymentVerificationOptions = Partial<typeof PAYMENT_VERIFICATION>;
+
+/** Runs `verify` over `ids` with at most `concurrency` in flight. Never throws; returns what failed. */
+export async function verifyConcurrently(
+  ids: string[], verify: (id: string) => Promise<void>, concurrency = PAYMENT_VERIFICATION.concurrency,
+) {
+  const failed: { id: string; error: unknown }[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < ids.length) {
+      const id = ids[next++];
+      try { await verify(id); } catch (error) { failed.push({ id, error }); }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), ids.length) }, worker));
+  return failed;
+}
+
 /** Refresh trusted payment state before staff authorise settlement; no money is moved here. */
-export async function refreshProviderPayments(auth: AuthContext, id: string) {
+export async function refreshProviderPayments(auth: AuthContext, id: string, overrides: PaymentVerificationOptions = {}) {
+  const options = { ...PAYMENT_VERIFICATION, ...overrides };
   const { withTransaction } = await import('./db/transaction.js');
   const { recruitmentIdentity } = await import('./provider-recruitment.js');
-  const ids = await withTransaction(async db => {
+  await withTransaction(async db => {
     await recruitmentIdentity(db,auth,true);
     const {rows:[a]}=await db.query('SELECT applicant_id FROM public.provider_applications WHERE id=$1',[id]);
     if(!a)throw new RecruitmentError(404,'Application not found');
     if(a.applicant_id===auth.userId)throw new RecruitmentError(403,'You cannot authorise your own payout');
-    return (await db.query(`SELECT p.id FROM public.purchases p JOIN public.provider_sale_attributions a ON a.purchase_id=p.id
-      WHERE a.application_id=$1 AND p.payment_intent_id IS NOT NULL AND p.status<>'refunded' ORDER BY p.id LIMIT 2001`,[id])).rows;
   });
-  if(ids.length>2000)throw new RecruitmentError(409,'Payment reconciliation limit reached; finance review required');
   const { getStripe } = await import('./stripe.js');
   if(!getStripe())throw new RecruitmentError(409,'Verified payment reconciliation is unavailable');
+  const { getDbPool } = await import('./db.js');
   const { dbGetPurchaseById }=await import('./db/purchases.js');
   const { reconcilePaidPurchase }=await import('./payment-lifecycle.js');
-  try {
-    for(const {id:purchaseId} of ids){
-      const p=await dbGetPurchaseById(purchaseId);
-      if(p && p.paymentIntentId) await reconcilePaidPurchase(p,p.paymentIntentId,'provider_payout_review',auth);
-    }
-  }catch{
-    throw new RecruitmentError(409,'Payment state could not be verified; no payout was authorised');
+  const pool = getDbPool();
+  const sales = `FROM public.purchases p JOIN public.provider_sale_attributions a ON a.purchase_id=p.id
+    WHERE a.application_id=$1 AND p.payment_intent_id IS NOT NULL AND p.status<>'refunded'`;
+  const { rows: [{ total }] } = await pool.query(`SELECT count(*)::integer AS total ${sales}`,[id]);
+  const maxAgeSeconds = total <= options.fullCheckLimit ? 0 : options.maxAgeSeconds;
+  const deadline = Date.now() + options.budgetMs;
+  const attempted: string[] = [];
+  let failures = 0;
+  for (;;) {
+    const { rows } = await pool.query(`SELECT p.id ${sales}
+      AND (p.payment_reconciled_at IS NULL OR p.payment_reconciled_at < now() - make_interval(secs => $2))
+      AND p.id <> ALL($3::uuid[]) ORDER BY p.payment_reconciled_at NULLS FIRST, p.id LIMIT $4`,
+    [id, maxAgeSeconds, attempted, options.batch]);
+    if (rows.length === 0) break;
+    // Sales checked so far stay fresh, so a retry carries on from here.
+    if (Date.now() > deadline)
+      throw new RecruitmentError(409,'Payment verification is still running for this provider; retry in a minute');
+    const ids = rows.map(row => row.id as string);
+    attempted.push(...ids);
+    const failed = await verifyConcurrently(ids, async purchaseId => {
+      const p = await dbGetPurchaseById(purchaseId);
+      if (p && p.paymentIntentId) await reconcilePaidPurchase(p,p.paymentIntentId,'provider_payout_review',auth);
+    }, options.concurrency);
+    for (const { id: purchaseId, error } of failed)
+      logger.error('Provider payout payment verification failed',
+        { purchaseId, error: error instanceof Error ? error.message : String(error) });
+    failures += failed.length;
   }
+  if (failures)
+    throw new RecruitmentError(409,`Payment state could not be verified for ${failures} sale(s); no payout was authorised. Check the server log, then retry.`);
 }
