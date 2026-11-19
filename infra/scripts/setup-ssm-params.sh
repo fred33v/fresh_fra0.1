@@ -10,7 +10,7 @@
 # ============================================================
 set -euo pipefail
 
-AWS_REGION="eu-west-2"
+AWS_REGION="eu-north-1"
 
 echo "=== Stop FRA SSM Parameter Setup ==="
 echo "Region: $AWS_REGION"
@@ -62,8 +62,8 @@ fi
 read -rp "UPSTASH_REDIS_REST_URL (Enter to keep the current value): " REDIS_URL
 read -rp "UPSTASH_REDIS_REST_TOKEN (Enter to keep the current value): " REDIS_TOKEN
 read -rp "S3_BUCKET (Enter to keep the current value): " S3_BUCKET
-read -rp "S3_REGION [eu-west-2]: " S3_REGION
-S3_REGION=${S3_REGION:-eu-west-2}
+read -rp "S3_REGION [eu-north-1]: " S3_REGION
+S3_REGION=${S3_REGION:-eu-north-1}
 read -rp "S3_UPLOAD_PREFIX [uploads/]: " S3_UPLOAD_PREFIX
 S3_UPLOAD_PREFIX=${S3_UPLOAD_PREFIX:-uploads/}
 read -rp "S3_DOWNLOAD_PREFIX [downloads/]: " S3_DOWNLOAD_PREFIX
