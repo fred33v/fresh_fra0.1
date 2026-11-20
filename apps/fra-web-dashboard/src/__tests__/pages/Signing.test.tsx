@@ -229,3 +229,12 @@ it('verifies retained audit evidence and exposes downloads for completed documen
   ).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Send invitations' })).not.toBeInTheDocument();
 });
+
+it('keeps the two linked agreement identities fixed in the recipient screen', async () => {
+  doc.providerAgreement = { id: 'agreement-1', applicationId: 'application-1' };
+  show('/signing/doc-1');
+  expect(await screen.findByText(/Its terms and two signatories are fixed/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add recipient' })).toBeDisabled();
+  expect(screen.getByLabelText('Full name')).toBeDisabled();
+  expect(screen.getByLabelText('Email address')).toBeDisabled();
+});

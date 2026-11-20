@@ -1,3 +1,4 @@
+import type { ProviderAgreement } from './providerAgreements';
 export type ProviderStatus = 'submitted' | 'under_review' | 'approved' | 'rejected' | 'suspended';
 export interface ProviderProfile {
   fullName: string;
@@ -37,6 +38,8 @@ export interface ProviderApplication {
   payoutsActive: boolean;
   independentEngagementComplete?: boolean;
   history?: ProviderHistory[];
+  agreements?: ProviderAgreement[];
+  agreementProgress?: Pick<ProviderAgreement, 'state' | 'signedCount' | 'signerCount'> | null;
 }
 export const providerStatusLabels: Record<ProviderStatus, string> = {
   submitted: 'Submitted',

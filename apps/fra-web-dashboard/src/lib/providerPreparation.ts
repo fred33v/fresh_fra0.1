@@ -10,7 +10,7 @@ export const engagementPreparationSteps = [
 
 const supplied = (value: string | undefined) => value || 'Not supplied';
 const answer = (value: string | undefined) =>
-  !value ? 'Not supplied' : value === 'not_sure' ? 'Needs discussion' : value.replaceAll('_', ' ');
+  !value ? 'Not supplied' : value === 'not_sure' ? 'Needs discussion' : value.replace(/_/g, ' ');
 const declaration = (value: boolean | undefined) =>
   value === true ? 'Acknowledged' : 'Not recorded';
 

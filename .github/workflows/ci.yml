@@ -213,6 +213,7 @@ jobs:
           export DATABASE_URL_UNPOOLED="$DATABASE_URL"
           pnpm migrate
           node --import tsx scripts/provider-recruitment-integration.mjs
+          node --import tsx scripts/provider-agreements-integration.mjs
 
       - name: Internal electronic signing (PostgreSQL, generated certificate, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend
@@ -246,6 +247,7 @@ jobs:
           trap 'kill "$provider_web_pid" 2>/dev/null || true' EXIT
           node --input-type=module -e 'let ready=false; for(let i=0;i<60;i++){try{const r=await fetch("http://127.0.0.1:8080");if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}if(!ready)throw new Error("Provider UI did not start");'
           node --import tsx scripts/provider-recruitment-integration.mjs
+          node --import tsx scripts/provider-agreements-integration.mjs
 
       - name: Document preparation UI (mock API, real PDF canvas)
         run: pnpm --filter @stopfra/web-dashboard test:e2e:signing

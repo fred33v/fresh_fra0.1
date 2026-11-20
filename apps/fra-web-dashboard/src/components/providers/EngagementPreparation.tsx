@@ -30,8 +30,9 @@ export default function EngagementPreparation({
           ))}
         </ol>
         <p className="mt-3 text-xs text-muted-foreground">
-          These are preparation steps; their completion is not recorded here. Programme approval
-          does not confirm a signed agreement. Payment setup follows in the final financial step.
+          This checklist is preparation guidance. Use Agreement & administrative follow-up for
+          recorded signing and readiness. Programme approval does not confirm a signed agreement.
+          Payment setup follows in the final financial step.
         </p>
       </details>
       <Button

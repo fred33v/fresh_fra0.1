@@ -31,6 +31,7 @@ function show(path = '/partners') {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/partners" element={<Partners />} />
+          <Route path="/partners/review" element={<PartnerReviews />} />
           <Route path="/partners/review/:id" element={<PartnerReviews />} />
         </Routes>
       </MemoryRouter>
@@ -183,7 +184,9 @@ it('shows approval separately from payout activation and keeps historical revisi
   expect(await screen.findByText('Approved', { exact: true })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Update & resubmit' })).not.toBeInTheDocument();
   expect(
-    screen.getByText(/Stripe recipient verification and payout activation are a separate step/)
+    screen.getByText(
+      /Stripe recipient verification and payouts come afterwards and remain inactive/
+    )
   ).toBeInTheDocument();
   await userEvent.click(screen.getByText('Details recorded at this revision'));
   expect(screen.getByText(/Original Professional Name/)).toBeInTheDocument();
@@ -267,7 +270,7 @@ it('offers agreement preparation without claiming a signed contract or activatin
     await screen.findByRole('button', { name: 'Download preparation dossier' })
   ).toBeInTheDocument();
   await userEvent.click(screen.getByText('Steps before starting work'));
-  expect(screen.getByText(/their completion is not recorded here/)).toBeInTheDocument();
+  expect(screen.getByText(/This checklist is preparation guidance/)).toBeInTheDocument();
   expect(screen.getByText(/Programme approval is still required/)).toBeInTheDocument();
 });
 
@@ -313,4 +316,20 @@ it('downloads a private text dossier locally without posting it to the API', asy
     if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke);
     else Reflect.deleteProperty(URL, 'revokeObjectURL');
   }
+});
+
+it('shows agreement readiness separately from programme status in the administrative queue', async () => {
+  application.status = 'approved';
+  application.agreementProgress = {
+    state: 'signed_pending_review',
+    signedCount: 2,
+    signerCount: 2,
+  };
+  mocked.get.mockResolvedValue({ applications: [application], hasMore: false });
+  show('/partners/review');
+  expect(await screen.findByText('Signed · administrative review needed')).toBeInTheDocument();
+  expect(screen.getByText('2/2 signatures')).toBeInTheDocument();
+  expect(
+    screen.getByRole('row', { name: /Signed · administrative review needed/ })
+  ).toHaveTextContent('Approved');
 });

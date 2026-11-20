@@ -276,6 +276,23 @@ export default function Signing() {
             </Button>
           )}
         </div>
+        {doc?.providerAgreement && (
+          <div className="mb-5 rounded-lg border bg-muted/30 p-4 text-sm">
+            <p>
+              This agreement is linked to a candidate revision. Its terms and two signatories are
+              fixed. Return to the application to prepare a retained replacement or complete
+              administrative follow-up.
+            </p>
+            {user?.role === 'admin' && (
+              <Link
+                className="mt-2 inline-block font-medium text-primary underline"
+                to={`/partners/review/${doc.providerAgreement.applicationId}`}
+              >
+                Return to candidate follow-up
+              </Link>
+            )}
+          </div>
+        )}
         {error != null && (
           <div className="mb-5">
             <Failure error={error} />
@@ -565,7 +582,7 @@ export default function Signing() {
                           maxLength={120}
                           pattern="[\x20-\x7e\u00a0-\u00ff]+"
                           title="Use Latin characters for PDF signatures"
-                          disabled={busy || doc.signers.length >= 20}
+                          disabled={busy || !!doc.providerAgreement || doc.signers.length >= 20}
                         />
                       </div>
                       <div>
@@ -578,13 +595,13 @@ export default function Signing() {
                           onChange={(e) => setEmail(e.target.value)}
                           required
                           maxLength={254}
-                          disabled={busy || doc.signers.length >= 20}
+                          disabled={busy || !!doc.providerAgreement || doc.signers.length >= 20}
                         />
                       </div>
                       <Button
                         variant="outline"
                         className="sm:col-span-2"
-                        disabled={busy || doc.signers.length >= 20}
+                        disabled={busy || !!doc.providerAgreement || doc.signers.length >= 20}
                       >
                         <Plus className="mr-2 h-4 w-4" /> Add recipient
                       </Button>

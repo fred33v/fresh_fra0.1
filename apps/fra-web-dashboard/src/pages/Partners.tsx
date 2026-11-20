@@ -1,3 +1,4 @@
+import ProviderAgreementPanel from '@/components/providers/ProviderAgreementPanel';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -379,6 +380,7 @@ export default function Partners() {
                   </form>
                 </section>
               )}
+              {application && <ProviderAgreementPanel application={application} />}
               {application && <ProviderHistory application={application} />}
             </div>
             <aside className="space-y-5">
@@ -406,10 +408,21 @@ export default function Partners() {
                   <li className="flex gap-3">
                     <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">3. Set up payouts separately</p>
+                      <p className="font-medium">3. Review and sign the agreement</p>
                       <p className="mt-1 text-muted-foreground">
-                        Stripe recipient verification and payout activation are a separate step and
-                        are not available in this release.
+                        After approval, review the proposed agreement and sign through the emailed
+                        invitation. Both parties must sign before administrative validation.
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <FileCheck2 className="mt-1 h-5 w-5 shrink-0 text-primary" />
+                    <div>
+                      <p className="font-medium">4. Follow administrative validation</p>
+                      <p className="mt-1 text-muted-foreground">
+                        Track the signed agreement and the team's final readiness review here.
+                        Stripe recipient verification and payouts come afterwards and remain
+                        inactive.
                       </p>
                     </div>
                   </li>

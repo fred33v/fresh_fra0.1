@@ -1,3 +1,5 @@
+import { agreementStateLabels } from '@/lib/providerAgreements';
+import ProviderAgreementPanel from '@/components/providers/ProviderAgreementPanel';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -171,6 +173,7 @@ export default function PartnerReviews() {
                   <tr>
                     <th className="p-4 font-medium">Applicant</th>
                     <th className="p-4 font-medium">Status</th>
+                    <th className="p-4 font-medium">Agreement</th>
                     <th className="p-4 font-medium">Updated</th>
                     <th className="p-4">
                       <span className="sr-only">Review</span>
@@ -194,6 +197,19 @@ export default function PartnerReviews() {
                       <td className="p-4">
                         <ProviderStatus application={app} />
                       </td>
+                      <td className="p-4 text-muted-foreground">
+                        {app.agreementProgress ? (
+                          <>
+                            <p>{agreementStateLabels[app.agreementProgress.state]}</p>
+                            <p className="mt-1 text-xs">
+                              {app.agreementProgress.signedCount}/
+                              {app.agreementProgress.signerCount} signatures
+                            </p>
+                          </>
+                        ) : (
+                          'No agreement prepared'
+                        )}
+                      </td>
                       <td className="whitespace-nowrap p-4 text-muted-foreground">
                         {new Date(app.updatedAt).toLocaleDateString('en-GB')}
                       </td>
@@ -211,7 +227,7 @@ export default function PartnerReviews() {
                   ))}
                   {queue.data?.applications.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="p-12 text-center text-muted-foreground">
+                      <td colSpan={5} className="p-12 text-center text-muted-foreground">
                         No applications with this status.
                       </td>
                     </tr>
@@ -243,6 +259,7 @@ export default function PartnerReviews() {
                 <section className="rounded-xl border bg-card p-5 sm:p-7">
                   <ProviderDetails application={application} />
                 </section>
+                <ProviderAgreementPanel application={application} administrator />
                 <ProviderHistory application={application} />
               </div>
               <aside className="space-y-5">
@@ -365,7 +382,8 @@ export default function PartnerReviews() {
                   </h2>
                   <p>
                     Approval does not activate payouts or verify a recipient's identity. Stripe
-                    onboarding, attribution, refunds and transfer controls are the next increment.
+                    onboarding, attribution, refunds and transfer controls remain the final
+                    financial increment.
                   </p>
                 </section>
               </aside>
