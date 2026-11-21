@@ -1,5 +1,5 @@
 -- Preserve application versions and review decisions; no cascades into legacy retention tables.
-CREATE TABLE public.provider_applications (
+CREATE TABLE public.partner_applications (
  id uuid PRIMARY KEY,
  user_id uuid NOT NULL UNIQUE,
  organisation_id uuid NOT NULL,
@@ -17,10 +17,10 @@ CREATE TABLE public.provider_applications (
  review_message text,
  CHECK(status = 'submitted' OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL AND length(review_message) >= 3))
 );
-CREATE INDEX provider_application_queue ON public.provider_applications(status,updated_at DESC,id);
-CREATE TABLE public.provider_application_events (
+CREATE INDEX partner_application_queue ON public.partner_applications(status,updated_at DESC,id);
+CREATE TABLE public.partner_application_events (
  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
- application_id uuid NOT NULL REFERENCES public.provider_applications(id) ON DELETE RESTRICT,
+ application_id uuid NOT NULL REFERENCES public.partner_applications(id) ON DELETE RESTRICT,
  version integer NOT NULL,
  actor_id uuid NOT NULL,
  actor_role text NOT NULL,
@@ -31,11 +31,11 @@ CREATE TABLE public.provider_application_events (
 );
 CREATE FUNCTION public.provider_evidence_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Provider application evidence cannot be deleted, updated or truncated'; END $$;
-CREATE TRIGGER provider_events_immutable BEFORE UPDATE OR DELETE ON public.provider_application_events FOR EACH ROW EXECUTE FUNCTION public.provider_evidence_immutable();
-CREATE TRIGGER provider_events_no_truncate BEFORE TRUNCATE ON public.provider_application_events FOR EACH STATEMENT EXECUTE FUNCTION public.provider_evidence_immutable();
-CREATE TRIGGER provider_applications_no_delete BEFORE DELETE ON public.provider_applications FOR EACH ROW EXECUTE FUNCTION public.provider_evidence_immutable();
-CREATE TRIGGER provider_applications_no_truncate BEFORE TRUNCATE ON public.provider_applications FOR EACH STATEMENT EXECUTE FUNCTION public.provider_evidence_immutable();
-CREATE FUNCTION public.provider_application_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE TRIGGER provider_events_immutable BEFORE UPDATE OR DELETE ON public.partner_application_events FOR EACH ROW EXECUTE FUNCTION public.provider_evidence_immutable();
+CREATE TRIGGER provider_events_no_truncate BEFORE TRUNCATE ON public.partner_application_events FOR EACH STATEMENT EXECUTE FUNCTION public.provider_evidence_immutable();
+CREATE TRIGGER partner_applications_no_delete BEFORE DELETE ON public.partner_applications FOR EACH ROW EXECUTE FUNCTION public.provider_evidence_immutable();
+CREATE TRIGGER partner_applications_no_truncate BEFORE TRUNCATE ON public.partner_applications FOR EACH STATEMENT EXECUTE FUNCTION public.provider_evidence_immutable();
+CREATE FUNCTION public.partner_application_revision() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF (NEW.id,NEW.user_id,NEW.organisation_id,NEW.submitted_at,NEW.commission_basis_points,NEW.terms_version)
    IS DISTINCT FROM (OLD.id,OLD.user_id,OLD.organisation_id,OLD.submitted_at,OLD.commission_basis_points,OLD.terms_version)
@@ -52,4 +52,4 @@ BEGIN
    RAISE EXCEPTION 'A review cannot change applicant details'; END IF;
  RETURN NEW;
 END $$;
-CREATE TRIGGER provider_application_revision BEFORE UPDATE ON public.provider_applications FOR EACH ROW EXECUTE FUNCTION public.provider_application_revision();
+CREATE TRIGGER partner_application_revision BEFORE UPDATE ON public.partner_applications FOR EACH ROW EXECUTE FUNCTION public.partner_application_revision();

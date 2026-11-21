@@ -1,574 +1,275 @@
-#!/usr/bin/env node
-// Only a disposable local database. Never contacts Stripe, SMTP, AWS or production.
+// Run only on an explicitly disposable local PostgreSQL database after migrations.
 import assert from 'node:assert/strict';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-const connection = process.env.DATABASE_URL;
-if (
-  process.env.PROVIDER_TEST_DATABASE !== '1' ||
-  process.env.NODE_ENV === 'production' ||
-  !connection
-)
-  throw new Error('Requires PROVIDER_TEST_DATABASE=1 and disposable PostgreSQL');
-const target = new URL(connection);
-assert(
-  ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) &&
-    target.pathname === '/provider_recruitment_test' &&
-    !target.search,
-  'Use the isolated loopback provider_recruitment_test database'
-);
+import jwt from 'jsonwebtoken';
+import { Hono } from 'hono';
+if (process.env.PROVIDER_TEST_DATABASE !== '1' || process.env.NODE_ENV === 'production' ||
+    !['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.DATABASE_URL ?? 'https://invalid').hostname))
+  throw new Error('Requires PROVIDER_TEST_DATABASE=1 and a disposable local DATABASE_URL');
 process.env.NODE_ENV = 'test';
-process.env.PROVIDERS_ENABLED = 'true';
-process.env.SMTP_HOST = '';
-process.env.WEBHOOK_WORKER_ENABLED = 'false';
-process.env.RETENTION_ENABLED = 'false';
-process.env.UPSTASH_REDIS_REST_URL = '';
-process.env.UPSTASH_REDIS_REST_TOKEN = '';
-process.env.RATE_LIMIT_MAX = '10000';
-const { default: app } = await import('../src/index.ts');
-const { default: providerRoutes } = await import('../src/providers/routes.ts');
-const { Hono } = await import('hono');
-const { issueTokens } = await import('../src/auth-utils.ts');
+process.env.PROVIDER_PAYOUTS_ENABLED='false';
+const { default: routes } = await import('../src/routes/provider-applications.ts');
+const { jwtSecret } = await import('../src/helpers.ts');
 const { closeDbPool } = await import('../src/db.ts');
-const { RETENTION_RULES } = await import('../src/retention.ts');
-const pool = new pg.Pool({ connectionString: connection });
-let cases = 0;
-const pass = (name) => {
-  cases++;
-  console.log('PASS ' + name);
-};
-async function actor(role = 'employer', verified = true) {
-  const user = {
-    id: randomUUID(),
-    email: `provider-${randomUUID()}@example.test`,
-    name: 'Provider fixture',
-    role,
-    organisationId: randomUUID(),
-  };
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const app = new Hono().route('/api/v1/provider-applications', routes);
+const operatorOrg = randomUUID();
+process.env.PROVIDER_REVIEW_ORGANISATION_ID = operatorOrg;
+let checks = 0;
+async function actor(role, org = randomUUID(), verified = true) {
+  const a = { id: randomUUID(), org, email: `${randomUUID()}@example.test`, role };
+  const db = await pool.connect();
+  try {
+  await db.query('BEGIN');
+  await db.query(`INSERT INTO public.users(id,email,name,password_hash,role,organisation_id,email_verified_at)
+    VALUES($1,$2,'Recruitment test','unused',$3,$4,$5)`, [a.id,a.email,role,org,verified ? new Date() : null]);
+  await db.query(`INSERT INTO public.organisations(id,name,created_by_user_id) VALUES($1,'Provider test',$2) ON CONFLICT(id) DO NOTHING`,[org,a.id]);
+  await db.query('COMMIT');
+  } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
+  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: org }, jwtSecret);
+  return a;
+}
+async function call(actor, path, body, expected = 200, method = body ? 'POST' : 'GET') {
+  const r = await app.request(`http://localhost/api/v1/provider-applications${path}`, {
+    method, headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: `Bearer ${actor.token}` } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await r.json();
+  assert.equal(r.status, expected, JSON.stringify(data)); checks++;
+  return data.data;
+}
+async function agreement(a, org = operatorOrg, { title = 'Provider agreement', extraSigner = false } = {}) {
+  const id = randomUUID();
+  const hash = 'a'.repeat(64);
+  // Completed retained fixture; normal application clients cannot insert signing evidence.
+  await pool.query(`INSERT INTO public.esign_documents(id,organisation_id,created_by,title,
+    original_pdf,original_sha256,source_pdf,source_sha256,pages,status,final_key,final_version,final_sha256)
+    VALUES($1,$2,$3,$5,'fixture',encode(sha256('fixture'::bytea),'hex'),
+    'fixture',encode(sha256('fixture'::bytea),'hex'),'[]','draft','retained','v1',$4)`, [id,org,a.id,hash,title]);
+  // Build retained fixture in the same state order as signing, without disabling integrity triggers.
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
-    await db.query(
-      'INSERT INTO public.users(id,email,name,password_hash,role,organisation_id,email_verified_at) VALUES($1,$2,$3,$4,$5,$6,$7)',
-      [
-        user.id,
-        user.email,
-        user.name,
-        'not-a-real-password',
-        role,
-        user.organisationId,
-        verified ? new Date() : null,
-      ]
-    );
-    await db.query(
-      "INSERT INTO public.organisations(id,name,created_by_user_id) VALUES($1,'Provider fixture',$2)",
-      [user.organisationId, user.id]
-    );
+    await db.query(`INSERT INTO public.esign_signers(id,document_id,email,name,status,consent_text,consent_at,signature_text,signed_at)
+      VALUES($1,$2,$3,'Recruitment test','signed','fixture',now(),'Fixture',now())`, [randomUUID(),id,a.email]);
+    if (extraSigner) await db.query(`INSERT INTO public.esign_signers(id,document_id,email,name,status,consent_text,consent_at,signature_text,signed_at)
+      VALUES($1,$2,$3,'Other party','signed','fixture',now(),'Fixture',now())`, [randomUUID(),id,`other-${id}@example.test`]);
+    await db.query("UPDATE public.esign_documents SET status='sent' WHERE id=$1",[id]);
+    await db.query("UPDATE public.esign_documents SET status='completed' WHERE id=$1",[id]);
     await db.query('COMMIT');
-  } catch (e) {
-    await db.query('ROLLBACK');
-    throw e;
-  } finally {
-    db.release();
-  }
-  return { ...user, token: issueTokens(user).accessToken };
+  } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
+  await pool.query(`INSERT INTO public.esign_artifacts(document_id,manifest_key,manifest_version,manifest_sha256)
+    VALUES($1,'manifest','v1',$2)`, [id,hash]);
+  return id;
 }
-async function call(method, path, body, user) {
-  const response = await app.request('http://localhost/api/v1/providers' + path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(user ? { Authorization: `Bearer ${user.token}` } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  return {
-    status: response.status,
-    body: await response.json(),
-    cache: response.headers.get('cache-control'),
-  };
-}
-const engagement = {
-  model: 'independent_no_minimum',
-  formVersion: 'independent-engagement-2026-11-v1',
-  legalStructure: 'sole_trader',
-  companyNumber: '',
-  businessAddress: {
-    line1: '10 Example Street',
-    line2: '',
-    city: 'London',
-    postalCode: 'SW1A 1AA',
-  },
-  vatRegistered: 'no',
-  vatNumber: '',
-  availability: 'Available for independently agreed assignments on weekdays.',
-  declineAssignments: 'yes',
-  deliveryControl: 'self',
-  otherClients: 'yes',
-  personalService: 'substitution_by_agreement',
-  declarationName: 'Alex Morgan',
-  noMinimumAccepted: true,
-  commissionAccepted: true,
-  informationAccurate: true,
-};
-const profile = {
-  fullName: 'Alex Morgan',
-  engagement,
-  businessName: 'Example Prevention Ltd',
-  country: 'GB',
-  kind: 'both',
-  website: 'https://example.test',
-  expertise: ['fraud_prevention', 'training'],
-  experience:
-    'We support small organisations with fraud prevention, training and appropriate package referrals.',
-};
-const submission = (version = 0, patch = {}) => ({
-  version,
-  profile: { ...profile, ...patch },
-  acknowledged: true,
-});
-const applicant = await actor(),
-  other = await actor(),
-  reviewer = await actor('admin'),
-  secondReviewer = await actor('admin'),
-  orgAdmin = await actor('admin'),
-  unverified = await actor('employee', false);
-process.env.PROVIDER_REVIEWER_IDS = `${reviewer.id},${secondReviewer.id}`;
-const review = (
-  id,
-  version,
-  status,
-  message = 'Reviewed the supplied application information.',
-  by = reviewer
-) =>
-  call(
-    'POST',
-    `/admin/applications/${id}/review`,
-    { version, status, message, engagementReviewed: status === 'approved' },
-    by
-  );
-let failureName;
 try {
-  process.env.PROVIDERS_ENABLED = 'false';
-  assert.equal((await call('GET', '/me', undefined, applicant)).status, 503);
-  process.env.PROVIDERS_ENABLED = 'true';
-  assert.equal((await call('GET', '/me')).status, 401);
-  assert.equal((await call('GET', '/me', undefined, unverified)).status, 403);
-  const keyApp = new Hono();
-  keyApp.use('*', async (c, next) => {
-    c.set('apiKeyAuth', {
-      userId: applicant.id,
-      organisationId: applicant.organisationId,
-      role: 'employer',
-      email: applicant.email,
-    });
-    return next();
-  });
-  keyApp.route('/providers', providerRoutes);
-  assert.equal((await keyApp.request('http://localhost/providers/me')).status, 403);
-  assert.equal(
-    (
-      await call(
-        'POST',
-        '/me',
-        { ...submission(), status: 'approved', commissionBasisPoints: 9999 },
-        applicant
-      )
-    ).status,
-    400
-  );
-  assert.equal(
-    (await call('POST', '/me', { ...submission(), acknowledged: false }, applicant)).status,
-    400
-  );
-  assert.equal(
-    (await call('POST', '/me', submission(0, { website: 'not-a-url' }), applicant)).status,
-    400
-  );
-  pass('feature, verified-account, API-key and server-owned policy gates');
-  let response = await call('POST', '/me', submission(), applicant);
-  assert.equal(response.status, 201, JSON.stringify(response.body));
-  let application = response.body.data.application;
-  assert.equal(application.contactEmail, applicant.email);
-  assert.equal(application.commissionBasisPoints, 1700);
-  assert.equal(application.payoutsActive, false);
-  assert.equal(application.history.length, 1);
-  assert.equal(response.cache, 'no-store');
-  assert.equal((await call('GET', '/me', undefined, other)).body.data.application, null);
-  assert.equal((await call('GET', '/admin/applications', undefined, applicant)).status, 403);
-  assert.equal((await call('GET', '/admin/applications', undefined, orgAdmin)).status, 403);
-  const queue = await call('GET', '/admin/applications?status=submitted', undefined, reviewer);
-  assert.equal(queue.status, 200);
-  assert(queue.body.data.applications.some((a) => a.id === application.id));
-  assert.equal('history' in queue.body.data.applications[0], false);
-  assert.equal(
-    (await call('GET', '/admin/applications?offset=-1', undefined, reviewer)).status,
-    400
-  );
-  pass('private applicant access, explicit programme-review appointments and paginated queue');
-  response = await call(
-    'POST',
-    '/me',
-    submission(application.version, { businessName: 'Revised Prevention Ltd' }),
-    applicant
-  );
-  assert.equal(response.status, 200);
-  application = response.body.data.application;
-  assert.equal(application.version, 2);
-  assert.equal(application.history[0].profile.businessName, profile.businessName);
-  assert.equal(application.profile.businessName, 'Revised Prevention Ltd');
-  assert.equal((await call('POST', '/me', submission(1), applicant)).status, 409);
-  response = await review(application.id, application.version, 'under_review');
-  assert.equal(response.status, 200);
-  application = response.body.data.application;
-  assert.equal((await call('POST', '/me', submission(application.version), applicant)).status, 409);
-  const competing = await Promise.all([
-    review(application.id, application.version, 'approved', 'First reviewer approval.'),
-    review(
-      application.id,
-      application.version,
-      'approved',
-      'Second reviewer approval.',
-      secondReviewer
-    ),
-  ]);
-  assert.deepEqual(competing.map((r) => r.status).sort(), [200, 409]);
-  application = competing.find((r) => r.status === 200).body.data.application;
-  assert.equal(application.version, 4);
-  assert.equal(application.history.length, 4);
-  assert.equal(application.status, 'approved');
-  assert.equal(application.payoutsActive, false);
-  pass('retained revisions, review freeze and concurrent decisions without lost updates');
-  response = await review(
-    application.id,
-    application.version,
-    'suspended',
-    'Suspended pending additional information.'
-  );
-  assert.equal(response.status, 200);
-  application = response.body.data.application;
-  response = await review(
-    application.id,
-    application.version,
-    'approved',
-    'Programme membership reinstated.'
-  );
-  assert.equal(response.status, 200);
-  application = response.body.data.application;
-  assert.equal(application.version, 6);
-  assert.equal(application.payoutsActive, false);
-  assert.equal(application.history[4].status, 'suspended');
-  pass('suspension and reinstatement retain decisions and never activate payouts');
-  const self = (await call('POST', '/me', submission(), reviewer)).body.data.application;
-  assert.equal((await review(self.id, self.version, 'approved')).status, 403);
-  assert.equal(
-    (await call('GET', `/admin/applications/${self.id}`, undefined, reviewer)).body.data.canReview,
-    false
-  );
-  assert.equal(
-    (
-      await review(
-        self.id,
-        self.version,
-        'approved',
-        'Another administrator reviewed this application.',
-        secondReviewer
-      )
-    ).status,
-    200
-  );
-  await pool.query("UPDATE public.users SET role='employer' WHERE id=$1", [reviewer.id]);
-  assert.equal((await call('GET', '/admin/applications', undefined, reviewer)).status, 403);
-  await pool.query("UPDATE public.users SET role='admin' WHERE id=$1", [reviewer.id]);
-  process.env.PROVIDER_REVIEWER_IDS = secondReviewer.id;
-  assert.equal((await call('GET', '/admin/applications', undefined, reviewer)).status, 403);
-  process.env.PROVIDER_REVIEWER_IDS = `${reviewer.id},${secondReviewer.id}`;
-  await pool.query('UPDATE public.users SET organisation_id=$2 WHERE id=$1', [
-    applicant.id,
-    other.organisationId,
-  ]);
-  assert.equal((await call('GET', '/me', undefined, applicant)).status, 403);
-  const transferred = { ...applicant, organisationId: other.organisationId };
-  transferred.token = issueTokens(transferred).accessToken;
-  assert.equal((await call('GET', '/me', undefined, transferred)).status, 403);
-  await pool.query('UPDATE public.users SET organisation_id=$2 WHERE id=$1', [
-    applicant.id,
-    applicant.organisationId,
-  ]);
-  pass(
-    'no self-review, stale-role or removed appointment access, and no cross-organisation affiliation leak'
-  );
-  const correction = await actor();
-  let corrected = (await call('POST', '/me', submission(), correction)).body.data.application;
-  corrected = (
-    await review(
-      corrected.id,
-      corrected.version,
-      'rejected',
-      'Please provide more details about your experience.'
-    )
-  ).body.data.application;
-  response = await call(
-    'POST',
-    '/me',
-    submission(corrected.version, {
-      experience:
-        'Updated experience with specific training and assessment projects supporting organisations.',
-    }),
-    correction
-  );
-  assert.equal(response.status, 200);
-  corrected = response.body.data.application;
-  assert.equal(corrected.status, 'submitted');
-  assert.equal(corrected.reviewMessage, null);
-  assert(corrected.history.some((h) => h.message?.includes('more details')));
-  pass('requested changes can be resubmitted without erasing the previous application or review');
-  const failed = await actor();
-  failureName = `provider_test_${randomBytes(5).toString('hex')}`;
-  await pool.query(
-    `CREATE FUNCTION ${failureName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.actor_id='${failed.id}'::uuid THEN RAISE EXCEPTION 'injected provider event failure'; END IF; RETURN NEW; END $$`
-  );
-  await pool.query(
-    `CREATE TRIGGER ${failureName} BEFORE INSERT ON public.provider_application_events FOR EACH ROW EXECUTE FUNCTION ${failureName}()`
-  );
-  assert.equal((await call('POST', '/me', submission(), failed)).status, 500);
-  assert.equal(
-    (
-      await pool.query(
-        'SELECT count(*)::int n FROM public.provider_applications WHERE user_id=$1',
-        [failed.id]
-      )
-    ).rows[0].n,
-    0
-  );
-  await pool.query(`DROP TRIGGER ${failureName} ON public.provider_application_events`);
-  await pool.query(`DROP FUNCTION ${failureName}()`);
-  failureName = undefined;
-  const racer = await actor();
-  const duplicate = await Promise.all([
-    call('POST', '/me', submission(), racer),
-    call('POST', '/me', submission(), racer),
-  ]);
-  assert.deepEqual(duplicate.map((r) => r.status).sort(), [201, 409]);
-  assert.equal(
-    (
-      await pool.query(
-        'SELECT count(*)::int n FROM public.provider_applications WHERE user_id=$1',
-        [racer.id]
-      )
-    ).rows[0].n,
-    1
-  );
-  pass('audit failures roll back submissions and racing creates yield one retained application');
-  await assert.rejects(
-    pool.query(
-      "UPDATE public.provider_application_events SET event='changed' WHERE application_id=$1",
-      [application.id]
-    )
-  );
-  await assert.rejects(
-    pool.query('DELETE FROM public.provider_applications WHERE id=$1', [application.id])
-  );
-  await assert.rejects(pool.query('TRUNCATE public.provider_application_events'));
-  assert(!RETENTION_RULES.some((rule) => /provider/.test(rule.table)));
-  const cascades = await pool.query(
-    "SELECT conname FROM pg_constraint WHERE conrelid='public.provider_applications'::regclass AND contype='f'"
-  );
-  assert.equal(cascades.rowCount, 0);
-  pass(
-    'new application evidence is append-only, retained and independent of legacy purge cascades'
-  );
-  const legacy = await actor();
-  const legacyProfile = { ...profile };
-  delete legacyProfile.engagement;
-  const legacyId = randomUUID();
-  await pool.query(
-    `INSERT INTO public.provider_applications(id,user_id,organisation_id,contact_email,profile,terms_version,acknowledged_at) VALUES($1,$2,$3,$4,$5,'provider-programme-2026-11',now())`,
-    [legacyId, legacy.id, legacy.organisationId, legacy.email, legacyProfile]
-  );
-  await pool.query(
-    `INSERT INTO public.provider_application_events(application_id,version,actor_id,actor_role,event,snapshot) SELECT id,version,user_id,'employer','application.submitted',to_jsonb(a) FROM public.provider_applications a WHERE id=$1`,
-    [legacyId]
-  );
-  const beforeLegacy = await call('GET', '/me', undefined, legacy);
-  assert.equal(beforeLegacy.body.data.application.independentEngagementComplete, false);
-  assert.equal(beforeLegacy.body.data.application.history[0].profile.engagement, undefined);
-  assert.equal((await review(legacyId, 1, 'approved')).status, 409);
-  assert.equal(
-    (
-      await call(
-        'POST',
-        `/admin/applications/${legacyId}/review`,
-        { version: 1, status: 'approved', message: 'Needs explicit review confirmation.' },
-        reviewer
-      )
-    ).status,
-    400
-  );
-  const revisedLegacy = await call('POST', '/me', submission(1), legacy);
-  assert.equal(revisedLegacy.status, 200);
-  assert.equal(revisedLegacy.body.data.application.independentEngagementComplete, true);
-  assert.equal(revisedLegacy.body.data.application.history[0].profile.engagement, undefined);
-  const approvedLegacy = await review(legacyId, 2, 'approved');
-  assert.equal(approvedLegacy.status, 200);
-  assert.equal(approvedLegacy.body.data.application.history.at(-1).engagementReviewed, true);
-  assert.equal(approvedLegacy.body.data.application.payoutsActive, false);
-  pass(
-    'legacy records remain readable; independent candidate forms and reviewer confirmation gate new approvals'
-  );
-
-  if (process.env.PROVIDER_BROWSER_TEST === '1') {
-    const web = new URL(process.env.PROVIDER_BROWSER_URL ?? 'http://127.0.0.1:8080');
-    assert(
-      web.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(web.hostname),
-      'Browser tests require a loopback Web dashboard'
-    );
-    const { serve } = await import('@hono/node-server');
-    const { chromium, expect } =
-      await import('../../../fra-web-dashboard/node_modules/@playwright/test/index.mjs');
-    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
-    if (!server.listening) await new Promise((resolve) => server.once('listening', resolve));
-    const apiOrigin = `http://127.0.0.1:${server.address().port}`;
-    const browser = await chromium.launch({
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-      args: ['--no-sandbox'],
-    });
+  const admin = await actor('admin', operatorOrg);
+  const stranger = await actor('admin');
+  const applicant = await actor('employer');
+  const other = await actor('employer');
+  const unverified = await actor('employer', randomUUID(), false);
+  await call(null, '/me', null, 401);
+  await call(unverified, '/me', null, 403);
+  await call(stranger, '/review', null, 403);
+  await call(applicant, '/me', { companyName:'Test company', serviceInterest:'training' },400);
+  const application = await call(applicant, '/me', { companyName:'Test company', serviceInterest:'both', trainingExperience:'Demonstrated training experience' },201);
+  await call(applicant, '/me', { companyName:'Test company', serviceInterest:'sales' },409);
+  assert.equal(await call(other, '/me'), null);
+  assert((await call(admin, '/review')).some(a => a.id === application.id));
+  const review = { revision:0,status:'approved',reason:'Reviewed qualifications and demonstration',qualificationEvidence:'Professional register checked and demo observed' };
+  await call(applicant, `/${application.id}/review`, review,403);
+  await call(admin, `/${application.id}/review`, review,400);
+  const wrong = await agreement(other);
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:wrong },400);
+  // A completed, retained, applicant-signed document is not enough: it must be the provider agreement, signed only by the applicant.
+  const consent = await agreement(applicant, operatorOrg, { title: 'Consent form' });
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:consent },400);
+  const shared = await agreement(applicant, operatorOrg, { extraSigner: true });
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:shared },400);
+  const own = await call(admin, '/me', {companyName:'Operator company',serviceInterest:'sales'},201);
+  await call(admin, `/${own.id}/review`,review,403);
+  await call(admin, '/review?page=-1',null,400);
+  const doc = await agreement(applicant);
+  const noEvidence = {...review,agreementDocumentId:doc}; delete noEvidence.qualificationEvidence;
+  await call(admin, `/${application.id}/review`,noEvidence,400);
+  const approved = await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:doc });
+  assert.equal(approved.status,'approved'); assert.match(approved.providerCode,/^PRV-[a-f0-9]{32}$/);
+  // Statements are reads: a lock held on the provider row (as reconciliation/checkout hold it) must not stall them.
+  {
+    const lock = await pool.connect();
     try {
-      const candidate = await actor('employee'),
-        staff = await actor('admin');
-      process.env.PROVIDER_REVIEWER_IDS += `,${staff.id}`;
-      const errors = [];
-      async function pageFor(user) {
-        const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-        page.on('pageerror', (error) => errors.push(error.message));
-        await page.addInitScript(
-          (token) => localStorage.setItem('fra_access_token', token),
-          user.token
-        );
-        // Forward only loopback API requests to the isolated real API. No responses are mocked.
-        await page.route('**/api/v1/**', async (route) => {
-          const requested = new URL(route.request().url());
-          assert(['localhost', '127.0.0.1', '[::1]'].includes(requested.hostname));
-          const response = await route.fetch({
-            url: apiOrigin + requested.pathname + requested.search,
-          });
-          await route.fulfill({ response });
-        });
-        return page;
+      await lock.query('BEGIN');
+      await lock.query('SELECT id FROM public.provider_applications WHERE id=$1 FOR UPDATE',[application.id]);
+      const stalled = Symbol('stalled');
+      const timeout = () => new Promise(r => setTimeout(() => r(stalled), 3000));
+      for (const read of [() => call(applicant,'/me/statement'), () => call(admin,`/${application.id}/statement`)]) {
+        const result = await Promise.race([read(), timeout()]);
+        assert.notEqual(result, stalled, 'statement endpoint blocked behind a provider-row lock');
       }
-      const candidatePage = await pageFor(candidate),
-        staffPage = await pageFor(staff);
-      const business = `Browser Partner ${randomBytes(4).toString('hex')}`;
-      await candidatePage.goto(new URL('/partners', web).href);
-      await candidatePage.getByLabel('Full name', { exact: true }).fill('Alex Morgan');
-      await candidatePage.getByLabel('Business or professional name').fill(business);
-      await candidatePage.getByLabel('Training', { exact: true }).check();
-      await candidatePage
-        .getByLabel('Experience and proposed contribution')
-        .fill(profile.experience);
-      await candidatePage.getByLabel('Business legal structure').selectOption('sole_trader');
-      await candidatePage
-        .getByLabel('Business correspondence address', { exact: true })
-        .fill(engagement.businessAddress.line1);
-      await candidatePage
-        .getByLabel('Town / city', { exact: true })
-        .fill(engagement.businessAddress.city);
-      await candidatePage
-        .getByLabel('Postcode / postal code', { exact: true })
-        .fill(engagement.businessAddress.postalCode);
-      await candidatePage.getByLabel('Are you VAT registered?').selectOption('no');
-      await candidatePage
-        .getByLabel('Availability and preferred working arrangements')
-        .fill(engagement.availability);
-      await candidatePage
-        .getByLabel('Can you choose whether to accept a proposed assignment?')
-        .selectOption('yes');
-      await candidatePage
-        .getByLabel('Who would normally decide how the agreed services are delivered?')
-        .selectOption('self');
-      await candidatePage
-        .getByLabel('Do you currently provide services to other clients?')
-        .selectOption('yes');
-      await candidatePage
-        .getByLabel('What personal-service arrangement is proposed?')
-        .selectOption('substitution_by_agreement');
-      await candidatePage.getByRole('checkbox', { name: /I understand that no minimum/ }).check();
-      await candidatePage.getByRole('checkbox', { name: /I understand the 17%/ }).check();
-      await candidatePage
-        .getByRole('checkbox', { name: /I confirm the business information/ })
-        .check();
-      await candidatePage.getByLabel('Declaration full name').fill('Alex Morgan');
-      await candidatePage.getByRole('checkbox', { name: /I confirm these details/ }).check();
-      await candidatePage.getByRole('button', { name: 'Submit application', exact: true }).click();
-      await candidatePage
-        .getByText('Your application has been submitted. You can follow its review here.', {
-          exact: true,
-        })
-        .waitFor();
-      await staffPage.goto(new URL('/partners/review', web).href);
-      await staffPage.getByRole('link', { name: business, exact: true }).click();
-      await staffPage.getByLabel('Decision', { exact: true }).selectOption('approved');
-      await staffPage
-        .getByLabel('Message to the applicant')
-        .fill('Approved for the programme. Stripe recipient verification remains separate.');
-      await staffPage.getByRole('checkbox', { name: /I have reviewed the candidate/ }).check();
-      await staffPage.getByRole('button', { name: 'Record decision', exact: true }).click();
-      await staffPage
-        .getByRole('alertdialog')
-        .getByRole('button', { name: 'Record decision', exact: true })
-        .click();
-      await staffPage
-        .getByText('Decision recorded. Payouts remain inactive.', { exact: true })
-        .waitFor();
-      await candidatePage.getByRole('button', { name: 'Refresh status', exact: true }).click();
-      await candidatePage.getByText('Approved', { exact: true }).waitFor();
-      await expect(candidatePage.getByRole('button', { name: 'Update & resubmit' })).toHaveCount(0);
-      const stored = (await call('GET', '/me', undefined, candidate)).body.data.application;
-      assert.equal(stored.status, 'approved');
-      assert.equal(stored.history.length, 2);
-      assert.equal(stored.payoutsActive, false);
-      if (process.env.PROVIDER_BROWSER_ARTIFACTS) {
-        mkdirSync(process.env.PROVIDER_BROWSER_ARTIFACTS, { recursive: true });
-        await candidatePage.evaluate(() => window.scrollTo(0, 0));
-        await candidatePage.screenshot({
-          path: join(process.env.PROVIDER_BROWSER_ARTIFACTS, 'application-approved.png'),
-          fullPage: true,
-        });
-        await staffPage.evaluate(() => window.scrollTo(0, 0));
-        await staffPage.screenshot({
-          path: join(process.env.PROVIDER_BROWSER_ARTIFACTS, 'administrator-review.png'),
-          fullPage: true,
-        });
-        await candidatePage.setViewportSize({ width: 390, height: 844 });
-        assert(
-          await candidatePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
-        );
-        await candidatePage.evaluate(() => window.scrollTo(0, 0));
-        await candidatePage.screenshot({
-          path: join(process.env.PROVIDER_BROWSER_ARTIFACTS, 'application-mobile.png'),
-          fullPage: true,
-        });
-      }
-      assert.deepEqual(errors, []);
-      pass(
-        'real browser submits and reviews an application through authenticated API and PostgreSQL; applicant sees retained approval'
-      );
-    } finally {
-      await browser.close();
-      server.closeAllConnections();
-      await new Promise((resolve) => server.close(resolve));
-    }
+    } finally { await lock.query('ROLLBACK'); lock.release(); }
   }
-  console.log(
-    `PASS ${cases} provider recruitment PostgreSQL scenarios (no Stripe, SMTP or AWS calls)`
-  );
-} finally {
-  if (failureName) {
-    await pool.query(`DROP TRIGGER IF EXISTS ${failureName} ON public.provider_application_events`);
-    await pool.query(`DROP FUNCTION IF EXISTS ${failureName}()`);
-  }
-  await pool.end();
-  await closeDbPool();
-}
+  await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:doc },409);
+  const offer = { packageId:'pkg_basic',reference:randomUUID(),service:'training' };
+  const assignment = await call(admin, `/${application.id}/assignments`,offer);
+  await call(admin, `/${application.id}/assignments`,offer,409);
+  const list = await call(applicant,'/me/assignments'); assert.equal(list[0].id,assignment.id);
+  await call(other,`/me/assignments/${assignment.id}/decision`,{status:'accepted'},403);
+  const outcomes = await Promise.all(['accepted','refused'].map(status => app.request(`http://localhost/api/v1/provider-applications/me/assignments/${assignment.id}/decision`,{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${applicant.token}`},body:JSON.stringify({status})
+  })));
+  assert.deepEqual(outcomes.map(r=>r.status).sort(),[200,409]); checks++;
+  await call(admin,`/${application.id}/review`,{revision:1,status:'suspended',reason:'Temporary suspension pending review'});
+  assert.equal((await call(applicant,'/me/assignments'))[0].status,'cancelled');
+  await call(applicant,`/me/assignments/${assignment.id}/decision`,{status:'accepted'},403);
+  await call(admin,`/${application.id}/assignments`,{...offer,reference:randomUUID()},409);
+  const audit = await call(admin,`/${application.id}/audit`); assert.equal(audit.length,4);
+  await call(admin,`/${application.id}/review`,{...review,revision:2,agreementDocumentId:doc});
+  const final = await call(admin,`/${application.id}/assignments`,{...offer,reference:randomUUID()});
+  await call(applicant,`/me/assignments/${final.id}/decision`,{status:'accepted'});
+  await call(admin,`/${application.id}/assignments/${final.id}/close`,{status:'completed',reason:'Delivery reviewed and accepted'});
+  await call(admin,`/${application.id}/assignments/${final.id}/close`,{status:'completed',reason:'Delivery reviewed and accepted'},409);
+  await call(admin,`/${application.id}/assignments`);
+  const cancelled = await call(admin,`/${application.id}/assignments`,{...offer,reference:randomUUID()});
+  await call(admin,`/${application.id}/assignments/${cancelled.id}/close`,{status:'cancelled',reason:'Customer cancelled assignment'});
+  await call(applicant,`/me/assignments/${cancelled.id}/decision`,{status:'accepted'},409);
+  const seller = await call(other,'/me',{companyName:'Sales company',serviceInterest:'sales'},201);
+  const sellerDoc = await agreement(other);
+  await call(admin,`/${seller.id}/review`,{revision:0,status:'approved',reason:'Sales references and agreement reviewed',agreementDocumentId:sellerDoc});
+  await call(admin,`/${seller.id}/assignments`,{...offer,reference:randomUUID()},409);
+  const declinedUser = await actor('employer');
+  const declined = await call(declinedUser,'/me',{companyName:'Another company',serviceInterest:'sales'},201);
+  await call(admin,`/${declined.id}/review`,{revision:0,status:'declined',reason:'Application does not meet requirements'});
+  await call(admin,`/${declined.id}/assignments`,{...offer,reference:randomUUID()},409);
+  // A declined applicant is not stuck: a reviewer can reopen the application, but cannot approve it directly.
+  const reopenReason='Evidence supplied after the decision';
+  await call(admin,`/${declined.id}/review`,{revision:1,status:'approved',reason:reopenReason},409);
+  await call(declinedUser,`/${declined.id}/review`,{revision:1,status:'submitted',reason:reopenReason},403);
+  const reopened=await call(admin,`/${declined.id}/review`,{revision:1,status:'submitted',reason:reopenReason});
+  assert.equal(reopened.status,'submitted');
+  await call(admin,`/${declined.id}/review`,{revision:2,status:'submitted',reason:reopenReason},409);
+  await call(admin,`/${declined.id}/review`,{revision:2,status:'declined',reason:'Application still does not meet requirements'});
+  await assert.rejects(pool.query('DELETE FROM public.provider_recruitment_audit WHERE application_id=$1',[application.id])); checks++;
+  // Financial integration: real PostgreSQL and the existing isolated Stripe snapshot fixture.
+  const { attributeProviderSale, commissionTarget, reconcileProviderCommission, refreshProviderPayments } = await import('../src/provider-commissions.ts');
+  const { withTransaction } = await import('../src/db/transaction.ts');
+  const { dbInsertPurchase } = await import('../src/db/purchases.ts');
+  const { reconcilePaidPurchase } = await import('../src/payment-lifecycle.ts');
+  const { setStripeClient } = await import('../src/stripe.ts');
+  const { paymentProvider } = await import('../__tests__/fixtures/payment-provider.ts');
+  assert.equal(commissionTarget(100000,120000,0,true),17000);
+  assert.equal(commissionTarget(100000,120000,60000,true),8500);
+  assert.equal(commissionTarget(100000,120000,0,false),0);
+  checks+=3;
+  const sales=await call(admin,`/${application.id}/assignments`,{packageId:'pkg_basic',reference:randomUUID(),service:'sales'});
+  await call(applicant,`/me/assignments/${sales.id}/decision`,{status:'accepted'});
+  const sale={id:randomUUID(),organisationId:declinedUser.org,userId:declinedUser.id,packageId:'pkg_basic',status:'requires_confirmation',amountCents:100000,currency:'gbp',createdAt:new Date().toISOString()};
+  await withTransaction(async db=>{
+    await dbInsertPurchase(sale,db);
+    await attributeProviderSale(db,{userId:declinedUser.id,organisationId:declinedUser.org,email:declinedUser.email,role:'employer'},sale.id,'pkg_basic',approved.providerCode);
+  });
+  const provider=paymentProvider(sale);setStripeClient(provider.client);
+  await reconcilePaidPurchase(sale,provider.paymentIntentId,'test');
+  let statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,17000);
+  await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-replay');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.entries.length,1);
+  await call(other,`/${application.id}/statement`,null,403);
+  await call(admin,`/${application.id}/payouts`,{requestKey:randomUUID(),currency:'gbp',amountCents:17000,reason:'Finance verified customer receipt'},503);
+  process.env.PROVIDER_PAYOUTS_ENABLED='true';
+  provider.refund(60000);await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-refund');
+  provider.dispute('needs_response');await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-dispute');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);
+  provider.dispute('won');await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-dispute-won');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,8500);
+  // A provider with more sales than the full-check limit skips sales verified moments ago. A stale sale is
+  // still checked, a Stripe failure is reported rather than hidden, and a spent time budget asks for a retry.
+  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin'};
+  provider.state.unavailable=true;
+  await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // verified seconds ago: Stripe is not called
+  await pool.query("UPDATE public.purchases SET payment_reconciled_at=now()-interval '10 minutes' WHERE id=$1",[sale.id]);
+  await assert.rejects(refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}),/could not be verified for 1 sale/);
+  provider.state.unavailable=false;
+  await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // stale sale checked and refreshed
+  await assert.rejects(refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0,maxAgeSeconds:0,budgetMs:-1}),/still running/);
+  checks+=4;
+  const second=await actor('admin',operatorOrg);
+  const request={requestKey:randomUUID(),currency:'gbp',amountCents:8500,reason:'Finance verified customer receipt'};
+  provider.state.unavailable=true;
+  await call(admin,`/${application.id}/payouts`,request,409);
+  provider.state.unavailable=false;
+  const reserved=await call(admin,`/${application.id}/payouts`,request);
+  assert.equal((await call(admin,`/${application.id}/payouts`,request)).id,reserved.id);
+  await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID()},409);
+  const approve={action:'approve',reason:'Independent finance verification'};
+  await call(admin,`/payouts/${reserved.id}/action`,approve,403);
+  await call(second,`/payouts/${reserved.id}/action`,approve);
+  provider.refund(30000); // Refresh before recording catches even a not-yet-delivered refund webhook.
+  const record={action:'record',reason:'Bank settlement verified in fixture',settlementReference:`LOCAL-TEST-${randomUUID()}`};
+  await call(second,`/payouts/${reserved.id}/action`,record,409);
+  await call(admin,`/payouts/${reserved.id}/action`,{action:'cancel',reason:'Refund requires corrected amount'});
+  const corrected=await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:4250});
+  await call(second,`/payouts/${corrected.id}/action`,approve);
+  await call(second,`/payouts/${corrected.id}/action`,record);
+  await call(second,`/payouts/${corrected.id}/action`,record); // Idempotent replay.
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].recorded,4250);assert.equal(statement.balances[0].available,0);
+  // Operator staff identifiers are for reviewers only; the provider's own statement must not carry them.
+  assert(statement.payouts.length>0 && statement.payouts.every(p=>!('preparedBy' in p) && !('approvedBy' in p)));
+  const staffView=await call(admin,`/${application.id}/statement`);
+  assert(staffView.payouts.length>0 && staffView.payouts.every(p=>p.preparedBy));
+  provider.refund(30000);await reconcilePaidPurchase(sale,provider.paymentIntentId,'test-full-refund');
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);assert.equal(statement.balances[0].available,-4250);
+  await call(admin,`/${application.id}/payouts`,{...request,requestKey:randomUUID(),amountCents:1},409);
+  await assert.rejects(pool.query('DELETE FROM public.provider_commission_entries WHERE purchase_id=$1',[sale.id]));
+  await assert.rejects(pool.query("UPDATE public.provider_payouts SET settlement_reference='rewritten' WHERE id=$1",[corrected.id]));
+  checks+=2;
+  // A refund larger than the payment is inconsistent data. It must lower commission, never throw inside payment reconciliation.
+  const entriesBefore=(await call(applicant,'/me/statement')).entries.length;
+  await pool.query('UPDATE public.purchases SET refunded_amount_cents=refunded_amount_cents+50000 WHERE id=$1',[sale.id]);
+  await withTransaction(db=>reconcileProviderCommission(db,sale.id));
+  statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,0);assert.equal(statement.entries.length,entriesBefore);
+  checks+=2;
+  const selfSale={...sale,id:randomUUID(),userId:applicant.id,organisationId:applicant.org};
+  await assert.rejects(withTransaction(async db=>{
+    await dbInsertPurchase(selfSale,db);
+    await attributeProviderSale(db,{userId:applicant.id,organisationId:applicant.org,email:applicant.email,role:'employer'},selfSale.id,'pkg_basic',approved.providerCode);
+  }),/Self-referrals/);
+  assert.equal((await pool.query('SELECT 1 FROM public.purchases WHERE id=$1',[selfSale.id])).rowCount,0);checks++;
+  const {default:paymentRoutes}=await import('../src/routes/payments.ts');
+  const checkoutApp=new Hono().route('/api/v1',paymentRoutes);
+  const checkoutBuyer=await actor('employer');
+  setStripeClient({checkout:{sessions:{create:async()=>({id:'cs_provider_fixture',url:'https://example.test/fixture-checkout'})}}});
+  const checkout=await checkoutApp.request('http://localhost/api/v1/purchases',{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${checkoutBuyer.token}`},
+    body:JSON.stringify({packageId:'pkg_basic',client:'web',providerCode:approved.providerCode}),
+  });
+  assert.equal(checkout.status,200,await checkout.clone().text());
+  const checkoutData=await checkout.json();
+  assert.equal((await pool.query('SELECT application_id FROM public.provider_sale_attributions WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rows[0].application_id,application.id);
+  assert.equal((await pool.query('SELECT 1 FROM public.provider_commission_entries WHERE purchase_id=$1',[checkoutData.data.purchaseId])).rowCount,0);
+  checks++;
+  let expired=false;
+  setStripeClient({checkout:{sessions:{
+    create:async()=>({id:'cs_replacement_fixture',url:'https://example.test/replacement-checkout'}),
+    retrieve:async()=>({id:'cs_provider_fixture',client_reference_id:checkoutData.data.purchaseId,payment_status:'unpaid',status:expired?'expired':'open',url:'https://example.test/fixture-checkout'}),
+  }}});
+  const checkoutCall=code=>checkoutApp.request('http://localhost/api/v1/purchases',{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${checkoutBuyer.token}`},
+    body:JSON.stringify({packageId:'pkg_basic',client:'web',providerCode:code}),
+  });
+  assert.equal((await checkoutCall('PRV-'+'f'.repeat(32))).status,409);checks++;
+  const sellerOffer=await call(admin,`/${seller.id}/assignments`,{packageId:'pkg_basic',service:'sales',reference:randomUUID()});
+  await call(other,`/me/assignments/${sellerOffer.id}/decision`,{status:'accepted'});
+  const sellerCode=(await call(other,'/me')).providerCode;
+  expired=true;
+  const replacement=await checkoutCall(sellerCode);
+  assert.equal(replacement.status,200,await replacement.clone().text());
+  const replacementData=await replacement.json();
+  assert.equal((await pool.query('SELECT application_id FROM public.provider_sale_attributions WHERE purchase_id=$1',[replacementData.data.purchaseId])).rows[0].application_id,seller.id);checks++;
+  setStripeClient(null);
+  process.env.STRIPE_SECRET_KEY='rk_test_fixture_only';
+  process.env.STRIPE_WEBHOOK_SECRET='whsec_fixture_only';
+  await import('../src/check-provider-setup.ts');checks++;
+  await pool.query("UPDATE public.users SET role='employee' WHERE id=$1",[admin.id]);
+  await call(admin,'/review',null,403);
+  console.log(`PASS: ${checks} recruitment checks, signed-agreement binding, tenant isolation, stale-role rejection, concurrent decisions, suspension, retained audit, attribution, refunds/disputes and independently approved payout records`);
+} finally { await closeDbPool(); await pool.end(); }

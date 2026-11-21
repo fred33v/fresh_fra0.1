@@ -2,7 +2,7 @@
 CREATE TABLE public.provider_agreements (
  id uuid PRIMARY KEY,
  sequence bigint GENERATED ALWAYS AS IDENTITY UNIQUE,
- application_id uuid NOT NULL REFERENCES public.provider_applications(id) ON DELETE RESTRICT,
+ application_id uuid NOT NULL REFERENCES public.partner_applications(id) ON DELETE RESTRICT,
  application_version integer NOT NULL CHECK(application_version > 0),
  document_id uuid NOT NULL UNIQUE REFERENCES public.esign_documents(id) ON DELETE RESTRICT,
  source_sha256 text NOT NULL CHECK(source_sha256 ~ '^[a-f0-9]{64}$'),

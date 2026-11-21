@@ -2,8 +2,8 @@ import type { DbExecutor } from './transaction.js';
 import { getDbPool } from '../db.js';
 import type { Purchase, Package, PurchaseStatus } from '../types.js';
 
-export async function dbInsertPurchase(p: Purchase): Promise<void> {
-  const pool = getDbPool();
+export async function dbInsertPurchase(p: Purchase, db?: DbExecutor): Promise<void> {
+  const pool = db ?? getDbPool();
   await pool.query(
     'insert into public.purchases (id, organisation_id, user_id, package_id, status, payment_intent_id, client_secret, checkout_session_id, amount_cents, currency, created_at, confirmed_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
     [p.id, p.organisationId, p.userId, p.packageId, p.status, p.paymentIntentId ?? null, p.clientSecret ?? null, p.checkoutSessionId ?? null, p.amountCents, p.currency, p.createdAt, p.confirmedAt ?? null]

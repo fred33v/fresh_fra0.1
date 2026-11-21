@@ -70,6 +70,16 @@ export function checkProductionEnv(
     errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set');
   }
 
+  if (env.PROVIDER_PAYOUTS_ENABLED && !['true','false'].includes(env.PROVIDER_PAYOUTS_ENABLED)) {
+    errors.push('PROVIDER_PAYOUTS_ENABLED must be true or false');
+  }
+  if (env.PROVIDER_REVIEW_ORGANISATION_ID && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(env.PROVIDER_REVIEW_ORGANISATION_ID)) {
+    errors.push('PROVIDER_REVIEW_ORGANISATION_ID must be an operator organisation UUID');
+  }
+  if (env.PROVIDER_PAYOUTS_ENABLED === 'true' && !env.PROVIDER_REVIEW_ORGANISATION_ID) {
+    errors.push('Payout recording requires PROVIDER_REVIEW_ORGANISATION_ID');
+  }
+
   // Recommended (warn)
   if (!env.S3_BUCKET) {
     warnings.push('S3_BUCKET is not set — file uploads will be unavailable');

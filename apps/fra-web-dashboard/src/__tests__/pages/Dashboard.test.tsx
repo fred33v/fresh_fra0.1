@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '@/pages/Dashboard';
@@ -7,6 +7,7 @@ import { useWorkshopProgress } from '@/hooks/useWorkshopProgress';
 import { useEntitlements, type Entitlements } from '@/hooks/useEntitlements';
 import { useOrgAssessments } from '@/hooks/useOrgAssessments';
 import { workshopSections } from '@/data/workshopContent';
+import { api } from '@/lib/api';
 
 // ── Mocks ──────────────────────────────────────────────────
 
@@ -21,6 +22,11 @@ vi.mock('@/hooks/useAuth');
 vi.mock('@/hooks/useWorkshopProgress');
 vi.mock('@/hooks/useEntitlements');
 vi.mock('@/hooks/useOrgAssessments');
+
+// Enterprise renders MyActions, which loads its own data (tested in MyActions.test.tsx). Without this mock it made
+// a real network call whose rejection could land after the test environment was torn down
+// ("window is not defined" from setFailed), failing the run at random.
+vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 // The health check card loads its own data; its behaviour is tested in HealthCheckCard.test.tsx
 vi.mock('@/components/HealthCheckCard', () => ({
@@ -44,6 +50,7 @@ const mockedUseAuth = vi.mocked(useAuth);
 const mockedUseWorkshopProgress = vi.mocked(useWorkshopProgress);
 const mockedUseEntitlements = vi.mocked(useEntitlements);
 const mockedUseOrgAssessments = vi.mocked(useOrgAssessments);
+const mockedApiGet = vi.mocked(api.get);
 
 function setupAssessments(hasFinishedAssessment: boolean) {
   mockedUseOrgAssessments.mockReturnValue({ assessments: [], isLoading: false, hasFinishedAssessment, latestResult: vi.fn().mockReturnValue(null) });
@@ -154,6 +161,7 @@ function renderDashboard() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedApiGet.mockResolvedValue({ risks: [], speakUpToken: null });
   setupAuth();
   setupProgress();
   setupPackage('pkg_training');
@@ -503,6 +511,12 @@ describe('Dashboard', () => {
       setupPackage(packageId);
       renderDashboard();
       expect(screen.getByTestId('health-check-card')).toHaveTextContent(PACKAGE_FEATURES[packageId].packageName);
+    });
+
+    it('Enterprise loads "My actions" through the API client, never the network', async () => {
+      setupPackage('pkg_full');
+      renderDashboard();
+      await waitFor(() => expect(mockedApiGet).toHaveBeenCalledWith('/api/v1/my-actions'));
     });
 
     it('Starter: health check, with the workshop shown as part of Professional', () => {

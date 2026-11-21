@@ -16,7 +16,7 @@ No bank details, identity document upload, Stripe account creation, commission a
 
 ## Storage and permissions
 
-Forward-only migration `037_provider_recruitment.sql` adds `provider_applications` and `provider_application_events`. Existing migrations 001–036 remain unchanged.
+Forward-only migration `040_partner_applications.sql` (originally `037_provider_recruitment.sql`) adds `partner_applications` and `partner_application_events`. Existing migrations 001–036 remain unchanged.
 
 Application updates and their complete version snapshots commit in the same transaction. A failure to append evidence rolls back the application change. Events reject UPDATE, DELETE and TRUNCATE; application deletion/truncation is also refused. Database owners/superusers remain trusted administrators and can bypass database-level controls.
 
@@ -26,7 +26,7 @@ Every request checks the current persisted account and organisation. Writes lock
 
 ## Activation
 
-Apply migration 037 on an isolated test database first. Production schema and data have not been changed during this increment.
+Apply migrations 040 and 041 on an isolated test database first. A database that applied the earlier 037/038 names needs the one-off `scripts/reconcile-local-partner-tables.sql` first (see "Renumbering" below). Production schema and data have not been changed during this increment.
 
 ```dotenv
 PROVIDERS_ENABLED=false
@@ -100,3 +100,11 @@ The preparation checklist identifies actual working-arrangement/status review, a
 ## Expanded scope reminder — 21 November 2026
 
 The [Hire, Sell & Earn specification](HIRE_SELL_EARN_SPEC.md) expands the target beyond this independent-provider increment. Existing applications/agreements remain retained under their original model. Public/company intake, verified trainer scopes, employment/B2B families, assignment permissions/delivery and finance workflows must be implemented and tested before the expanded module is declared complete. Stripe execution remains last.
+
+## Renumbering and the second recruitment module
+
+`main` merged a separate provider-recruitment module (pull request 86: `/provider-applications`, migrations 037–039, commission ledger and payouts) while this module was in draft. Both created `public.provider_applications`, so they could not share a database. This module's table is now `partner_applications` (and `partner_application_events`), its migrations are `040_partner_applications.sql` and `041_provider_agreements.sql`, and its integration script is `scripts/partner-recruitment-integration.mjs`. Nothing else changed.
+
+Both modules are still mounted (`/provider-applications` and `/providers`). They are not yet unified: that is a separate design step, because the commission, assignment and payout tables on `main` reference `provider_applications`.
+
+A local database that applied the earlier 037/038 names holds this module's table as `provider_applications`. Run `scripts/reconcile-local-partner-tables.sql` once against it, then `pnpm migrate`. It renames the tables, swaps the two `schema_migrations` entries, and does nothing if the database is already in the new shape. Take a backup first.

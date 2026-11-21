@@ -203,7 +203,13 @@ jobs:
           DOMAIN_BUDGET_TEST_DATABASE: '1'
         run: node --import tsx scripts/domain-budget-integration.mjs
 
-      - name: Provider recruitment and retained reviews (PostgreSQL, no external services)
+      - name: Provider recruitment (PostgreSQL, local evidence fixtures)
+        working-directory: apps/fra-backend/backend
+        env:
+          PROVIDER_TEST_DATABASE: '1'
+        run: node --import tsx scripts/provider-recruitment-integration.mjs
+
+      - name: Partner applications and retained reviews (PostgreSQL, no external services)
         working-directory: apps/fra-backend/backend
         env:
           PROVIDER_TEST_DATABASE: '1'
@@ -212,7 +218,7 @@ jobs:
           export DATABASE_URL=postgresql://fra:fra-ci-only@localhost:5432/provider_recruitment_test
           export DATABASE_URL_UNPOOLED="$DATABASE_URL"
           pnpm migrate
-          node --import tsx scripts/provider-recruitment-integration.mjs
+          node --import tsx scripts/partner-recruitment-integration.mjs
           node --import tsx scripts/provider-agreements-integration.mjs
 
       - name: Internal electronic signing (PostgreSQL, generated certificate, captured SMTP and S3 double)
@@ -234,7 +240,7 @@ jobs:
       - name: Install Chromium for authenticated browser/database checks
         run: pnpm --filter @stopfra/web-dashboard exec playwright install --with-deps chromium
 
-      - name: Provider applicant and appointed-reviewer browser journey (real PostgreSQL)
+      - name: Partner applicant and appointed-reviewer browser journey (real PostgreSQL)
         working-directory: apps/fra-backend/backend
         env:
           DATABASE_URL: postgresql://fra:fra-ci-only@localhost:5432/provider_recruitment_test
@@ -246,7 +252,7 @@ jobs:
           provider_web_pid=$!
           trap 'kill "$provider_web_pid" 2>/dev/null || true' EXIT
           node --input-type=module -e 'let ready=false; for(let i=0;i<60;i++){try{const r=await fetch("http://127.0.0.1:8080");if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}if(!ready)throw new Error("Provider UI did not start");'
-          node --import tsx scripts/provider-recruitment-integration.mjs
+          node --import tsx scripts/partner-recruitment-integration.mjs
           node --import tsx scripts/provider-agreements-integration.mjs
 
       - name: Document preparation UI (mock API, real PDF canvas)

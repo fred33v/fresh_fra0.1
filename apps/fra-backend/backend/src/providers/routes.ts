@@ -28,7 +28,7 @@ async function evidence(
   reviewConfirmation?: { engagementReviewed: boolean; engagementVersion: string | null }
 ) {
   await db.query(
-    'INSERT INTO public.provider_application_events(application_id,version,actor_id,actor_role,event,snapshot) VALUES($1,$2,$3,$4,$5,$6)',
+    'INSERT INTO public.partner_application_events(application_id,version,actor_id,actor_role,event,snapshot) VALUES($1,$2,$3,$4,$5,$6)',
     [
       application.id,
       application.version,
@@ -61,7 +61,7 @@ function present(application: Application) {
 }
 async function detail(db: DbExecutor, application: Application) {
   const { rows } = await db.query(
-    'SELECT id::text,version,event,actor_role,created_at,snapshot FROM public.provider_application_events WHERE application_id=$1 AND version <= $2 ORDER BY version',
+    'SELECT id::text,version,event,actor_role,created_at,snapshot FROM public.partner_application_events WHERE application_id=$1 AND version <= $2 ORDER BY version',
     [application.id, application.version]
   );
   return {
@@ -100,7 +100,7 @@ export function createProviderRoutes(
     if (user instanceof Response) return user;
     const application = (
       await getDbPool().query<Application>(
-        'SELECT * FROM public.provider_applications WHERE user_id=$1',
+        'SELECT * FROM public.partner_applications WHERE user_id=$1',
         [user.id]
       )
     ).rows[0];
@@ -141,7 +141,7 @@ export function createProviderRoutes(
       if (user instanceof Response) return user;
       const existing = (
         await db.query<Application>(
-          'SELECT * FROM public.provider_applications WHERE user_id=$1 FOR UPDATE',
+          'SELECT * FROM public.partner_applications WHERE user_id=$1 FOR UPDATE',
           [user.id]
         )
       ).rows[0];
@@ -166,11 +166,11 @@ export function createProviderRoutes(
         );
       const result = existing
         ? await db.query<Application>(
-            `UPDATE public.provider_applications SET profile=$2,contact_email=$3,status='submitted',version=version+1,acknowledged_at=now(),updated_at=now(),reviewed_by=NULL,reviewed_at=NULL,review_message=NULL WHERE id=$1 RETURNING *`,
+            `UPDATE public.partner_applications SET profile=$2,contact_email=$3,status='submitted',version=version+1,acknowledged_at=now(),updated_at=now(),reviewed_by=NULL,reviewed_at=NULL,review_message=NULL WHERE id=$1 RETURNING *`,
             [existing.id, parsed.data.profile, user.email]
           )
         : await db.query<Application>(
-            `INSERT INTO public.provider_applications(id,user_id,organisation_id,contact_email,profile,commission_basis_points,terms_version,acknowledged_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) ON CONFLICT(user_id) DO NOTHING RETURNING *`,
+            `INSERT INTO public.partner_applications(id,user_id,organisation_id,contact_email,profile,commission_basis_points,terms_version,acknowledged_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) ON CONFLICT(user_id) DO NOTHING RETURNING *`,
             [
               randomUUID(),
               user.id,
@@ -209,7 +209,7 @@ export function createProviderRoutes(
       .safeParse({ offset: c.req.query('offset'), status: c.req.query('status') });
     if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid application filter');
     const { rows } = await getDbPool().query<Application>(
-      `SELECT * FROM public.provider_applications WHERE ($1::text IS NULL OR status=$1) ORDER BY updated_at DESC,id DESC LIMIT 26 OFFSET $2`,
+      `SELECT * FROM public.partner_applications WHERE ($1::text IS NULL OR status=$1) ORDER BY updated_at DESC,id DESC LIMIT 26 OFFSET $2`,
       [parsed.data.status ?? null, parsed.data.offset]
     );
     return success(c, {
@@ -239,7 +239,7 @@ export function createProviderRoutes(
       return jsonError(c, 404, 'NOT_FOUND', 'Application not found');
     const application = (
       await getDbPool().query<Application>(
-        'SELECT * FROM public.provider_applications WHERE id=$1',
+        'SELECT * FROM public.partner_applications WHERE id=$1',
         [id]
       )
     ).rows[0];
@@ -264,7 +264,7 @@ export function createProviderRoutes(
       if (user instanceof Response) return user;
       const application = (
         await db.query<Application>(
-          'SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',
+          'SELECT * FROM public.partner_applications WHERE id=$1 FOR UPDATE',
           [c.req.param('id')]
         )
       ).rows[0];
@@ -298,7 +298,7 @@ export function createProviderRoutes(
         );
       const updated = (
         await db.query<Application>(
-          `UPDATE public.provider_applications SET status=$2,version=version+1,review_message=$3,reviewed_by=$4,reviewed_at=now(),updated_at=now() WHERE id=$1 RETURNING *`,
+          `UPDATE public.partner_applications SET status=$2,version=version+1,review_message=$3,reviewed_by=$4,reviewed_at=now(),updated_at=now() WHERE id=$1 RETURNING *`,
           [application.id, parsed.data.status, parsed.data.message, user.id]
         )
       ).rows[0];

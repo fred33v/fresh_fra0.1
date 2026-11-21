@@ -76,6 +76,17 @@ read -rp "S3_ALLOWED_CONTENT_TYPES [application/pdf,image/png,image/jpeg]: " S3_
 S3_CONTENT_TYPES=${S3_CONTENT_TYPES:-application/pdf,image/png,image/jpeg}
 
 echo ""
+read -rp "PROVIDER_REVIEW_ORGANISATION_ID (operator organisation UUID; Enter to keep current): " PROVIDER_REVIEW_ORGANISATION_ID
+if [ -n "$PROVIDER_REVIEW_ORGANISATION_ID" ] && ! [[ "$PROVIDER_REVIEW_ORGANISATION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+  echo "Invalid operator organisation UUID" >&2; exit 1
+fi
+read -rp "PROVIDER_PAYOUTS_ENABLED (true enables staff bank-settlement recording; false disables it; Enter keeps current): " PROVIDER_PAYOUTS_ENABLED
+if [ -n "$PROVIDER_PAYOUTS_ENABLED" ] && [[ "$PROVIDER_PAYOUTS_ENABLED" != true && "$PROVIDER_PAYOUTS_ENABLED" != false ]]; then
+  echo "Payout setting must be true or false" >&2; exit 1
+fi
+[ -n "$PROVIDER_REVIEW_ORGANISATION_ID" ] && put_param "/fra/backend/PROVIDER_REVIEW_ORGANISATION_ID" "$PROVIDER_REVIEW_ORGANISATION_ID" "String"
+[ -n "$PROVIDER_PAYOUTS_ENABLED" ] && put_param "/fra/backend/PROVIDER_PAYOUTS_ENABLED" "$PROVIDER_PAYOUTS_ENABLED" "String"
+
 echo "Setting parameters..."
 
 # Secrets (SecureString - encrypted with KMS)

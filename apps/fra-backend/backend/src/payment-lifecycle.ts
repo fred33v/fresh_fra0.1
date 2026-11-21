@@ -1,3 +1,4 @@
+import { reconcileProviderCommission } from './provider-commissions.js';
 import { hasDatabase } from './helpers.js';
 import { withKeypassLock } from './keypass-lock.js';
 import { withTransaction, type DbExecutor } from './db/transaction.js';
@@ -203,6 +204,7 @@ export async function reconcilePaidPurchase(
         disputeStatus: state.disputes ?? undefined,
         paymentReconciledAt: new Date().toISOString(),
       });
+    if (client) await reconcileProviderCommission(client, current.id);
     return changed;
   };
   return db ? work(db) : withKeypassLock(purchase.organisationId, (client) => work(client));

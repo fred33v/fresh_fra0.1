@@ -111,7 +111,7 @@ export function createProviderAgreementRoutes(
       if (user instanceof Response) return user;
       const app = (
         await db.query<Application>(
-          'SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',
+          'SELECT * FROM public.partner_applications WHERE id=$1 FOR UPDATE',
           [c.req.param('id')]
         )
       ).rows[0];
@@ -265,7 +265,7 @@ export function createProviderAgreementRoutes(
     if (!validId(c.req.param('id'))) return jsonError(c, 404, 'NOT_FOUND', 'Application not found');
     const db = getDbPool();
     const app = (
-      await db.query<Application>('SELECT * FROM public.provider_applications WHERE id=$1', [
+      await db.query<Application>('SELECT * FROM public.partner_applications WHERE id=$1', [
         c.req.param('id'),
       ])
     ).rows[0];
@@ -294,7 +294,7 @@ export function createProviderAgreementRoutes(
       if (user instanceof Response) return user;
       const app = (
         await db.query<Application>(
-          'SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',
+          'SELECT * FROM public.partner_applications WHERE id=$1 FOR UPDATE',
           [c.req.param('id')]
         )
       ).rows[0];
@@ -365,7 +365,7 @@ export function createProviderAgreementRoutes(
       const g = (
         await db.query(
           `SELECT g.*,a.user_id,a.organisation_id AS candidate_org FROM public.provider_agreements g
-        JOIN public.provider_applications a ON a.id=g.application_id WHERE g.id=$1`,
+        JOIN public.partner_applications a ON a.id=g.application_id WHERE g.id=$1`,
           [c.req.param('agreementId')]
         )
       ).rows[0];
