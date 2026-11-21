@@ -255,3 +255,16 @@ describe('Checkout', () => {
     });
   });
 });
+
+
+it('preserves the provider referral in purchase creation', async () => {
+  const user = userEvent.setup();
+  const providerCode = 'PRV-' + 'a'.repeat(32);
+  renderCheckout('?package=Professional&provider=' + providerCode);
+  expect(screen.getByLabelText('Provider referral reference (optional)')).toHaveValue(providerCode);
+  const buttons = screen.getAllByRole('button');
+  const pay = buttons.find(b => b.getAttribute('type') === 'submit');
+  expect(pay).toBeTruthy();
+  await user.click(pay!);
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/v1/purchases', {packageId:'pkg_training',client:'web',providerCode}));
+});

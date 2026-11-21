@@ -14,6 +14,7 @@
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest -c jest.config.cjs --coverage --forceExit",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest -c jest.config.cjs --watch",
     "db:check": "node --import tsx scripts/check-production-connection.mjs",
+    "providers:check": "node dist/check-provider-setup.js",
     "esign:check": "node --import tsx scripts/check-esign.mjs",
     "esign:demo": "node --import tsx scripts/esign-live-demo.mjs",
     "esign:access": "node --import tsx scripts/esign-local-access.mjs"
