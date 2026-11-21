@@ -86,3 +86,7 @@ Use main's existing `PROVIDER_REVIEW_ORGANISATION_ID`; do not copy #94's reviewe
 - Backend/Web TypeScript and lint passed (zero errors; existing warnings); root build **5/5 tasks successful**. CI YAML and script syntax checked.
 
 Only dedicated disposable loopback databases were changed for these checks. The owner's Mac database and all external services remain untouched.
+
+## Explicit professional-authority gap
+
+A [source-backed follow-up finding](PROFESSIONAL_SCOPE_GAP.md) confirms that main does not model approval by training subject/professional scope or connect such approval to certificate authority. Existing qualification notes, facilitator roles and learner completion certificates are not substitutes. Existing learner eligibility/revocation controls do exist; the missing model is professional permission/provenance. This remains outside #95 and must be resolved before claiming the expanded professional-onboarding/certification acceptance criteria are met.
