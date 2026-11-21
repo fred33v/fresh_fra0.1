@@ -225,6 +225,7 @@ jobs:
           SALES_REPORT_TEST_DATABASE=1 node --import tsx scripts/sales-report-integration.mjs
           DELIVERY_TEST_DATABASE=1 node --import tsx scripts/service-delivery-integration.mjs
           FINANCE_TEST_DATABASE=1 node --import tsx scripts/finance-integration.mjs
+          MFA_TEST_DATABASE=1 node --import tsx scripts/mfa-integration.mjs
 
       - name: Reconcile legacy PR94 schema with real backup and restore (isolated local database)
         working-directory: apps/fra-backend/backend

@@ -5,6 +5,7 @@ const logger = createLogger('Auth');
 import { Profile, AppRole } from '@/types/workshop';
 
 export interface AuthUser {
+  mfaEnrollmentRequired?: boolean;
   userId: string;
   email: string;
   name: string;
@@ -23,7 +24,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, metadata: SignUpMetadata) => Promise<{ error: Error | null }>;
   /** Confirms the email from the link's token and signs the user in */
   verifyEmail: (token: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string, totpCode?: string) => Promise<{ error: Error | null }>;
   /** Redeems an employer's access code: creates the employee account and signs the new user in */
   joinWithKeypass: (input: { code: string; email: string; password: string; name?: string }) => Promise<{ error: Error | null; emailConfirmationRequired?: boolean }>;
   signOut: () => Promise<void>;
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await api.get<MeResponse>('/api/v1/auth/me');
       if (!isMountedRef.current) return;
       setUser({
+        mfaEnrollmentRequired: data.mfaEnrollmentRequired,
         userId: data.userId,
         email: data.email,
         name: data.name,
@@ -167,9 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, totpCode?: string) => {
     try {
       const data = await api.post<AuthResponse>('/api/v1/auth/login', {
+        ...(totpCode ? {totpCode} : {}),
         email,
         password,
       });

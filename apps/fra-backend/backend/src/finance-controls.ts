@@ -2,14 +2,11 @@ import type { PoolClient } from 'pg';
 import type { AuthContext } from './helpers.js';
 import { recruitmentIdentity, RecruitmentError } from './provider-recruitment.js';
 export async function financeReviewer(db: PoolClient, auth: AuthContext) {
-  await recruitmentIdentity(db, auth, true);
-  if (
-    !(process.env.FINANCE_AUTHORISED_USER_IDS ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .includes(auth.userId)
-  )
-    throw new RecruitmentError(403, 'Explicit finance access is required');
+  await recruitmentIdentity(db, auth);
+  const {rows:[grant]}=await db.query(`SELECT r.user_id,m.enabled,m.version FROM public.user_security_roles r
+    JOIN public.user_mfa m ON m.user_id=r.user_id WHERE r.user_id=$1 AND r.role='finance' AND r.revoked_at IS NULL FOR SHARE OF r,m`,[auth.userId]);
+  if(auth.organisationId!==process.env.PROVIDER_REVIEW_ORGANISATION_ID || !grant?.enabled || auth.mfaVersion!==grant.version || !auth.mfaAt || Date.now()/1000-auth.mfaAt>900)
+    throw new RecruitmentError(403,'Current finance role and recent MFA are required');
 }
 export async function financeIdentity(
   db: PoolClient,

@@ -32,6 +32,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/risk-register\b/, 'Risk register'],
   [/^\/compliance\b/, 'Compliance'],
   [/^\/integrations\b/, 'Integrations'],
+  [/^\/security\b/, 'Account security'],
   [/^\/profile\b/, 'Your profile'],
   [/^\/speak-up\b/, 'Speak up'],
 ];

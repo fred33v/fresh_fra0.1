@@ -107,9 +107,9 @@ export async function verifyConcurrently(
 export async function refreshProviderPayments(auth: AuthContext, id: string, overrides: PaymentVerificationOptions = {}) {
   const options = { ...PAYMENT_VERIFICATION, ...overrides };
   const { withTransaction } = await import('./db/transaction.js');
-  const { recruitmentIdentity } = await import('./provider-recruitment.js');
+  const { financeReviewer } = await import('./finance-controls.js');
   await withTransaction(async db => {
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT applicant_id FROM public.provider_applications WHERE id=$1',[id]);
     if(!a)throw new RecruitmentError(404,'Application not found');
     if(a.applicant_id===auth.userId)throw new RecruitmentError(403,'You cannot authorise your own payout');

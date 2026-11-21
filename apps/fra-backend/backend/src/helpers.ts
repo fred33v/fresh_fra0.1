@@ -5,6 +5,8 @@ import { randomBytes } from 'node:crypto';
 import type { Purchase } from './types.js';
 
 export type AuthContext = {
+  mfaVersion?: number;
+  mfaAt?: number;
   userId: string;
   email: string;
   role: string;
@@ -55,6 +57,8 @@ export function getAuth(c: Context): AuthContext | null {
 
     return {
       userId: payload.sub,
+      mfaVersion: typeof payload.mfaVersion === 'number' ? payload.mfaVersion : undefined,
+      mfaAt: typeof payload.mfaAt === 'number' ? payload.mfaAt : undefined,
       email: payload.email,
       role: payload.role,
       organisationId: payload.organisationId,

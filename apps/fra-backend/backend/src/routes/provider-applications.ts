@@ -1,4 +1,4 @@
-import {commissionPaymentProfile} from '../finance-controls.js';
+import {financeReviewer,commissionPaymentProfile} from '../finance-controls.js';
 import {providerIdentifiersActive} from '../relationship-identifiers.js';
 import {validProfessionalScope} from '../professional-authority.js';
 import { providerProfileSchema } from '../provider-candidate.js';
@@ -313,7 +313,7 @@ routes.get('/:id/statement', async c => {
   if(!z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid provider');
   return recruitmentResponse(c,()=>withTransaction(async db=>{
     await snapshotRead(db);
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
     return commissionStatement(db,a.id,true);
@@ -330,7 +330,7 @@ routes.post('/:id/payouts', async c => {
   return recruitmentResponse(c,async()=>{
     await refreshProviderPayments(auth,c.req.param('id'));
     return withTransaction(async db=>{
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
     if(a.applicant_id===auth.userId) throw new RecruitmentError(403,'You cannot prepare your own payout');
@@ -362,14 +362,14 @@ routes.post('/payouts/:id/action', async c => {
   return recruitmentResponse(c,async()=>{
     if(parsed.data.action!=='cancel') {
       const lookup=await withTransaction(async db=>{
-        await recruitmentIdentity(db,auth,true);
+        await financeReviewer(db,auth);
         return (await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')])).rows[0];
       });
       if(!lookup)throw new RecruitmentError(404,'Payout not found');
       await refreshProviderPayments(auth,lookup.application_id);
     }
     return withTransaction(async db=>{
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[lookup]}=await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')]);
     if(!lookup)throw new RecruitmentError(404,'Payout not found');
     const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[lookup.application_id]);

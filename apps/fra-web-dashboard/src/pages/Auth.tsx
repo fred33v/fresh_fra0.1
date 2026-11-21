@@ -18,6 +18,7 @@ import { checkoutPath, getPackage } from '@/data/packages';
 
 
 const signInSchema = z.object({
+  totpCode: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
@@ -198,10 +199,12 @@ export default function Auth() {
 
   const handleSignIn = async (data: SignInFormData) => {
     setIsLoading(true);
-    const { error } = await signIn(data.email, data.password);
+    const { error } = await (data.totpCode ? signIn(data.email, data.password, data.totpCode) : signIn(data.email, data.password));
     
     if (error) {
-      if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
+      if (error instanceof ApiError && error.code === 'MFA_REQUIRED') {
+        toast.error('Enter your current six-digit authenticator code.');
+      } else if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
         toast.error('Invalid email or password');
       } else if (error instanceof ApiError && error.code === 'ACCOUNT_LOCKED') {
         toast.error('Account temporarily locked. Please try again later.');
@@ -354,6 +357,9 @@ export default function Auth() {
                             </FormItem>
                           )}
                         />
+                        <label className="block text-sm">Authenticator code (if enabled)
+                          <Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} {...signInForm.register('totpCode')} />
+                        </label>
                         <Button type="submit" className="w-full" disabled={isLoading} aria-busy={isLoading}>
                           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                           Sign In

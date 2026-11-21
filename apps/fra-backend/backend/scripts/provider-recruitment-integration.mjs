@@ -27,7 +27,11 @@ async function actor(role, org = randomUUID(), verified = true) {
   await db.query(`INSERT INTO public.organisations(id,name,created_by_user_id) VALUES($1,'Provider test',$2) ON CONFLICT(id) DO NOTHING`,[org,a.id]);
   await db.query('COMMIT');
   } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
-  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: org }, jwtSecret);
+  if(role==='admin' && org===operatorOrg){
+    await pool.query("INSERT INTO public.user_mfa(user_id,secret,enabled) VALUES($1,'{}',true)",[a.id]);
+    await pool.query("INSERT INTO public.user_security_roles(user_id,role,granted_by,reason) VALUES($1,'finance',$1,'Synthetic finance fixture grant')",[a.id]);
+  }
+  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: org,mfaVersion:1,mfaAt:Math.floor(Date.now()/1000) }, jwtSecret);
   return a;
 }
 async function call(actor, path, body, expected = 200, method = body ? 'POST' : 'GET') {
@@ -183,7 +187,7 @@ try {
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,8500);
   // A provider with more sales than the full-check limit skips sales verified moments ago. A stale sale is
   // still checked, a Stripe failure is reported rather than hidden, and a spent time budget asks for a retry.
-  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin'};
+  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin',mfaVersion:1,mfaAt:Math.floor(Date.now()/1000)};
   provider.state.unavailable=true;
   await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // verified seconds ago: Stripe is not called
   await pool.query("UPDATE public.purchases SET payment_reconciled_at=now()-interval '10 minutes' WHERE id=$1",[sale.id]);

@@ -6,7 +6,7 @@ Migration 046 extends the existing recruitment and commission module. It does no
 
 The authenticated `/finance` page collects UK account-holder names, sort codes and account numbers for existing SUP supplier or EMP employee identifiers. Full bank details are encrypted with AES-256-GCM and profile-specific authenticated context. Ordinary API responses expose only masked last-four digits. Every bank amendment creates a new version requiring fresh, independent finance review. Review is a **staff evidence attestation**, not automated bank ownership verification.
 
-Finance access requires the existing verified operator/admin identity and explicit `FINANCE_AUTHORISED_USER_IDS` allowlisting. Revealing bank details additionally requires the current password, is rate limited and audited, and the UI hides revealed details after 60 seconds. Password re-entry is **not MFA**. Privileged MFA remains a production prerequisite outside this change.
+After migration 047, finance access requires a verified operator identity, a separate database-backed finance role and a recent MFA login. The former `FINANCE_AUTHORISED_USER_IDS` allowlist no longer grants authority. See MFA_AND_FINANCE_ROLES.md for enrollment and independent grants. Revealing bank details additionally requires the current password, is rate limited and audited, and the UI hides revealed details after 60 seconds. Password re-entry is **not MFA**. Migration 047 adds privileged MFA; password re-entry remains an additional bank-reveal safeguard.
 
 Supplier fees are fixed GBP quotes with separate net and VAT amounts and recorded terms. The supplier must accept the exact version. Preparing, approving or recording a fee instruction requires customer-accepted delivery, a matching purchase and trusted payment reconciliation with no refund or dispute. This deliberately conservative service-fee rule does not change proportional-refund commission calculations.
 
@@ -38,10 +38,9 @@ Configure the backend's private `.env.local`:
 
 ```ini
 FINANCE_VAULT_KEYS_FILE=/absolute/backend/path/.local/finance/vault-keys.json
-FINANCE_AUTHORISED_USER_IDS=first-independent-finance-user-uuid,second-finance-user-uuid
 ```
 
-Use real, verified operator/admin UUIDs and the existing reviewer organisation configuration. Do not paste bank details or keys into chat or commit them. Missing keys disable collection and revelation. Production requires a vault-managed mounted keyring file with private permissions; inline `FINANCE_VAULT_KEYS` is permitted only for development/test. Preserve old key IDs during rotation and securely back up the keyring: losing keys makes existing profiles unreadable. The ignored local directory is not a production secret manager.
+Configure the existing reviewer organisation, enroll MFA and have an independent operator admin assign the finance role. Do not paste bank details or keys into chat or commit them. Missing keys disable collection and revelation. Production requires a vault-managed mounted keyring file with private permissions; inline `FINANCE_VAULT_KEYS` is permitted only for development/test. Preserve old key IDs during rotation and securely back up the keyring: losing keys makes existing profiles unreadable. The ignored local directory is not a production secret manager.
 
 Open `/finance` after login. Own records are the default; the review view is restricted to authorised finance users. Delivery administration links to the fee proposal context. Lists currently return the latest 200 records. Provider commission statements remain separate.
 
@@ -49,7 +48,7 @@ Open `/finance` after login. Own records are the default; the review view is res
 
 Profiles, fee versions, instructions and their chained event snapshots are retained without automatic purge. Event snapshots exclude encrypted bank payloads and full account/sort-code fields; masked metadata remains auditable. Do not put banking credentials into free-text evidence references or reasons. Authorised bank reveals are logged without the revealed values.
 
-This module does not execute transfers, provide independent bank reconciliation, implement privileged MFA or complete employment/payroll compliance. Stripe Connect remains deferred. Use a separate review before collecting production banking data or deploying payroll workflows.
+This module does not execute transfers, provide independent bank reconciliation or complete employment/payroll compliance. Privileged MFA is provided by migration 047. Stripe Connect remains deferred. Use a separate review before collecting production banking data or deploying payroll workflows.
 
 ## Validation
 

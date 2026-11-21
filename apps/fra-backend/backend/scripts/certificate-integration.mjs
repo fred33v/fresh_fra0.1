@@ -38,9 +38,10 @@ async function account(role='admin',db=pool){
   await client.query(`INSERT INTO public.users(id,email,name,password_hash,role,organisation_id,email_verified_at) VALUES($1,$2,'Certificate Recipient','not-a-login-hash',$3,$4,now())`,[userId,email,role,organisationId]);
   await client.query(`INSERT INTO public.organisations(id,name,created_by_user_id) VALUES($1,'Original Organisation',$2)`,[organisationId,userId]);
   await client.query(`INSERT INTO public.purchases(id,organisation_id,user_id,package_id,status,amount_cents,currency) VALUES($1,$2,$3,'pkg_full','succeeded',100,'gbp')`,[crypto.randomUUID(),organisationId,userId]);
+  if(db===pool && (role==='admin'||role==='facilitator'))await client.query("INSERT INTO public.user_mfa(user_id,secret,enabled) VALUES($1,'{}',true)",[userId]);
   await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
- return{userId,organisationId,email,token:jwt.sign({sub:userId,email,role,organisationId},secret,{algorithm:'HS256',expiresIn:'1h'})};
+ return{userId,organisationId,email,token:jwt.sign({sub:userId,email,role,organisationId,mfaVersion:1,mfaAt:Math.floor(Date.now()/1000)},secret,{algorithm:'HS256',expiresIn:'1h'})};
 }
 async function progress(a,{scores={1:100,2:100,3:100,4:100},sections=[0,1,2,3,4,5,6],sessionId=null}={}){
  const id=crypto.randomUUID();

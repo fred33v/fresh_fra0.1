@@ -59,7 +59,7 @@ async function actor(role = 'employer', org = randomUUID()) {
   } finally {
     db.release();
   }
-  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: a.org }, jwtSecret);
+  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: a.org, mfaVersion:1,mfaAt:Math.floor(Date.now()/1000) }, jwtSecret);
   a.auth = { userId: a.id, email: a.email, role, organisationId: a.org };
   return a;
 }
@@ -152,12 +152,16 @@ try {
     learner = await actor('participant', customer.org),
     outsider = await actor('admin');
   process.env.PROVIDER_REVIEW_ORGANISATION_ID = a.org;
-  process.env.FINANCE_AUTHORISED_USER_IDS = [a.id, b.id].join(',');
+  // Finance grants are read from the database, not an environment allowlist.
   const vault = JSON.stringify({
     activeKeyId: 'test-v1',
     keys: { 'test-v1': randomBytes(32).toString('base64') },
   });
   process.env.FINANCE_VAULT_KEYS = vault;
+  for(const actor of [a,b]) {
+    await pool.query("INSERT INTO public.user_mfa(user_id,secret,enabled) VALUES($1,'{}',true)",[actor.id]);
+    await pool.query("INSERT INTO public.user_security_roles(user_id,role,granted_by,reason) VALUES($1,'finance',$2,'Synthetic independent finance grant')",[actor.id,actor.id===a.id?b.id:a.id]);
+  }
   delete process.env.FINANCE_VAULT_KEYS_FILE;
   const password = 'Synthetic-finance-password-only';
   await pool.query('UPDATE public.users SET password_hash=$2 WHERE id=ANY($1::uuid[])', [
@@ -761,9 +765,9 @@ try {
   });
   const cancelledHistory = await call(a, '/finance/history/instruction/' + pending.id);
   assert.equal(cancelledHistory.events.at(-1).snapshot.last_action_by, a.id);
-  process.env.FINANCE_AUTHORISED_USER_IDS = b.id;
+  await pool.query("UPDATE public.user_security_roles SET revoked_at=now() WHERE user_id=$1",[a.id]);
   await call(a, '/finance/profiles?view=review', undefined, 403);
-  process.env.FINANCE_AUTHORISED_USER_IDS = [a.id, b.id].join(',');
+  // Finance grants are read from the database, not an environment allowlist.
   payment.refund(100);
   const { refreshFeePayment, eligibleFee } = await import('../src/finance-controls.ts');
   await refreshFeePayment(a.auth, fee.id);

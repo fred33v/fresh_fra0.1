@@ -1,5 +1,6 @@
 // Must stay the first import: modules below read process.env when they load
 import './env.js';
+import securityRoutes, { mfaGuard } from './routes/security.js';
 import financeRoutes from './routes/finance.js';
 import serviceDeliveryRoutes from './routes/service-delivery.js';
 import providerSalesReportRoutes from './routes/provider-sales-report.js';
@@ -126,6 +127,8 @@ applyApiMiddleware(api, allowedOrigins);
 
 // Enterprise API keys (read-only) resolve to an AuthContext before routes run
 api.use('*', apiKeyMiddleware);
+api.use('*', mfaGuard);
+api.route('/security', securityRoutes);
 
 api.route('/professional', professionalScopesRoutes);
 api.route('/provider-sales', providerSalesReportRoutes);

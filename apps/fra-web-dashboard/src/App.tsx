@@ -27,6 +27,7 @@ const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
 const BudgetHolder = lazy(() => import("./pages/BudgetHolder"));
+const Security = lazy(() => import("./pages/Security"));
 const Finance = lazy(() => import("./pages/Finance"));
 const ServiceDelivery = lazy(() => import("./pages/ServiceDelivery"));
 const ProfessionalTraining = lazy(() => import("./pages/ProfessionalTraining"));
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/join" element={<Join />} />
+                <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/workshop" element={<ProtectedRoute><PackageGate feature="training"><Workshop /></PackageGate></ProtectedRoute>} />
                 <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
