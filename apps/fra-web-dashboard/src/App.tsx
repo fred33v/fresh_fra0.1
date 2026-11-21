@@ -44,6 +44,9 @@ const Integrations = lazy(() => import("./pages/Integrations"));
 const Compliance = lazy(() => import("./pages/Compliance"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Partners = lazy(() => import("./pages/Partners"));
+const PartnerReviews = lazy(() => import("./pages/PartnerReviews"));
+const Signing = lazy(() => import("./pages/Signing"));
 const SpeakUp = lazy(() => import("./pages/SpeakUp"));
 
 const queryClient = new QueryClient({
@@ -105,6 +108,11 @@ const App = () => (
                 <Route path="/risk-register" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><RiskRegister /></PackageGate></ProtectedRoute>} />
                 <Route path="/compliance" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Compliance /></PackageGate></ProtectedRoute>} />
                 <Route path="/integrations" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Integrations /></PackageGate></ProtectedRoute>} />
+                <Route path="/partners" element={<ProtectedRoute><Partners /></ProtectedRoute>} />
+                <Route path="/partners/review" element={<ProtectedRoute requiredUserRole={['admin']}><PartnerReviews /></ProtectedRoute>} />
+                <Route path="/partners/review/:id" element={<ProtectedRoute requiredUserRole={['admin']}><PartnerReviews /></ProtectedRoute>} />
+                <Route path="/signing" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
+                <Route path="/signing/:id" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/provider-review" element={<ProtectedRoute><ProviderReview /></ProtectedRoute>} />
                 <Route path="/provider-application" element={<ProtectedRoute><ProviderApplication /></ProtectedRoute>} />

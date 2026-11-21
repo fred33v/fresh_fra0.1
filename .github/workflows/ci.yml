@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run the same gates for feature-to-feature PRs used by reviewed stacks.
+    branches: [main, 'feat/**']
 
 # On pull requests a new push cancels the run it replaces. On main every merge
 # gets its own group (keyed by commit), so each one is tested to the end even
@@ -208,6 +209,18 @@ jobs:
           PROVIDER_TEST_DATABASE: '1'
         run: node --import tsx scripts/provider-recruitment-integration.mjs
 
+      - name: Partner applications and retained reviews (PostgreSQL, no external services)
+        working-directory: apps/fra-backend/backend
+        env:
+          PROVIDER_TEST_DATABASE: '1'
+        run: |
+          node --input-type=module -e 'import pg from "pg"; const pool=new pg.Pool({connectionString:process.env.DATABASE_URL}); try { await pool.query("CREATE DATABASE provider_recruitment_test"); } finally { await pool.end(); }'
+          export DATABASE_URL=postgresql://fra:fra-ci-only@localhost:5432/provider_recruitment_test
+          export DATABASE_URL_UNPOOLED="$DATABASE_URL"
+          pnpm migrate
+          node --import tsx scripts/partner-recruitment-integration.mjs
+          node --import tsx scripts/provider-agreements-integration.mjs
+
       - name: Internal electronic signing (PostgreSQL, generated certificate, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend
         env:
@@ -226,6 +239,24 @@ jobs:
 
       - name: Install Chromium for authenticated browser/database checks
         run: pnpm --filter @stopfra/web-dashboard exec playwright install --with-deps chromium
+
+      - name: Partner applicant and appointed-reviewer browser journey (real PostgreSQL)
+        working-directory: apps/fra-backend/backend
+        env:
+          DATABASE_URL: postgresql://fra:fra-ci-only@localhost:5432/provider_recruitment_test
+          PROVIDER_TEST_DATABASE: '1'
+          PROVIDER_BROWSER_TEST: '1'
+          PROVIDER_BROWSER_URL: http://127.0.0.1:8080
+        run: |
+          (cd ../../fra-web-dashboard && exec node --input-type=module -e 'import {createServer} from "vite"; const server=await createServer({server:{host:"127.0.0.1",port:8080,strictPort:true}}); await server.listen();') > /tmp/provider-vite.log 2>&1 &
+          provider_web_pid=$!
+          trap 'kill "$provider_web_pid" 2>/dev/null || true' EXIT
+          node --input-type=module -e 'let ready=false; for(let i=0;i<60;i++){try{const r=await fetch("http://127.0.0.1:8080");if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}if(!ready)throw new Error("Provider UI did not start");'
+          node --import tsx scripts/partner-recruitment-integration.mjs
+          node --import tsx scripts/provider-agreements-integration.mjs
+
+      - name: Document preparation UI (mock API, real PDF canvas)
+        run: pnpm --filter @stopfra/web-dashboard test:e2e:signing
 
       - name: Electronic signer browser journey (PostgreSQL, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend

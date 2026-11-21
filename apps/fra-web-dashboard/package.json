@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "test:e2e": "playwright test",
     "build:resources": "node scripts/build-resources.mjs",
-    "test:e2e:database": "playwright test --config playwright.database.config.ts"
+    "test:e2e:database": "playwright test --config playwright.database.config.ts",
+    "test:e2e:signing": "playwright test --config playwright.signing.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
@@ -49,6 +50,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@stopfra/shared": "workspace:*",
     "@stopfra/types": "workspace:*",
+    "@stopfra/ui-core": "workspace:*",
     "@tanstack/react-query": "^5.83.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -59,6 +61,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.4.6",
+    "pdfjs-dist": "5.4.624",
     "react": "19.1.0",
     "react-day-picker": "^9.13.2",
     "react-dom": "19.1.0",
@@ -70,8 +73,7 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "zod": "^4.6.7",
-    "@stopfra/ui-core": "workspace:*"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

@@ -216,9 +216,17 @@ try {
   const doc = await document(),
     first = await signer(doc, 'first@example.test'),
     second = await signer(doc, 'second@example.test');
+  const listed = await json(await call('GET', '/documents?offset=0', undefined, owner));
+  assert(listed.documents.some(d => d.id === doc.id && d.signer_count === 2));
+  assert.equal(listed.hasMore, false);
+  assert(!('source_pdf' in listed.documents[0]) && !('original_pdf' in listed.documents[0]));
+  assert.equal((await json(await call('GET', '/documents', undefined, other))).documents.length, 0);
+  assert.equal((await call('GET', '/documents?offset=-1', undefined, owner)).status, 400);
+  assert.equal((await call('GET', '/documents')).status, 401);
   assert.equal((await call('GET', `/documents/${doc.id}`, undefined, other)).status, 404);
   assert.equal((await call('GET', `/documents/${doc.id}`)).status, 401);
   await pool.query("UPDATE public.users SET role='employee' WHERE id=$1", [owner.id]);
+  assert.equal((await call('GET', '/documents', undefined, owner)).status, 403);
   assert.equal((await call('GET', `/documents/${doc.id}`, undefined, owner)).status, 403);
   await pool.query("UPDATE public.users SET role='employer' WHERE id=$1", [owner.id]);
   assert.equal(
@@ -573,6 +581,7 @@ try {
       await json(await call('POST', `/documents/${bd.id}/send`, undefined, owner));
       const page = await browser.newPage();
       await page.goto(`${publicOrigin}/api/v1/esign/sign/${tokenFor(bs.email)}`);
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('button')).backgroundColor === 'rgb(17, 100, 94)');
       await page.getByRole('button', { name: 'Send email code', exact: true }).click();
       assert(
         emails.some((e) => e.to === bs.email && e.subject.includes('code')),
@@ -582,6 +591,12 @@ try {
         .filter((e) => e.to === bs.email && e.subject.includes('code'))
         .at(-1)
         .text.match(/\b\d{6}\b/)[0];
+      assert((await page.locator('[role=status]').innerText()).includes('A code has been sent'));
+      await page.getByLabel('One-time code').fill(code === '000000' ? '111111' : '000000');
+      await page.getByRole('button', { name: 'Verify', exact: true }).click();
+      await page.getByRole('heading', { name: 'We could not complete that step' }).waitFor();
+      assert((await page.getByRole('alert').innerText()).includes('invalid, expired or already used'));
+      await page.getByRole('link', { name: 'Return to signing' }).click();
       await page.getByLabel('One-time code').fill(code);
       await page.getByRole('button', { name: 'Verify', exact: true }).click();
       await page.getByRole('heading', { name: 'Disposable signing agreement' }).waitFor();

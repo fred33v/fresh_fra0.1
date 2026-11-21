@@ -90,3 +90,20 @@ describe('api.get', () => {
     await expect(api.get('/api/v1/test')).rejects.toThrow('Invalid input');
   });
 });
+
+describe('authenticated PDF upload', () => {
+  it('preserves multipart boundaries and the PDF body across a token refresh', async () => {
+    store.fra_access_token='expired';store.fra_refresh_token='refresh';
+    const {api} = await import('@/lib/api');
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValueOnce({status:401});
+    mockFetch.mockResolvedValueOnce({ok:true,json:async () => ({success:true,data:{accessToken:'new',refreshToken:'rotated'}})});
+    mockFetch.mockResolvedValueOnce({status:201,json:async () => ({success:true,data:{id:'doc'}})});
+    const form=new FormData();form.set('title','Agreement');form.set('file',new File(['pdf'],'agreement.pdf',{type:'application/pdf'}));
+    expect(await api.upload('/api/v1/esign/documents',form)).toEqual({id:'doc'});
+    expect(mockFetch.mock.calls[0][1].body).toBe(form);
+    expect(mockFetch.mock.calls[2][1].body).toBe(form);
+    expect(mockFetch.mock.calls[2][1].headers).not.toHaveProperty('Content-Type');
+    expect(mockFetch.mock.calls[2][1].headers.Authorization).toBe('Bearer new');
+  });
+});
