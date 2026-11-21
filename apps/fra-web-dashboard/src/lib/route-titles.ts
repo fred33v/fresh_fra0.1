@@ -6,6 +6,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/join\b/, 'Join your organisation'],
   [/^\/dashboard\b/, 'Your dashboard'],
   [/^\/workshop\b/, 'Workshop'],
+  [/^\/service-delivery\b/, 'Service delivery'],
   [/^\/assessment\/[^/]+\/results\b/, 'Assessment results'],
   [/^\/assessment\b/, 'Risk assessment'],
   [/^\/budget-guide\b/, 'Budget guide'],

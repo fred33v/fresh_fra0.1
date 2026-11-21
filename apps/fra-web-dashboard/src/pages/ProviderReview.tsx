@@ -1,3 +1,4 @@
+import ServiceDeliveries from '@/components/delivery/ServiceDeliveries';
 import ProviderSalesReport from '@/components/providers/ProviderSalesReport';
 import RelationshipIdentifiers, {EmployeeIdentifierRegistry} from '@/components/providers/RelationshipIdentifiers';
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
@@ -327,6 +328,7 @@ function Review({ application: a }: { application: Application }) {
         </div>
       ))}
       {a.serviceInterest !== 'sales' && <ProfessionalScopes applicationId={a.id} />}
+      <ServiceDeliveries applicationId={a.id} review/>
       <RelationshipIdentifiers applicationId={a.id}/>
       <ProviderCandidateDossier base={`${endpoint}/${a.id}`} profile={a.candidateProfile} />
       <ProviderStatement applicationId={a.id} />

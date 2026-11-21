@@ -256,6 +256,13 @@ routes.post('/:id/assignments/:assignmentId/close', async (c) => {
     const { rows: [a] } = await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
     if (!a) throw new RecruitmentError(404,'Application not found');
     if (a.applicant_id === auth.userId) throw new RecruitmentError(403,'You cannot close your own work assignment');
+    if(input.data.status==='completed'){
+      const assignment=(await db.query('SELECT * FROM public.provider_assignments WHERE id=$1 AND application_id=$2 FOR UPDATE',[c.req.param('assignmentId'),a.id])).rows[0];
+      if(assignment?.service==='training'&&assignment.professional_scope_id){
+        const states=(await db.query('SELECT status FROM public.service_deliveries WHERE assignment_id=$1',[assignment.id])).rows;
+        if(!states.some(d=>d.status==='accepted')||states.some(d=>!['accepted','cancelled'].includes(d.status)))throw new RecruitmentError(409,'Scoped training closure requires customer-accepted delivery; unfinished, refused or disputed work needs review');
+      }
+    }
     const { rows: [saved] } = await db.query(`UPDATE public.provider_assignments SET status=$3,decided_at=now()
       WHERE id=$1 AND application_id=$2 AND
       ((status='accepted' AND $3='completed' AND $4='approved') OR (status IN ('offered','accepted') AND $3='cancelled'))

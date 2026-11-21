@@ -107,9 +107,8 @@ async function refreshAccessToken(): Promise<boolean> {
 
 async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
   const token = getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers: Record<string, string> = multipart ? {} : {'Content-Type': 'application/json'};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -117,7 +116,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: multipart ? body as FormData : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   // Handle 401 with token refresh
@@ -208,6 +207,7 @@ export const anonymousApi = {
 
 export const api = {
   download,
+  upload: <T>(path: string, body: FormData) => request<T>('POST', path, body),
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
