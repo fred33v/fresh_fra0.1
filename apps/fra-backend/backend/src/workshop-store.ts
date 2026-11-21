@@ -17,6 +17,7 @@ export type SessionRow = {
   created_at: string; ended_at: string | null;
 };
 export type ProgressRow = {
+  provider_session_id?:string|null;
   id: string; user_id: string; session_id: string | null; current_section: number; completed_sections: number[];
   quiz_scores: Record<string, number>; scenario_choices: Record<string, string>; completed_at: string | null;
   created_at: string; updated_at: string;

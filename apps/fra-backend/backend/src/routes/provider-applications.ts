@@ -1,3 +1,4 @@
+import {validProfessionalScope} from '../professional-authority.js';
 import { providerProfileSchema } from '../provider-candidate.js';
 import { recordCandidateRevision, candidateDossier } from '../provider-candidate-dossier.js';
 import { providerBalance, refreshProviderPayments } from '../provider-commissions.js';
@@ -112,6 +113,7 @@ const reviewSchema = z.strictObject({
 const assignmentSchema = z.strictObject({
   packageId: z.string().min(1).max(100), reference: z.string().trim().min(2).max(160),
   service: z.enum(['sales', 'training']),
+  scopeId: z.uuid().optional(),
 });
 
 routes.get('/review', async (c) => {
@@ -147,7 +149,7 @@ routes.get('/me/assignments', async (c) => {
   return recruitmentResponse(c, () => withTransaction(async (db) => {
     await recruitmentIdentity(db, auth);
     return (await db.query(`SELECT s.id,s.package_id AS "packageId",p.name AS "packageName",s.reference,
-      s.service,s.status,s.created_at AS "createdAt" FROM public.provider_assignments s
+      s.service,s.status,s.professional_scope_id AS "scopeId",s.professional_scope_revision AS "scopeRevision",s.created_at AS "createdAt" FROM public.provider_assignments s
       JOIN public.provider_applications a ON a.id=s.application_id
       JOIN public.packages p ON p.id=s.package_id
       WHERE a.applicant_id=$1 AND a.organisation_id=$2 ORDER BY s.created_at DESC LIMIT 200`,
@@ -168,11 +170,17 @@ routes.post('/:id/assignments', async (c) => {
     if (a.applicant_id === auth.userId) throw new RecruitmentError(403, 'You cannot assign work to yourself');
     if (a.status !== 'approved' || (a.service_interest !== 'both' && a.service_interest !== parsed.data.service))
       throw new RecruitmentError(409, 'Provider is not approved for this service');
+    let scopeRevision:number|null=null;
+    if(parsed.data.scopeId){
+      const scope=await validProfessionalScope(db,parsed.data.scopeId,'deliver',true);
+      if(parsed.data.service!=='training'||scope.application.id!==a.id)throw new RecruitmentError(403,'Scope must belong to this provider and training service');
+      scopeRevision=scope.scope.revision;
+    }
     const { rows: [saved] } = await db.query(`INSERT INTO public.provider_assignments
-      (application_id,package_id,reference,service,assigned_by)
-      SELECT $1,id,$3,$4,$5 FROM public.packages WHERE id=$2 AND is_active
+      (application_id,package_id,reference,service,assigned_by,professional_scope_id,professional_scope_revision)
+      SELECT $1,id,$3,$4,$5,$6,$7 FROM public.packages WHERE id=$2 AND is_active
       ON CONFLICT(application_id,reference) DO NOTHING RETURNING id,status`,
-    [a.id, parsed.data.packageId, parsed.data.reference, parsed.data.service, auth.userId]);
+    [a.id, parsed.data.packageId, parsed.data.reference, parsed.data.service, auth.userId,parsed.data.scopeId??null,scopeRevision]);
     if (!saved) throw new RecruitmentError(409, 'Package unavailable or assignment reference already used');
     await recruitmentAudit(db, a.id, auth.userId, 'assignment.offered', { ...parsed.data, id: saved.id });
     return saved;
@@ -228,7 +236,7 @@ routes.get('/:id/assignments', async (c) => {
     return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid application');
   return recruitmentResponse(c, () => withTransaction(async (db) => {
     await recruitmentIdentity(db, auth, true);
-    return (await db.query(`SELECT s.id,s.reference,s.service,s.status,p.name AS "packageName"
+    return (await db.query(`SELECT s.id,s.reference,s.service,s.status,s.professional_scope_id AS "scopeId",s.professional_scope_revision AS "scopeRevision",p.name AS "packageName"
       FROM public.provider_assignments s JOIN public.packages p ON p.id=s.package_id
       WHERE s.application_id=$1 ORDER BY s.created_at DESC LIMIT 200`,[c.req.param('id')])).rows;
   }));

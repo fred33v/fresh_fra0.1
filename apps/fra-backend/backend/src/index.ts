@@ -1,5 +1,6 @@
 // Must stay the first import: modules below read process.env when they load
 import './env.js';
+import professionalScopesRoutes from './routes/professional-scopes.js';
 import { serve } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { getDbPool, closeDbPool } from './db.js';
@@ -121,6 +122,8 @@ applyApiMiddleware(api, allowedOrigins);
 
 // Enterprise API keys (read-only) resolve to an AuthContext before routes run
 api.use('*', apiKeyMiddleware);
+
+api.route('/professional', professionalScopesRoutes);
 
 // Mount route modules
 api.route('/', authRoutes);
