@@ -206,7 +206,34 @@ jobs:
         working-directory: apps/fra-backend/backend
         env:
           PROVIDER_TEST_DATABASE: '1'
-        run: node --import tsx scripts/provider-recruitment-integration.mjs
+        run: |
+          node --import tsx scripts/provider-recruitment-integration.mjs
+          node --import tsx scripts/provider-candidate-port-integration.mjs
+
+      - name: Reconcile legacy PR94 schema with real backup and restore (isolated local database)
+        working-directory: apps/fra-backend/backend
+        env:
+          PROVIDER_RECONCILE_TEST_DATABASE: '1'
+          NODE_ENV: test
+          POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          node --input-type=module -e 'import pg from "pg"; const db=new pg.Pool({connectionString:process.env.DATABASE_URL}); try {await db.query("CREATE DATABASE provider_reconcile_test");} finally {await db.end();}'
+          cat > /tmp/provider-pg-dump <<'SH'
+          #!/usr/bin/env bash
+          set -eu
+          dest="${!#}"
+          docker exec -e PGHOST -e PGPORT -e PGDATABASE -e PGUSER -e PGPASSWORD "$POSTGRES_TEST_CONTAINER" pg_dump --format=custom > "$dest"
+          SH
+          cat > /tmp/provider-pg-restore <<'SH'
+          #!/usr/bin/env bash
+          set -eu
+          source="${!#}"
+          docker exec -i -e PGHOST -e PGPORT -e PGDATABASE -e PGUSER -e PGPASSWORD "$POSTGRES_TEST_CONTAINER" pg_restore "${@:1:$#-1}" < "$source"
+          SH
+          chmod 700 /tmp/provider-pg-dump /tmp/provider-pg-restore
+          export DATABASE_URL=postgresql://fra:fra-ci-only@localhost:5432/provider_reconcile_test
+          export DATABASE_URL_UNPOOLED="$DATABASE_URL"
+          PG_DUMP=/tmp/provider-pg-dump PG_RESTORE=/tmp/provider-pg-restore node --import tsx scripts/provider-reconcile-integration.mjs
 
       - name: Internal electronic signing (PostgreSQL, generated certificate, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend
