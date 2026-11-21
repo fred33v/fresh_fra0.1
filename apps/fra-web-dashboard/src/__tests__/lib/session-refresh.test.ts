@@ -64,3 +64,18 @@ describe('session refresh ownership',()=>{
   expect(lock).toHaveBeenCalledTimes(2);expect(refreshes).toBe(1);
  });
 });
+
+describe('interactive authentication is never replayed',()=>{
+ it.each([
+  ['/api/v1/auth/login','MFA_REQUIRED'],
+  ['/api/v1/auth/login','INVALID_CREDENTIALS'],
+  ['/api/v1/security/mfa/confirm','MFA_INVALID'],
+ ])('preserves %s rejection %s without refreshing stale credentials',async(path,code)=>{
+  const module=await setup();
+  fetchMock.mockResolvedValueOnce(response(401,{success:false,error:{code,message:'Authentication refused'}}));
+  await expect(module.api.post(path,{totpCode:'123456',code:'123456'})).rejects.toMatchObject({code,message:'Authentication refused'});
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(storage.get('fra_access_token')).toBe('old-access');
+  expect(storage.get('fra_refresh_token')).toBe('old-refresh');
+ });
+});

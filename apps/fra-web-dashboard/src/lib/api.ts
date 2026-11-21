@@ -119,8 +119,10 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
     body: multipart ? body as FormData : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // Handle 401 with token refresh
-  if (res.status === 401 && retry && getRefreshToken()) {
+  // A rejected password or one-use factor is an authentication result, not an
+  // expired-session signal. Never replay these operations through refresh.
+  const interactiveAuthentication = /^\/api\/v1\/(?:auth\/(?:login|refresh)|security\/mfa\/confirm)(?:[/?#]|$)/.test(path);
+  if (res.status === 401 && retry && !interactiveAuthentication && getRefreshToken()) {
     // Deduplicate concurrent refresh attempts
     if (!refreshPromise) {
       refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });

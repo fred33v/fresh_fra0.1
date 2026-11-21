@@ -12,6 +12,8 @@ Seeds use the existing private AES-GCM keyring with distinct `mfa:USER_UUID` aut
 
 Verification accepts one adjacent time step for clock drift. Five incorrect/replayed attempts lock the database-backed factor check for five minutes, across server replicas. Endpoint rate limits also protect enrollment/confirmation. Missing security state infrastructure fails closed in production. This is TOTP, not phishing-resistant WebAuthn/passkeys.
 
+The web client does not automatically refresh or replay rejected password logins or one-use MFA confirmations; the original authentication error remains visible. Ordinary expired-session refresh remains available.
+
 Access and refresh tokens carry the MFA version and original authentication time. Refresh preserves that time and cannot turn a password-only session into an MFA session. Enrollment revokes existing refresh tokens; changed MFA versions invalidate older access tokens. Password reset and email verification do not bypass the protected API checks. MFA is not requested interactively from API keys; privileged machine principals without MFA evidence are denied by the current guard, so plan machine-account access separately before rollout.
 
 ## Finance role
@@ -50,3 +52,5 @@ Validation recorded for this change:
 - All five build tasks and frontend/backend type checks passed. Each application linter reports five pre-existing warnings and zero errors.
 
 The stacked PR's base is the finance-beneficiary feature branch. Hosted workflows currently target main; these are local test results, not a hosted CI claim.
+
+Follow-up client review: three regression cases verify that refused password/MFA attempts are sent once, preserve their original error and do not rotate stored credentials. The focused authentication/session suite passes 69 tests; frontend type checking and production build also pass for this follow-up.
