@@ -50,3 +50,7 @@ Production agreement signing against the owner's actual SMTP/S3 and legal review
 - Backend focused provider/agreement/e-sign policy suites: 3 suites / 30 tests passed; TypeScript passed; ESLint has no errors and five pre-existing warnings.
 - Agreement integration: 9 scenarios passed, including real Chromium preparation/sending, both signer browser journeys, administrative readiness, candidate download, transaction rollback, stale identity/revision/suspension controls, sealing retry, protected evidence checks and independent OpenSSL CMS verification.
 - All agreement service tests use isolated local PostgreSQL, captured email and an S3 command double. Actual SMTP/S3 production delivery and deployment are not claimed by these tests.
+
+## Expanded scope reminder — 21 November 2026
+
+The [Hire, Sell & Earn specification](HIRE_SELL_EARN_SPEC.md) expands the target beyond this independent-provider increment. Existing applications/agreements remain retained under their original model. Public/company intake, verified trainer scopes, employment/B2B families, assignment permissions/delivery and finance workflows must be implemented and tested before the expanded module is declared complete. Stripe execution remains last.

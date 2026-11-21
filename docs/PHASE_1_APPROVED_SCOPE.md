@@ -1,6 +1,6 @@
 # Phase 1 — approved scope and external test gates
 
-Updated 2026-11-19. This records the owner's decisions, not an assertion that the features are implemented.
+Updated 2026-11-21. This records the owner's decisions, not an assertion that the features are implemented.
 
 ## Scope
 
@@ -45,3 +45,11 @@ The 17% VAT-exclusive referral policy is recorded as 1700 basis points. **No com
 ## Candidate agreement and administrative follow-up — 20 November 2026
 
 The owner requested continuation through approved candidate → reviewed services agreement → linked signing → explicit administrative readiness. This is implemented with additive migration 038, two fixed signatories, immutable revision links, current-account/application gates and retained final-evidence verification. Programme approval alone never implies signing/readiness. No Stripe integration or payment activation was performed. See [candidate agreements](PHASE_1_PROVIDER_AGREEMENTS.md) for workflow, limitations and local activation.
+
+## Expanded Hire, Sell & Earn scope — 21 November 2026
+
+The owner's new [Hire, Sell & Earn specification](HIRE_SELL_EARN_SPEC.md) is the current target and 12-point acceptance checklist. It expands the earlier independent/no-minimum path to individual/company public intake, qualification and training-scope review, appropriate employment and B2B agreements, employee/supplier identifiers, package permissions, assignments/delivery, seller attribution, 17% of eligible VAT-exclusive net collected package revenue, separate payroll/supplier payment handling, finance approval/reconciliation and privileged MFA. The earlier independent-only decision remains the historical basis for existing records, not a prohibition on these newly requested categories.
+
+Source inspection has identified reusable infrastructure and explicitly recorded the gaps. Existing application approval, key-passes, workshop progress, purchase reconciliation and completion certificates must not be presented as full recruitment verification, supplier assignment management, payroll, seller payout reconciliation or professional accreditation. Existing records and applied migrations remain unchanged. The expanded module is not complete until all 12 new acceptance criteria pass.
+
+Stripe/financial execution remains the final increment; no real payout or payroll run is authorised. The London real-service signing test remains open pending successful AWS reauthentication and an observed readiness result. This update changes specifications and tracking only, not runtime code or data.
