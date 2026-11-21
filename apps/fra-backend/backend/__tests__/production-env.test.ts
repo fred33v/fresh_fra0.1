@@ -108,3 +108,17 @@ describe('checkProductionEnv', () => {
     }
   });
 });
+
+it('requires an operator organisation before enabling provider payout recording', () => {
+  expect(check({ PROVIDER_PAYOUTS_ENABLED: 'true' }).errors.join('\n')).toContain('PROVIDER_REVIEW_ORGANISATION_ID');
+});
+it('rejects malformed recruitment configuration without printing its value', () => {
+  const bad = 'not-an-organisation';
+  const errors = check({ PROVIDER_REVIEW_ORGANISATION_ID: bad, PROVIDER_PAYOUTS_ENABLED: 'yes' }).errors.join('\n');
+  expect(errors).toContain('PROVIDER_REVIEW_ORGANISATION_ID');
+  expect(errors).toContain('PROVIDER_PAYOUTS_ENABLED');
+  expect(errors).not.toContain(bad);
+});
+it('accepts explicit disabled payout recording and a valid operator organisation', () => {
+  expect(check({ PROVIDER_PAYOUTS_ENABLED: 'false', PROVIDER_REVIEW_ORGANISATION_ID: '451e8db1-9a29-4b44-bfaf-3a7f039d1234' }).errors).toEqual([]);
+});

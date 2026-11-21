@@ -202,6 +202,12 @@ jobs:
           DOMAIN_BUDGET_TEST_DATABASE: '1'
         run: node --import tsx scripts/domain-budget-integration.mjs
 
+      - name: Provider recruitment (PostgreSQL, local evidence fixtures)
+        working-directory: apps/fra-backend/backend
+        env:
+          PROVIDER_TEST_DATABASE: '1'
+        run: node --import tsx scripts/provider-recruitment-integration.mjs
+
       - name: Internal electronic signing (PostgreSQL, generated certificate, captured SMTP and S3 double)
         working-directory: apps/fra-backend/backend
         env:

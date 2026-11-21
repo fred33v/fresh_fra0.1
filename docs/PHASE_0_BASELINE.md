@@ -732,3 +732,80 @@ scope on 12 November 2026, with these recorded conditions:
 Acceptance does not merge anything. PR #69 still needs the owner's
 explicit approval to leave Draft and merge. The Phase 1 gate in
 sections 7 to 11 is satisfied once PR #69 is merged into `main`.
+
+## 19. picomatch: findings kept, local patches removed
+
+**Status, 19 November 2026.** A reviewer reported that
+GHSA-fc5q-39xc-vjpf / CVE-2026-112366, a regular-expression denial of
+service in `picomatch`, was withdrawn on 18 November 2026. That could not
+be confirmed from the build environment, which cannot read GitHub's
+advisory database. What was checked: `pnpm audit` against the npm registry
+lists 7 advisories, all for Hono, and none for `picomatch`.
+
+### What was done, and undone
+
+PR #80 (merged as `285d399` on 18 November) added two local patches,
+`patches/picomatch@4.0.7.patch` and `patches/picomatch@2.3.2.patch`, and a
+regression test. They made a repeated extglob with a bare `*` match as
+literal text. This change removes them: the patch registrations in
+`package.json`, both patch files, the patch hashes in `pnpm-lock.yaml`
+(the lockfile is identical to the one before #80) and the patch-specific
+test.
+
+Reasons: the advisory was reported withdrawn; the patches changed matching
+(`+(*a)` stopped matching `aa`, and `+(*.js)` matched only its own text);
+and nothing in this repository triggers the slow behaviour. A matching
+patch for Rollup's bundled copies, proposed in PR #81, was not merged.
+
+### What was found, and is still true upstream
+
+- `picomatch` 4.0.7 and 2.3.2 compile a repeated extglob whose branch
+  holds a bare `*` (for example `+(*a)`) to a regular expression with
+  nested unbounded quantifiers. A failed match takes exponential time: on
+  a file name of `a` repeated then `b`, 43 ms at 20 characters, 0.8 s at
+  24, and over 10 s at 28. 4.0.7 is the latest release on npm. Other
+  shapes behave the same way, for example `+(a*)c`, `+(*a|b)c` and
+  `*(a|*b)`: 24 of 118 fuzzed shapes took over 100 ms.
+- No source file in this repository imports a glob library, and nothing on
+  a running server matches a pattern. The patterns that reach `picomatch`
+  come from configuration written by us (Jest, Vitest, Tailwind `content`,
+  lint-staged, `sucrase`, Expo's `assetBundlePatterns`, Vite's
+  `server.fs.deny`), with one exception: the `sideEffects` field in the
+  `package.json` of any package that Vite or Expo's Metro config resolves,
+  including packages in `node_modules`. In a throwaway project, a
+  dependency declaring `"sideEffects": ["+(*a)"]` stalled `vite build` for
+  12.9 s, against 0.2 s for a benign value. The realistic effect is a slow
+  or hung build when a dependency, or a dependency update, carries a
+  hostile `package.json`.
+- The production backend package (built with `pnpm deploy --prod`) and the
+  dashboard `dist/` contain none of this tooling; both were checked. The
+  mobile app bundles were not.
+- Several packages bundle their own, older copy of the engine, which a
+  patch on `picomatch` could never reach. Rollup 4.68.0 has six: a plugin
+  hook filter `**/+(*a)` took 0.9 s at 24 characters and
+  `watch.chokidar.ignored` took 1.3 s. Prettier 3.8.1 took 4.2 s at 26
+  characters with a hostile `overrides[].files`, and Playwright 1.58.2 took
+  5.1 s at 28 characters and 17.6 s at 30 with a hostile `testMatch`. tsx
+  and resolve-workspace-root were not tested. This repository's own
+  Prettier and Playwright settings do not use such patterns.
+
+### Guidance
+
+- Treat customer input as text to search for, never as a glob pattern, and
+  map any customer-selectable filter to a fixed pattern. No such path
+  exists today.
+- If the advisory is reinstated, the patches are in git history: PR #80,
+  merge `285d399`, code in commit `93cf796`. Reverting the commit that
+  removes them restores them. The Rollup version is on the branch
+  `claude/fix-rollup-bundled-picomatch` (commit `73e64e4`), if it still
+  exists.
+
+### Checked after removal
+
+A clean `pnpm install --frozen-lockfile` installs only `picomatch` 4.0.7
+and 2.3.2 with no patch hash, and every file matches the package as
+published on npm (13 files compared, none differ). `+(*a)` matches `aa`
+again. Security tests: 26 of 26. Lint and typecheck: 8 of 8 tasks each.
+The dashboard and backend build, and the dashboard bundle has the same
+content hash as before. All 11 test tasks pass with the same counts as
+before (2,364 tests).
