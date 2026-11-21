@@ -1,3 +1,4 @@
+import {commissionPaymentProfile} from '../finance-controls.js';
 import {providerIdentifiersActive} from '../relationship-identifiers.js';
 import {validProfessionalScope} from '../professional-authority.js';
 import { providerProfileSchema } from '../provider-candidate.js';
@@ -288,7 +289,7 @@ async function commissionStatement(db: Parameters<typeof providerBalance>[0], id
   for (const {currency} of currencies) balances.push({currency,...await providerBalance(db,id,currency)});
   const entries = (await db.query(`SELECT id,delta_cents AS "deltaCents",target_cents AS "targetCents",currency,reason,created_at AS "createdAt"
     FROM public.provider_commission_entries WHERE application_id=$1 ORDER BY id DESC LIMIT 200`,[id])).rows;
-  const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",
+  const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",instruction_reference AS "instructionReference",confirmation_reference AS "confirmationReference",payment_profile_id AS "paymentProfileId",beneficiary_source AS "beneficiarySource",(SELECT last4 FROM public.finance_payment_profiles fp WHERE fp.id=payment_profile_id) AS "beneficiaryLast4",
     created_at AS "createdAt",prepared_by AS "preparedBy",approved_by AS "approvedBy" FROM public.provider_payouts WHERE application_id=$1 ORDER BY created_at DESC LIMIT 200`,[id])).rows;
   // Operator staff identifiers are internal: only reviewers see who prepared or approved a payout.
   if (!forReviewer) for (const payout of payouts) { delete payout.preparedBy; delete payout.approvedBy; }
@@ -340,10 +341,11 @@ routes.post('/:id/payouts', async c => {
       return {id:previous.id,status:previous.status};
     }
     if(a.status!=='approved') throw new RecruitmentError(409,'Provider approval is required');
+    const paymentProfileId=await commissionPaymentProfile(db,a.id);
     const b=await providerBalance(db,a.id,parsed.data.currency);
     if(parsed.data.amountCents>b.available) throw new RecruitmentError(409,'Amount exceeds the unreserved commission balance');
-    const {rows:[p]}=await db.query(`INSERT INTO public.provider_payouts(application_id,currency,amount_cents,request_key,prepared_by,reason)
-      VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`,[a.id,parsed.data.currency,parsed.data.amountCents,parsed.data.requestKey,auth.userId,parsed.data.reason]);
+    const {rows:[p]}=await db.query(`INSERT INTO public.provider_payouts(application_id,currency,amount_cents,request_key,prepared_by,reason,payment_profile_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,status`,[a.id,parsed.data.currency,parsed.data.amountCents,parsed.data.requestKey,auth.userId,parsed.data.reason,paymentProfileId]);
     await recruitmentAudit(db,a.id,auth.userId,'payout.prepared',{...parsed.data,id:p.id});
     return p;
     });
@@ -380,6 +382,7 @@ routes.post('/payouts/:id/action', async c => {
       await db.query("UPDATE public.provider_payouts SET status='cancelled' WHERE id=$1",[p.id]);
     }else{
       if(a.status!=='approved')throw new RecruitmentError(409,'Provider approval is required');
+      await commissionPaymentProfile(db,a.id,p.payment_profile_id);
       if(p.prepared_by===auth.userId)throw new RecruitmentError(403,'A second reviewer must approve and record settlement');
       if((await providerBalance(db,a.id,p.currency)).available<0)throw new RecruitmentError(409,'Refunds or disputes reduced this balance; cancel and prepare a corrected payout');
       if(action==='approve'){

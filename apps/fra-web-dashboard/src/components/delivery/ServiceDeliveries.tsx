@@ -1,3 +1,4 @@
+import {Link} from 'react-router-dom';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -382,6 +383,7 @@ function DeliveryDetail({ id, onSaved }: { id: string; onSaved: () => Promise<un
   return (
     <article className="space-y-4 border-t pt-4">
       <h3 className="text-xl font-semibold">{d.title}</h3>
+      {rights?.reviewer&&<Link className="underline" to={`/finance?delivery=${encodeURIComponent(id)}`}>Open service fee finance review</Link>}
       <p>
         {d.status} · revision {d.revision} · {new Date(d.starts_at).toLocaleString('en-GB')} –{' '}
         {new Date(d.ends_at).toLocaleString('en-GB')}

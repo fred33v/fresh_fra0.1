@@ -96,3 +96,6 @@ infra/terraform/.terraform.lock.hcl
 
 # Private local PR94 reconciliation snapshots (never commit database backups)
 apps/fra-backend/backend/.local/provider-reconcile/
+
+# Private finance vault keyring (never commit banking encryption keys)
+**/.local/finance/

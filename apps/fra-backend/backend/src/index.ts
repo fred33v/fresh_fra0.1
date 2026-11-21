@@ -1,5 +1,6 @@
 // Must stay the first import: modules below read process.env when they load
 import './env.js';
+import financeRoutes from './routes/finance.js';
 import serviceDeliveryRoutes from './routes/service-delivery.js';
 import providerSalesReportRoutes from './routes/provider-sales-report.js';
 import relationshipIdentifierRoutes from './routes/relationship-identifiers.js';
@@ -129,6 +130,7 @@ api.use('*', apiKeyMiddleware);
 api.route('/professional', professionalScopesRoutes);
 api.route('/provider-sales', providerSalesReportRoutes);
 api.route('/service-delivery', serviceDeliveryRoutes);
+api.route('/finance', financeRoutes);
 api.route('/relationship-identifiers', relationshipIdentifierRoutes);
 
 // Mount route modules

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 type Statement = {
   balances: {currency:string;earned:number;recorded:number;reserved:number;available:number}[];
   entries: {id:number;deltaCents:number;currency:string;reason:string;createdAt:string}[];
-  payouts: {id:string;amountCents:number;currency:string;status:string;settlementReference:string|null;preparedBy?:string;createdAt:string}[];
+  payouts: {id:string;amountCents:number;currency:string;status:string;settlementReference:string|null;instructionReference?:string;confirmationReference?:string|null;beneficiarySource?:string;beneficiaryLast4?:string|null;preparedBy?:string;createdAt:string}[];
 };
 const money=(cents:number,currency:string)=>new Intl.NumberFormat('en-GB',{style:'currency',currency}).format(cents/100);
 export function ProviderStatement({ applicationId }: { applicationId?: string }) {
@@ -51,7 +51,7 @@ export function ProviderStatement({ applicationId }: { applicationId?: string })
       <Button disabled={payout.isPending||reason.trim().length<10||!amount} onClick={()=>payout.mutate()}>Prepare payout</Button>
       {payout.isSuccess&&<p role="status">Payout reserved for independent review.</p>}
       {payout.isError&&<p role="alert">{payout.error.message}</p>}
-      <Label htmlFor={`${applicationId}-bank-reference`}>Bank payment reference (no bank account details)</Label>
+      <Label htmlFor={`${applicationId}-bank-reference`}>External bank transaction reference (no bank account details)</Label>
       <Input id={`${applicationId}-bank-reference`} value={reference} maxLength={160} onChange={e=>setReference(e.target.value)} />
       <Label className="flex gap-2"><input type="checkbox" checked={sent} onChange={e=>setSent(e.target.checked)} />I verified this payment was sent through our bank.</Label>
       {action.isError&&<p role="alert">{action.error.message}</p>}
@@ -59,6 +59,8 @@ export function ProviderStatement({ applicationId }: { applicationId?: string })
     <h3 className="font-semibold">Payout history</h3>
     <p>“Recorded” means staff recorded a bank settlement; it is not an automatic bank confirmation.</p>
     {query.data?.payouts.map(p=><article className="space-y-2 rounded border p-3" key={p.id}>
+      {p.beneficiarySource&&<p>{p.beneficiarySource==='approved_payment_profile'?`Beneficiary: reviewed payment profile, account ending ${p.beneficiaryLast4??'unknown'}`:'Beneficiary: legacy external bank workflow; details held outside this app'}</p>}
+      {p.instructionReference&&<p className="break-all text-xs">System instruction: {p.instructionReference}</p>}{p.confirmationReference&&<p className="break-all text-xs">System recording confirmation: {p.confirmationReference}</p>}
       <p>{money(p.amountCents,p.currency)} — {p.status}{p.settlementReference?` · ${p.settlementReference}`:''}</p>
       {applicationId&&['prepared','approved'].includes(p.status)&&<div className="flex flex-wrap gap-2">
         {p.status==='prepared'&&<Button disabled={reason.trim().length<10||action.isPending||p.preparedBy===user?.userId} onClick={()=>action.mutate({id:p.id,action:'approve'})}>Approve {p.id}</Button>}

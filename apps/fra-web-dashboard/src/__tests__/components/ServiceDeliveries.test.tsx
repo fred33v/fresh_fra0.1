@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ServiceDeliveries from '@/components/delivery/ServiceDeliveries';
@@ -33,15 +34,17 @@ const detail = {
 };
 function page(props: Parameters<typeof ServiceDeliveries>[0] = {}) {
   return render(
-    <QueryClientProvider
-      client={
-        new QueryClient({
-          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-        })
-      }
-    >
-      <ServiceDeliveries {...props} />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+          })
+        }
+      >
+        <ServiceDeliveries {...props} />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 beforeEach(() => {
