@@ -32,7 +32,7 @@ export function ProviderStatement({ applicationId }: { applicationId?: string })
   }),onSuccess:async()=>{setReference('');setSent(false);await client.invalidateQueries({queryKey:['provider-statement']});}});
   return <section className="space-y-4 rounded border p-4" aria-label="Provider commission statement">
     <h2 className="text-xl font-semibold">Commission and payouts</h2>
-    <p>Commission is 17% of eligible sales excluding VAT. Refunds reduce earnings and disputed payments are held. Negative balances are recovered from future commission.</p>
+    <p>Commission is 17% of eligible sales excluding VAT, before processing/bank fees. Gross refunds reduce the HT base proportionally and disputed payments are held. Negative balances are recovered from future commission.</p>
     <Button variant="outline" onClick={()=>void query.refetch()}>Refresh commission statement</Button>
     {query.isPending&&<p role="status">Loading statement…</p>}
     {query.isError&&<p role="alert">{query.error.message}</p>}

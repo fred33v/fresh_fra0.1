@@ -1,3 +1,4 @@
+import ProviderSalesReport from '@/components/providers/ProviderSalesReport';
 import RelationshipIdentifiers, {EmployeeIdentifierRegistry} from '@/components/providers/RelationshipIdentifiers';
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
 import type { ProfessionalScope } from '@/lib/professional';
@@ -70,6 +71,7 @@ export default function ProviderReview() {
             Next page
           </Button>
         </div>
+        <ProviderSalesReport/>
         <EmployeeIdentifierRegistry/>
         {query.data?.map((a) => (
           <Review key={`${a.id}-${a.revision}`} application={a} />

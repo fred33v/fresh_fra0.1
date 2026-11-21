@@ -222,6 +222,7 @@ jobs:
           node --import tsx scripts/professional-scope-integration.mjs
           IDENTIFIER_TEST_DATABASE=1 node --import tsx scripts/identifier-integration.mjs
           IDENTIFIER_TEST_DATABASE=1 node --import tsx scripts/identifier-backfill-integration.mjs
+          SALES_REPORT_TEST_DATABASE=1 node --import tsx scripts/sales-report-integration.mjs
 
       - name: Reconcile legacy PR94 schema with real backup and restore (isolated local database)
         working-directory: apps/fra-backend/backend
