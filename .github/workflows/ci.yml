@@ -209,6 +209,7 @@ jobs:
         run: |
           node --import tsx scripts/provider-recruitment-integration.mjs
           node --import tsx scripts/provider-candidate-port-integration.mjs
+          node --import tsx scripts/provider-documents-integration.mjs
 
       - name: Professional scope and certificate authority (isolated PostgreSQL)
         working-directory: apps/fra-backend/backend
