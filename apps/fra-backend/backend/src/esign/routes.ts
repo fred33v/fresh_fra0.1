@@ -17,6 +17,7 @@ import { sendEmail, emailConfigured } from '../email.js';
 import { rateLimit, getClientIp } from '../middleware.js';
 import { appendAudit, verifyAudit } from './audit.js';
 import { CONSENT, newToken, newCode, codeHash, equalHash, sha256 } from './crypto.js';
+import { providerAgreementCanProceed } from '../providers/agreement-guard.js';
 import { esignOrigin } from './origin.js';
 import { signingPage, signingStyles, escapeSigningHtml } from './presentation.js';
 // Keep PDF/certificate libraries out of unrelated API startup and disabled deployments.
@@ -212,6 +213,12 @@ export function createEsignRoutes(
       'SELECT * FROM public.esign_fields WHERE document_id=$1 ORDER BY id',
       [doc.id]
     );
+    const linkedAgreement = (
+      await getDbPool().query(
+        'SELECT id,application_id FROM public.provider_agreements WHERE document_id=$1',
+        [doc.id]
+      )
+    ).rows[0];
     return success(c, {
       id: doc.id,
       title: doc.title,
@@ -220,6 +227,9 @@ export function createEsignRoutes(
       pages: doc.pages,
       signers: signers.rows,
       fields: fields.rows,
+      providerAgreement: linkedAgreement
+        ? { id: linkedAgreement.id, applicationId: linkedAgreement.application_id }
+        : null,
       finalSha256: doc.final_sha256,
       createdAt: doc.created_at,
       expiresAt: doc.expires_at,
@@ -252,6 +262,19 @@ export function createEsignRoutes(
       .strict()
       .safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid signer');
+    if (
+      (
+        await getDbPool().query('SELECT id FROM public.provider_agreements WHERE document_id=$1', [
+          doc.id,
+        ])
+      ).rowCount
+    )
+      return jsonError(
+        c,
+        409,
+        'AGREEMENT_SIGNERS_FIXED',
+        'The agreement already contains its two fixed signatories'
+      );
     const id = randomUUID();
     const added = await withTransaction(async (db) => {
       const current = (
@@ -391,6 +414,13 @@ export function createEsignRoutes(
     if (auth instanceof Response) return auth;
     const doc = await owned(c, auth);
     if (!doc) return jsonError(c, 404, 'NOT_FOUND', 'Document not found');
+    if (!(await providerAgreementCanProceed(getDbPool(), doc.id, auth.userId)))
+      return jsonError(
+        c,
+        409,
+        'AGREEMENT_BLOCKED',
+        'Only an appointed reviewer can send the current approved candidate agreement'
+      );
     if (!services.emailConfigured())
       return jsonError(
         c,
@@ -414,7 +444,11 @@ export function createEsignRoutes(
       const current = (
         await db.query('SELECT * FROM public.esign_documents WHERE id=$1 FOR UPDATE', [doc.id])
       ).rows[0];
-      if (current.status !== 'draft') return null;
+      if (
+        current.status !== 'draft' ||
+        !(await providerAgreementCanProceed(db, doc.id, auth.userId))
+      )
+        return null;
       const list = (
         await db.query('SELECT id FROM public.esign_signers WHERE document_id=$1 ORDER BY id', [
           doc.id,
@@ -454,6 +488,13 @@ export function createEsignRoutes(
     if (!doc) return jsonError(c, 404, 'NOT_FOUND', 'Document not found');
     if (!uuid.safeParse(c.req.param('signerId')).success)
       return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid signer');
+    if (!(await providerAgreementCanProceed(getDbPool(), doc.id, auth.userId)))
+      return jsonError(
+        c,
+        409,
+        'AGREEMENT_BLOCKED',
+        'The current approved agreement and appointed reviewer are required'
+      );
     const limited = await rateLimit('esign:resend', { windowMs: 60_000, max: 3 })(c);
     if (limited instanceof Response) return limited;
     return (await invite(doc.id, c.req.param('signerId')))
@@ -506,6 +547,7 @@ export function createEsignRoutes(
       s.status !== 'pending'
     )
       return null;
+    if (!(await providerAgreementCanProceed(db, doc.id))) return null;
     if (session) {
       const cookie = getCookie(c, 'esign_session');
       if (

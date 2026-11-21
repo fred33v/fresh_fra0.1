@@ -17,6 +17,7 @@ export interface SigningField {
   kind: 'signature' | 'name' | 'date';
 }
 export interface SigningDocument {
+  providerAgreement?: { id: string; applicationId: string } | null;
   id: string;
   title: string;
   status: SigningStatus;
