@@ -1,3 +1,4 @@
+import {providerIdentifiersActive} from '../relationship-identifiers.js';
 import {validProfessionalScope} from '../professional-authority.js';
 import { providerProfileSchema } from '../provider-candidate.js';
 import { recordCandidateRevision, candidateDossier } from '../provider-candidate-dossier.js';
@@ -168,7 +169,7 @@ routes.post('/:id/assignments', async (c) => {
     const { rows: [a] } = await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE', [c.req.param('id')]);
     if (!a) throw new RecruitmentError(404, 'Application not found');
     if (a.applicant_id === auth.userId) throw new RecruitmentError(403, 'You cannot assign work to yourself');
-    if (a.status !== 'approved' || (a.service_interest !== 'both' && a.service_interest !== parsed.data.service))
+    if (a.status !== 'approved' || !(await providerIdentifiersActive(db,a.id)) || (a.service_interest !== 'both' && a.service_interest !== parsed.data.service))
       throw new RecruitmentError(409, 'Provider is not approved for this service');
     let scopeRevision:number|null=null;
     if(parsed.data.scopeId){
@@ -198,7 +199,7 @@ routes.post('/me/assignments/:id/decision', async (c) => {
     // Lock application before assignment, the same order as suspension and assignment creation.
     const { rows: [a] } = await db.query(`SELECT * FROM public.provider_applications
       WHERE applicant_id=$1 AND organisation_id=$2 FOR UPDATE`, [auth.userId, auth.organisationId]);
-    if (!a || a.status !== 'approved') throw new RecruitmentError(403, 'An approved provider account is required');
+    if (!a || a.status !== 'approved' || (parsed.data.status==='accepted' && !(await providerIdentifiersActive(db,a.id)))) throw new RecruitmentError(403, 'An approved provider account is required');
     const { rows: [saved] } = await db.query(`UPDATE public.provider_assignments SET status=$3,decided_at=now()
       WHERE id=$1 AND application_id=$2 AND status='offered' RETURNING id,status`,
     [c.req.param('id'), a.id, parsed.data.status]);

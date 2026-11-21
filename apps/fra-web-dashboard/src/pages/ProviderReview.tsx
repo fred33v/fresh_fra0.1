@@ -1,3 +1,4 @@
+import RelationshipIdentifiers, {EmployeeIdentifierRegistry} from '@/components/providers/RelationshipIdentifiers';
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
 import type { ProfessionalScope } from '@/lib/professional';
 import ProviderCandidateDossier from '@/components/providers/ProviderCandidateDossier';
@@ -69,6 +70,7 @@ export default function ProviderReview() {
             Next page
           </Button>
         </div>
+        <EmployeeIdentifierRegistry/>
         {query.data?.map((a) => (
           <Review key={`${a.id}-${a.revision}`} application={a} />
         ))}
@@ -323,6 +325,7 @@ function Review({ application: a }: { application: Application }) {
         </div>
       ))}
       {a.serviceInterest !== 'sales' && <ProfessionalScopes applicationId={a.id} />}
+      <RelationshipIdentifiers applicationId={a.id}/>
       <ProviderCandidateDossier base={`${endpoint}/${a.id}`} profile={a.candidateProfile} />
       <ProviderStatement applicationId={a.id} />
       {audit.isError && <p role="alert">Could not load the decision history.</p>}

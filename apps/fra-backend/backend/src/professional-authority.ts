@@ -1,3 +1,4 @@
+import {providerIdentifiersActive} from './relationship-identifiers.js';
 import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import type { DbExecutor } from './db/transaction.js';
@@ -59,7 +60,7 @@ export async function validProfessionalScope(
   ).rows[0];
   if (
     !a ||
-    a.status !== 'approved' ||
+    a.status !== 'approved' || !(await providerIdentifiersActive(db,a.id)) ||
     !['training', 'both'].includes(a.service_interest) ||
     s.status !== 'approved' ||
     a.revision !== s.application_revision ||

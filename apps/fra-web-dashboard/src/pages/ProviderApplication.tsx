@@ -1,3 +1,4 @@
+import RelationshipIdentifiers from '@/components/providers/RelationshipIdentifiers';
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
 import ProviderCandidateEditor from '@/components/providers/ProviderCandidateEditor';
 import ProviderCandidateDossier from '@/components/providers/ProviderCandidateDossier';
@@ -130,6 +131,7 @@ export default function ProviderApplication() {
         )}
         {application.data?.reviewReason && <p>Review decision: {application.data.reviewReason}</p>}
         {application.data && <ProviderStatement />}
+        {application.data && <RelationshipIdentifiers/>}
         {application.data && application.data.serviceInterest !== 'sales' && <ProfessionalScopes/>}
         {application.data && (
           <ProviderCandidateDossier base={endpoint} profile={application.data.candidateProfile} />
