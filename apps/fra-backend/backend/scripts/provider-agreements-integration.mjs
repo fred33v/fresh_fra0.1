@@ -771,8 +771,25 @@ try {
         });
       }
       await candidatePage.setViewportSize({ width: 390, height: 844 });
+      // Same requirement as before (the page must not scroll sideways at phone width). On failure the message
+      // names the elements that reach past the viewport, because the overflow depends on the machine's fonts.
+      const phoneLayout = await candidatePage.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth,
+        offenders: [...document.querySelectorAll('body *')]
+          .map((element) => ({ element, box: element.getBoundingClientRect() }))
+          .filter(({ box }) => box.width > 0 && box.right > innerWidth + 0.5)
+          .slice(0, 8)
+          .map(
+            ({ element, box }) =>
+              `${element.tagName.toLowerCase()}[class="${String(element.className).slice(0, 90)}"] ` +
+              `right=${Math.round(box.right)} width=${Math.round(box.width)} ` +
+              `text="${(element.textContent ?? '').trim().slice(0, 60)}"`
+          ),
+      }));
       assert(
-        await candidatePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+        phoneLayout.scrollWidth <= phoneLayout.innerWidth,
+        `Candidate page scrolls sideways at ${phoneLayout.innerWidth}px: ${JSON.stringify(phoneLayout)}`
       );
       assert.deepEqual(errors, []);
       pass(
