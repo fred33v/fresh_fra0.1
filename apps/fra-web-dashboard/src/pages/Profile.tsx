@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { Layout } from '@/components/layout/Layout';
@@ -80,6 +81,7 @@ export default function Profile() {
           </div>
           <h1 className="text-2xl font-bold">{displayName}</h1>
           <Badge variant="secondary" className="mt-2">{roleBadge}</Badge>
+          <Link to="/provider-application" className="mt-3 block text-sm text-primary underline">Apply to become a provider</Link>
         </div>
 
         <Card className="mb-6">

@@ -60,7 +60,10 @@ In the Stripe dashboard, go to Developers > Webhooks > Add endpoint:
 - URL: `https://api.fraud-risk.co.uk/api/v1/webhooks/stripe`
 - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
   `checkout.session.async_payment_failed`, `checkout.session.expired`,
-  `payment_intent.succeeded`
+  `payment_intent.succeeded`, `charge.refunded`, `charge.refund.updated`,
+  `refund.created`, `refund.updated`, `refund.failed`, `charge.dispute.created`,
+  `charge.dispute.updated`, `charge.dispute.closed`, `charge.dispute.funds_withdrawn`,
+  `charge.dispute.funds_reinstated`
 
 Copy the signing secret (`whsec_…`) for the next step.
 
@@ -141,3 +144,12 @@ sudo journalctl -u stopfra-backend --since "-1h" | grep '"client-error"'
 
 Each line has the message, stack, page path, browser and build commit. Emails, tokens
 and query strings are removed before logging, and the IP address is never logged.
+
+
+## Provider recruitment and commission rollout
+
+Before enabling recruitment review, confirm the operator organisation UUID and current verified administrator accounts. Use `setup-ssm-params.sh` to configure `PROVIDER_REVIEW_ORGANISATION_ID`. Keep `PROVIDER_PAYOUTS_ENABLED=false` until two independent reviewers, signed provider terms, bank instructions and payment/refund/dispute webhook delivery are ready.
+
+After taking the database snapshot, apply migrations through `039_provider_commissions.sql` using the normal migration runner. From the built backend run `pnpm providers:check` (or `node dist/check-provider-setup.js`). This is a read-only check of the selected operator organisation, migration versions, verified reviewer count and payment configuration. It never grants administrator roles or creates bank transfers.
+
+The payout workflow records manually executed bank settlements. It does not provision Stripe Connect accounts or initiate payouts automatically. Bank references are staff attestations. Test attribution, refund/dispute adjustments, independent approval, cancellation and statement history in the isolated test environment before using real recipients. See `docs/PROVIDER_RECRUITMENT.md` for the complete operating flow and limits.

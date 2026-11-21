@@ -18,7 +18,7 @@ Only the latest agreement for the current approved application revision can proc
 
 Drafts, declined agreements, expired invitations and agreements from an earlier application revision can be replaced by an explicitly prepared retained agreement. Concurrent replacements require the expected previous agreement ID and application revision; only one wins. An active signing round or completed agreement for the current revision cannot be silently replaced. Retry the existing finalisation if sealing/storage failed.
 
-Migration `038_provider_agreements.sql` is additive. It introduces retained agreement links and immutable readiness reviews with RESTRICT foreign keys to retained provider/e-sign records, without cascade references into legacy users/organisations/payment purges. No automatic purge is added. Database owners/superusers remain trusted administrators. The detail panel currently returns the latest 20 agreements; all older rows remain retained. The latest agreement progress also appears in the programme review queue.
+Migration `041_provider_agreements.sql` (originally 038) is additive. It introduces retained agreement links and immutable readiness reviews with RESTRICT foreign keys to retained provider/e-sign records, without cascade references into legacy users/organisations/payment purges. No automatic purge is added. Database owners/superusers remain trusted administrators. The detail panel currently returns the latest 20 agreements; all older rows remain retained. The latest agreement progress also appears in the programme review queue.
 
 ## API and authority
 

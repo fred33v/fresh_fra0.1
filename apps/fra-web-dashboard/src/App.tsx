@@ -27,6 +27,8 @@ const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
 const BudgetHolder = lazy(() => import("./pages/BudgetHolder"));
+const ProviderReview = lazy(() => import("./pages/ProviderReview"));
+const ProviderApplication = lazy(() => import("./pages/ProviderApplication"));
 const Facilitator = lazy(() => import("./pages/Facilitator"));
 const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
@@ -112,6 +114,8 @@ const App = () => (
                 <Route path="/signing" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
                 <Route path="/signing/:id" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><Signing /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/provider-review" element={<ProtectedRoute><ProviderReview /></ProtectedRoute>} />
+                <Route path="/provider-application" element={<ProtectedRoute><ProviderApplication /></ProtectedRoute>} />
                 {/* Public speak-up pages: no sign-in, reporters may be anonymous */}
                 <Route path="/speak-up/status" element={<SpeakUp mode="follow" />} />
                 <Route path="/speak-up/:token" element={<SpeakUp mode="report" />} />

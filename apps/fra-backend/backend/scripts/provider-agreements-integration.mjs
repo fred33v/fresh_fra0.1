@@ -771,8 +771,51 @@ try {
         });
       }
       await candidatePage.setViewportSize({ width: 390, height: 844 });
+      // Same requirement as before (the page must not scroll sideways at phone width). On failure the message
+      // names the elements that reach past the viewport, because the overflow depends on the machine's fonts.
+      const phoneLayout = await candidatePage.evaluate(() => {
+        // Report the innermost elements that reach past the viewport: an offending ancestor is only a symptom,
+        // its widest descendant is the cause.
+        const past = (element) => element.getBoundingClientRect().right > innerWidth + 0.5;
+        const offenders = [...document.querySelectorAll('body *')]
+          .filter((element) => element.getBoundingClientRect().width > 0 && past(element))
+          .filter((element) => ![...element.children].some(past))
+          .slice(0, 8)
+          .map((element) => {
+            const box = element.getBoundingClientRect();
+            return (
+              `${element.tagName.toLowerCase()}[class="${String(element.className).slice(0, 110)}"] ` +
+              `left=${Math.round(box.left)} right=${Math.round(box.right)} width=${Math.round(box.width)} ` +
+              `text="${(element.textContent ?? '').trim().slice(0, 70)}"`
+            );
+          });
+        // Which single element, once allowed to shrink or wrap, makes the sideways scroll disappear?
+        const fits = () => document.documentElement.scrollWidth <= innerWidth;
+        const describe = (element) =>
+          `${element.tagName.toLowerCase()}[class="${String(element.className).slice(0, 110)}"] ` +
+          `text="${(element.textContent ?? '').trim().slice(0, 60)}"`;
+        const cures = { minWidthZero: [], wrapAnywhere: [] };
+        if (!fits()) {
+          for (const element of document.querySelectorAll('body *')) {
+            if (cures.minWidthZero.length < 5) {
+              const before = element.style.minWidth;
+              element.style.minWidth = '0';
+              if (fits()) cures.minWidthZero.push(describe(element));
+              element.style.minWidth = before;
+            }
+            if (cures.wrapAnywhere.length < 5) {
+              const before = element.style.overflowWrap;
+              element.style.overflowWrap = 'anywhere';
+              if (fits()) cures.wrapAnywhere.push(describe(element));
+              element.style.overflowWrap = before;
+            }
+          }
+        }
+        return { scrollWidth: document.documentElement.scrollWidth, innerWidth, offenders, cures };
+      });
       assert(
-        await candidatePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+        phoneLayout.scrollWidth <= phoneLayout.innerWidth,
+        `Candidate page scrolls sideways at ${phoneLayout.innerWidth}px: ${JSON.stringify(phoneLayout)}`
       );
       assert.deepEqual(errors, []);
       pass(

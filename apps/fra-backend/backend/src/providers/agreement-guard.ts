@@ -12,7 +12,7 @@ export async function providerAgreementCanProceed(
     a.contact_email,u.email,u.email_verified_at,u.organisation_id AS current_org,
     d.organisation_id AS document_org,
     (SELECT max(sequence) FROM public.provider_agreements WHERE application_id=g.application_id) AS latest
-    FROM public.provider_agreements g JOIN public.provider_applications a ON a.id=g.application_id
+    FROM public.provider_agreements g JOIN public.partner_applications a ON a.id=g.application_id
     JOIN public.esign_documents d ON d.id=g.document_id
     LEFT JOIN public.users u ON u.id=a.user_id WHERE g.document_id=$1`,
       [documentId]

@@ -113,6 +113,28 @@ it('prepares explicit reviewed terms against the current application revision', 
   );
   expect(await screen.findByRole('status')).toHaveTextContent('Agreement prepared');
 });
+it('keeps the success message when preparing changes the current agreement', async () => {
+  // A real preparation adds a new current agreement, so the refetch changes the id the panel resets on.
+  // The notice is set after that refetch resolves and must not be wiped by the reset.
+  mocked.get
+    .mockResolvedValueOnce({ agreements: [], canPrepare: true, manageableDocumentIds: [] })
+    .mockResolvedValue({ agreements: [g], canPrepare: true, manageableDocumentIds: [g.documentId] });
+  mocked.post.mockResolvedValue({ agreements: [g], documentId: g.documentId });
+  show(true);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Prepare services agreement' }));
+  for (const f of agreementTermFields)
+    await user.type(screen.getByLabelText(f.label), terms[f.key]);
+  await user.click(screen.getByLabelText(/reviewed the proposed contract terms/));
+  await user.click(screen.getByLabelText(/reviewed the actual working arrangements/));
+  await user.click(screen.getByRole('button', { name: 'Prepare agreement PDF' }));
+  // The new agreement must be the one now shown ...
+  await waitFor(() => expect(mocked.get).toHaveBeenCalledTimes(2));
+  // ... and the message must still be there once everything has settled.
+  expect(await screen.findByText(/Agreement prepared\. Review the PDF/)).toBeInTheDocument();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(screen.getByText(/Agreement prepared\. Review the PDF/)).toBeInTheDocument();
+});
 it('retains entered terms on a conflict and never implies successful preparation', async () => {
   mocked.get.mockResolvedValue({
     agreements: [g],

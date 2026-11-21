@@ -54,13 +54,18 @@ export default function ProviderAgreementPanel({
   useEffect(() => {
     setEditing(false);
     setError('');
-    setNotice('');
     setTermsReviewed(false);
     setStatusReviewed(false);
     setContractReviewed(false);
     setReadyStatusReviewed(false);
     setReviewNote('');
   }, [application.id, application.version, current?.id]);
+  // The success notice is set after the refetch that a prepare or readiness action triggers, and that refetch
+  // changes `current?.id`. Clearing it on that change raced with setNotice and lost the message on slower
+  // machines, so it is cleared only when a different application or revision is shown.
+  useEffect(() => {
+    setNotice('');
+  }, [application.id, application.version]);
   const refresh = async () => {
     await Promise.all([
       cache.invalidateQueries({ queryKey: ['provider-agreements', user?.userId, application.id] }),

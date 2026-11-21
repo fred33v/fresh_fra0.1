@@ -1,3 +1,6 @@
+import { attributeProviderSale } from '../provider-commissions.js';
+import { RecruitmentError } from '../provider-recruitment.js';
+import { withTransaction } from '../db/transaction.js';
 import crypto from 'node:crypto';
 import type { DbExecutor } from '../db/transaction.js';
 import { processPaymentEvent, purchaseForReversal, reconcilePaidPurchase } from '../payment-lifecycle.js';
@@ -24,7 +27,7 @@ import {
   auditLog,
 } from '../db/index.js';
 
-const payments = new Hono();
+const payments: Hono = new Hono();
 
 
 /** Without Stripe, payments are simulated for local development and tests; production refuses them. */
@@ -155,6 +158,8 @@ payments.post('/purchases', async (c) => {
     return jsonError(c, 503, 'PAYMENTS_UNAVAILABLE', 'Card payments are not available at the moment. Please try again later.');
   }
   const stripe = getStripe();
+  if (parsed.data.providerCode && (!hasDatabase() || !stripe))
+    return jsonError(c,503,'ATTRIBUTION_UNAVAILABLE','Provider referrals require PostgreSQL and verified payments');
 
   // Look up the package — reject if not found or inactive
   let pkg: { name: string; priceCents: number; currency: string; isActive?: boolean } | null = null;
@@ -185,6 +190,11 @@ payments.post('/purchases', async (c) => {
     // A buyer who left Stripe's page comes back to the same payment while it is open
     const session = await stripe.checkout.sessions.retrieve(pending.checkoutSessionId);
     const outcome = sessionOutcome(session, pending);
+    if (outcome === 'open' && parsed.data.providerCode && hasDatabase()) {
+      const {rows:[attribution]} = await (await import('../db.js')).getDbPool().query(`SELECT a.provider_code FROM public.provider_sale_attributions s JOIN public.provider_applications a ON a.id=s.application_id WHERE s.purchase_id=$1`,[pending.id]);
+      if (attribution?.provider_code !== parsed.data.providerCode) return jsonError(c,409,'ATTRIBUTION_LOCKED','The existing checkout has a different referral. Complete or cancel it before changing attribution.');
+    }
+
     if (outcome === 'paid') {
       await settlePaid(pending, paymentIntentIdOf(session), 'checkout_return', { userId: auth.userId, email: auth.email, ip: getClientIp(c), userAgent: c.req.header('user-agent') });
       const current=await loadPurchase(pending.id);
@@ -218,7 +228,15 @@ payments.post('/purchases', async (c) => {
   };
 
   if (hasDatabase()) {
-    await dbInsertPurchase(purchase);
+    try {
+      await withTransaction(async db => {
+        await dbInsertPurchase(purchase, db);
+        if (parsed.data.providerCode) await attributeProviderSale(db,auth,purchaseId,parsed.data.packageId,parsed.data.providerCode);
+      });
+    } catch(error) {
+      if (error instanceof RecruitmentError) return jsonError(c,error.status,'ATTRIBUTION_ERROR',error.message);
+      throw error;
+    }
   } else {
     purchasesById.set(purchaseId, purchase);
   }

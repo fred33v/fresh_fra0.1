@@ -34,6 +34,7 @@ import workshop from './workshop.js';
 import budgetGuide from './budget-guide.js';
 import clientErrorRoutes from './routes/client-errors.js';
 import esignRoutes from './esign/routes.js';
+import providerApplicationRoutes from './routes/provider-applications.js';
 import providerRoutes from './providers/routes.js';
 import { scheduleClientErrorMetrics } from './client-errors.js';
 
@@ -139,6 +140,7 @@ api.route('/', organisationRoutes);
 api.route('/', certificatesRoutes);
 api.route('/', clientErrorRoutes);
 api.route('/esign', esignRoutes);
+api.route('/provider-applications', providerApplicationRoutes);
 api.route('/providers', providerRoutes);
 api.route('/speak-up', speakUpRoutes);
 api.route('/compliance', complianceRoutes);
