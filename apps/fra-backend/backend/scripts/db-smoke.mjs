@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 
+import { enrolAndSignIn } from './lib/mfa-test-user.mjs';
 const API = process.env.API_URL ?? 'http://localhost:3000/api/v1';
 const SKIP_PDF = process.env.SMOKE_SKIP_PDF === '1';
 const PASSWORD = `Smoke-${crypto.randomBytes(12).toString('base64url')}1!`;
@@ -73,7 +74,7 @@ async function buy(token, packageId) {
 const today = new Date().toISOString().slice(0, 10);
 
 // ── Accounts, packages, organisation ────────────────────────────
-const ent = await signup(`smoke-ent-${RUN}@example.test`, 'Smoke Enterprise', 'Smoke Enterprise Ltd');
+let ent = await signup(`smoke-ent-${RUN}@example.test`, 'Smoke Enterprise', 'Smoke Enterprise Ltd');
 await buy(ent, 'pkg_full');
 let [s, p] = await call('GET', '/entitlements', undefined, ent);
 expect('entitlement is Enterprise', data(p)?.packageName === 'Enterprise', data(p));
@@ -201,6 +202,10 @@ const rolePool = new Pool({ connectionString: process.env.DATABASE_URL });
 try {
   await rolePool.query("INSERT INTO public.workshop_roles (user_id, role) VALUES ($1, 'facilitator') ON CONFLICT DO NOTHING", [userId]);
 } finally { await rolePool.end(); }
+// A facilitator is a privileged account, so it needs an authenticator like any other (the MFA guard).
+ent = await enrolAndSignIn(
+  async (method, path, body, token) => { const [status, payload] = await call(method, path, body, token); return { status, body: payload }; },
+  { email: `smoke-ent-${RUN}@example.test`, password: PASSWORD, accessToken: ent });
 [s, p] = await call('POST', '/workshop/sessions', { title: 'Board briefing' }, ent); check('live session create', s, 201, p);
 [s, p] = await call('PUT', '/workshop/profile', { fullName: 'Smoke Enterprise', organizationName: 'Smoke Enterprise Ltd', sector: 'private' }, ent); check('workshop profile', s, 200, p);
 
