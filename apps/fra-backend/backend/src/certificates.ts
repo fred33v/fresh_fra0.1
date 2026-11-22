@@ -1,3 +1,10 @@
+import {
+  authoriseProfessionalCertificate,
+  professionalSessionAuthority,
+  professionalAudit,
+  type ProfessionalCertificateAuthority,
+} from './professional-authority.js';
+import { RecruitmentError, recruitmentIdentity } from './provider-recruitment.js';
 import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import type { PoolClient } from 'pg';
@@ -37,8 +44,15 @@ export type CertificateDetails = {
   courseId?: string;
   courseVersion?: string | null;
   snapshotOrigin?: 'issued' | 'legacy_reconstructed';
+  professionalDelivery?: {
+    subjectId: string;
+    subjectVersion: string;
+    trainerName: string;
+    providerReference: string;
+  };
 };
 export type CertificateRecord = CertificateDetails & {
+  professionalAuthority?: ProfessionalCertificateAuthority;
   organisationId: string | null;
   userId: string | null;
   status: 'valid' | 'revoked';
@@ -87,7 +101,7 @@ type StoredRecord = {
   organisation_id: string | null;
   session_id: string | null;
   training_key: string | null;
-  snapshot: CertificateDetails;
+  snapshot: CertificateDetails & { professionalAuthority?: ProfessionalCertificateAuthority };
   status: 'valid' | 'revoked';
   revoked_at: string | null;
 };
@@ -123,7 +137,12 @@ async function storeRecord(
       assessmentId,
       record.sessionId,
       record.trainingKey,
-      publicDetails(record),
+      {
+        ...publicDetails(record),
+        ...(record.professionalAuthority
+          ? { professionalAuthority: record.professionalAuthority }
+          : {}),
+      },
     ]
   );
 }
@@ -142,6 +161,16 @@ export function publicDetails(r: CertificateDetails): CertificateDetails {
     courseId: r.courseId,
     courseVersion: r.courseVersion ?? null,
     snapshotOrigin: r.snapshotOrigin,
+    ...(r.professionalDelivery
+      ? {
+          professionalDelivery: {
+            subjectId: r.professionalDelivery.subjectId,
+            subjectVersion: r.professionalDelivery.subjectVersion,
+            trainerName: r.professionalDelivery.trainerName,
+            providerReference: r.professionalDelivery.providerReference,
+          },
+        }
+      : {}),
   };
 }
 const pending = new Map<string, Promise<void>>();
@@ -224,7 +253,12 @@ export class CertificateEligibilityError extends Error {
 export async function issueTrainingCertificate(
   auth: AuthContext,
   sessionId?: string,
-  request: { ipAddress?: string; userAgent?: string } = {}
+  request: {
+    ipAddress?: string;
+    userAgent?: string;
+    professionalIssuer?: AuthContext;
+    assessmentRevision?: number;
+  } = {}
 ): Promise<{ row: IssuedTrainingRow; created: boolean }> {
   const key = `${auth.userId}:${TRAINING_COURSE_ID}:${TRAINING_COURSE_VERSION}`;
   return locked(`training:${key}`, async (db) => {
@@ -244,6 +278,26 @@ export async function issueTrainingCertificate(
           'Not a member of this session',
           403
         );
+    }
+    if (db && sessionId) {
+      const professional = await professionalSessionAuthority(
+        db,
+        sessionId,
+        request.professionalIssuer ? 'issue_completion' : 'deliver',
+        true
+      );
+      if (professional && request.professionalIssuer) {
+        await recruitmentIdentity(db, request.professionalIssuer);
+        if (
+          professional.trainer.id !== request.professionalIssuer.userId ||
+          professional.application.organisation_id !== request.professionalIssuer.organisationId ||
+          auth.userId === request.professionalIssuer.userId
+        )
+          throw new RecruitmentError(
+            403,
+            'Only the current authorised trainer can certify a different learner'
+          );
+      }
     }
     const existing = db
       ? (
@@ -319,6 +373,16 @@ export async function issueTrainingCertificate(
         'Account organisation has changed. Sign in again.',
         403
       );
+    const professional = db
+      ? await authoriseProfessionalCertificate(
+          db,
+          progress,
+          TRAINING_COURSE_ID,
+          TRAINING_COURSE_VERSION,
+          request.professionalIssuer,
+          request.assessmentRevision
+        )
+      : null;
     const r: CertificateRecord = {
       kind: 'training',
       certificateNumber: newCertificateNumber(),
@@ -332,6 +396,12 @@ export async function issueTrainingCertificate(
       courseId: TRAINING_COURSE_ID,
       courseVersion: TRAINING_COURSE_VERSION,
       snapshotOrigin: 'issued',
+      ...(professional
+        ? {
+            professionalAuthority: professional.authority,
+            professionalDelivery: professional.delivery,
+          }
+        : {}),
       sourceId: newId(),
       userId: auth.userId,
       organisationId: person.organisationId,
@@ -348,12 +418,20 @@ export async function issueTrainingCertificate(
         [row.id, row.user_id, row.session_id, row.certificate_number, row.quiz_score, row.issued_at]
       );
       await storeRecord(r, null, db);
+      if (professional)
+        await professionalAudit(
+          db,
+          professional.authority.applicationId,
+          professional.authority.issuerId,
+          'certificate.issued',
+          { certificateNumber: r.certificateNumber, authority: professional.authority }
+        );
     }
     await auditLog(
       {
         eventType: 'workshop.certificate_generate',
-        actorId: auth.userId,
-        actorEmail: auth.email,
+        actorId: request.professionalIssuer?.userId ?? auth.userId,
+        actorEmail: request.professionalIssuer?.email ?? auth.email,
         organisationId: auth.organisationId,
         resourceType: 'certificate',
         resourceId: r.certificateNumber,
@@ -362,7 +440,8 @@ export async function issueTrainingCertificate(
           courseVersion: TRAINING_COURSE_VERSION,
           progressId: progress.id,
         },
-        ...request,
+        ipAddress: request.ipAddress,
+        userAgent: request.userAgent,
       },
       db
     );
@@ -727,6 +806,7 @@ export async function certificateHtml(details: CertificateDetails): Promise<stri
   <div class="holder">${esc(details.holderName)}</div>
   ${training && details.organisationName ? `<div class="org">${esc(details.organisationName)}</div>` : ''}
   <div class="statement">${statement}</div>
+  ${details.professionalDelivery ? `<div class="subject">Delivered by ${esc(details.professionalDelivery.trainerName)} · ${esc(details.professionalDelivery.subjectId)} (${esc(details.professionalDelivery.subjectVersion)}). Course completion only; this is not professional accreditation.</div>` : ''}
   ${details.snapshotOrigin === 'legacy_reconstructed' ? '<div class="subject">Legacy record: details reconstructed from existing records.</div>' : ''}
   <div class="footer">
     <div class="facts">

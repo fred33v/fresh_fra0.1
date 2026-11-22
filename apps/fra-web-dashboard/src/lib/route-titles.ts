@@ -4,8 +4,11 @@ const SITE = 'Risk Aware';
 const TITLES: [RegExp, string][] = [
   [/^\/auth\b/, 'Sign in or create an account'],
   [/^\/join\b/, 'Join your organisation'],
+  [/^\/become-a-provider\b/, 'Become a provider'],
   [/^\/dashboard\b/, 'Your dashboard'],
   [/^\/workshop\b/, 'Workshop'],
+  [/^\/service-delivery\b/, 'Service delivery'],
+  [/^\/finance\b/, 'Payment details and finance'],
   [/^\/assessment\/[^/]+\/results\b/, 'Assessment results'],
   [/^\/assessment\b/, 'Risk assessment'],
   [/^\/budget-guide\b/, 'Budget guide'],
@@ -30,6 +33,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/risk-register\b/, 'Risk register'],
   [/^\/compliance\b/, 'Compliance'],
   [/^\/integrations\b/, 'Integrations'],
+  [/^\/security\b/, 'Account security'],
   [/^\/profile\b/, 'Your profile'],
   [/^\/speak-up\b/, 'Speak up'],
 ];

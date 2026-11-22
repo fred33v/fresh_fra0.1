@@ -1,4 +1,10 @@
+import ServiceDeliveries from '@/components/delivery/ServiceDeliveries';
+import ProviderSalesReport from '@/components/providers/ProviderSalesReport';
+import RelationshipIdentifiers, {EmployeeIdentifierRegistry} from '@/components/providers/RelationshipIdentifiers';
+import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
+import type { ProfessionalScope } from '@/lib/professional';
 import ProviderCandidateDossier from '@/components/providers/ProviderCandidateDossier';
+import { ReviewerEvidence } from '@/components/providers/ProviderEvidence';
 import type { CandidateProfile } from '@/lib/providerCandidate';
 import { ProviderStatement } from '@/components/ProviderStatement';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -67,6 +73,8 @@ export default function ProviderReview() {
             Next page
           </Button>
         </div>
+        <ProviderSalesReport/>
+        <EmployeeIdentifierRegistry/>
         {query.data?.map((a) => (
           <Review key={`${a.id}-${a.revision}`} application={a} />
         ))}
@@ -76,6 +84,7 @@ export default function ProviderReview() {
 }
 
 function Review({ application: a }: { application: Application }) {
+  const { user } = useAuth();
   const client = useQueryClient();
   const [reason, setReason] = useState('');
   const [evidence, setEvidence] = useState(a.qualificationEvidence ?? '');
@@ -84,6 +93,12 @@ function Review({ application: a }: { application: Application }) {
     a.status === 'approved' ? 'suspended' : a.status === 'declined' ? 'submitted' : 'approved'
   );
   const [chosenPackage, setPackageId] = useState('');
+  const [chosenScope, setChosenScope] = useState('');
+  const professionalScopes = useQuery({
+    queryKey: ['professional-assignment-scopes', user?.userId, user?.organisationId, a.id],
+    queryFn: () => api.get<ProfessionalScope[]>(`/api/v1/professional/applications/${a.id}/scopes`),
+    enabled: a.status === 'approved',
+  });
   const [reference, setReference] = useState('');
   const [service, setService] = useState(a.serviceInterest === 'training' ? 'training' : 'sales');
   const packages = useQuery({
@@ -108,7 +123,12 @@ function Review({ application: a }: { application: Application }) {
   });
   const assignment = useMutation({
     mutationFn: () =>
-      api.post(`${endpoint}/${a.id}/assignments`, { packageId, reference, service }),
+      api.post(`${endpoint}/${a.id}/assignments`, {
+        packageId,
+        reference,
+        service,
+        ...(service === 'training' && chosenScope ? { scopeId: chosenScope } : {}),
+      }),
     onSuccess: async () => {
       setReference('');
       await client.invalidateQueries({ queryKey: ['provider-review-assignments', a.id] });
@@ -179,6 +199,9 @@ function Review({ application: a }: { application: Application }) {
         />
         {status === 'approved' && (
           <>
+            <p className="text-sm">
+              Approval needs at least one evidence document you have verified (see Evidence documents below), as well as the signed agreement.
+            </p>
             <Label htmlFor={`${a.id}-agreement`}>Completed signing document UUID</Label>
             <Input
               id={`${a.id}-agreement`}
@@ -238,6 +261,29 @@ function Review({ application: a }: { application: Application }) {
             {a.serviceInterest !== 'training' && <option value="sales">Sales</option>}
             {a.serviceInterest !== 'sales' && <option value="training">Training</option>}
           </select>
+          {service === 'training' && (
+            <>
+              <Label htmlFor={`${a.id}-scope`}>
+                Professional subject scope (optional for legacy offers)
+              </Label>
+              <select
+                id={`${a.id}-scope`}
+                className="block w-full rounded border bg-background p-2"
+                value={chosenScope}
+                onChange={(e) => setChosenScope(e.target.value)}
+              >
+                <option value="">Unscoped offer — cannot start a professional class</option>
+                {Array.isArray(professionalScopes.data) &&
+                  professionalScopes.data
+                    .filter((s) => s.effective)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.subjectId} · {s.subjectVersion} · revision {s.revision}
+                      </option>
+                    ))}
+              </select>
+            </>
+          )}
           <Label htmlFor={`${a.id}-reference`}>Unique work reference</Label>
           <Input
             id={`${a.id}-reference`}
@@ -285,7 +331,11 @@ function Review({ application: a }: { application: Application }) {
           )}
         </div>
       ))}
+      {a.serviceInterest !== 'sales' && <ProfessionalScopes applicationId={a.id} />}
+      <ServiceDeliveries applicationId={a.id} review/>
+      <RelationshipIdentifiers applicationId={a.id}/>
       <ProviderCandidateDossier base={`${endpoint}/${a.id}`} profile={a.candidateProfile} />
+      <ReviewerEvidence applicationId={a.id} />
       <ProviderStatement applicationId={a.id} />
       {audit.isError && <p role="alert">Could not load the decision history.</p>}
       <details>

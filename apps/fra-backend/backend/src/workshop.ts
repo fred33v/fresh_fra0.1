@@ -1,3 +1,6 @@
+import {professionalWorkshopGuard} from './professional-workshop-guard.js';
+import {RecruitmentError} from './provider-recruitment.js';
+import {usersByEmail} from './stores.js';
 import { storeSseToken, consumeSseToken } from './sse-tokens.js';
 // ============================================================
 // Stop FRA - Workshop Routes (migrated from Supabase)
@@ -82,6 +85,7 @@ async function getAuthWithSseToken(c: Context): Promise<AuthContext | null> {
 // ── Workshop Hono App ────────────────────────────────────────
 
 const workshop = new Hono();
+workshop.use('/*',async(c,next)=>{const denied=await professionalWorkshopGuard(c);if(denied)return denied;return next();});
 
 // ── Package gate: training is part of Professional and Enterprise ──
 // Profile/roles stay open (used during onboarding); the SSE stream is covered
@@ -226,18 +230,18 @@ workshop.post('/sessions', async (c) => {
   const auth = requireAuth(c);
   if (auth instanceof Response) return auth;
 
-  const schema = z.object({ title: z.string().min(1).max(200) });
+  const schema = z.strictObject({ title: z.string().min(1).max(200) });
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return jsonError(c, 400, 'VALIDATION_ERROR', 'Title is required');
 
-  // Delivery authority is server-assigned; a paid package alone does not grant it.
-  if (auth.role !== 'admin') {
-    if (!hasDatabase()) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
-    const roles = await getDbPool().query(
-      "SELECT 1 FROM workshop_roles WHERE user_id = $1 AND role = 'facilitator' LIMIT 1",
-      [auth.userId],
-    );
-    if (!roles.rowCount) return jsonError(c, 403, 'FORBIDDEN', 'Requires facilitator role');
+  // Internal authority is independently server-assigned; provider approval never assigns this role.
+  if(c.get('apiKeyAuth' as never))return jsonError(c,403,'FORBIDDEN','A personal account is required');
+  if(hasDatabase()){
+    const u=(await getDbPool().query('SELECT id,role FROM public.users WHERE id=$1 AND organisation_id=$2 AND email_verified_at IS NOT NULL',[auth.userId,auth.organisationId])).rows[0];
+    if(!u||(u.role!=='admin'&&!(await getDbPool().query("SELECT 1 FROM public.workshop_roles WHERE user_id=$1 AND role='facilitator'",[auth.userId])).rowCount))return jsonError(c,403,'FORBIDDEN','Current internal facilitator authority required; professional providers use their scoped session workflow');
+  }else{
+    const u=[...usersByEmail.values()].find(u=>u.id===auth.userId);
+    if(u?.role!=='admin')return jsonError(c,403,'FORBIDDEN','Current internal administrator authority required');
   }
 
   const sessionCode = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
@@ -1260,6 +1264,7 @@ workshop.post('/certificates', async (c) => {
     return c.json({ success: true, data: issued.row }, issued.created ? 201 : 200);
   } catch (error) {
     if (error instanceof CertificateEligibilityError) return jsonError(c, error.status, error.code, error.message);
+    if(error instanceof RecruitmentError)return jsonError(c,error.status,'PROFESSIONAL_AUTHORITY',error.message);
     throw error;
   }
 });

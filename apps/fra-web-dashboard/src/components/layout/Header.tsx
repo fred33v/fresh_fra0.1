@@ -76,6 +76,9 @@ export function Header() {
                   </div>
                   {user.role === 'admin' && <DropdownMenuItem asChild><Link to="/certificate/manage">Manage certificates</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild><Link to="/service-delivery">Service delivery</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/security">Account security</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/finance">Payment details & finance</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/profile">Profile</Link>
                   </DropdownMenuItem>

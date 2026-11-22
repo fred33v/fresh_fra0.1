@@ -30,6 +30,8 @@ export function ProtectedRoute({ children, requiredRole, requiredUserRole }: Pro
     return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
 
+  if (user.mfaEnrollmentRequired && location.pathname !== '/security') return <Navigate to="/security" replace />;
+
   if (requiredRole && !hasRole(requiredRole)) {
     return <Navigate to="/dashboard" replace />;
   }

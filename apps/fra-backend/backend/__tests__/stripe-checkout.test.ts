@@ -193,6 +193,7 @@ describe('Without Stripe in production', () => {
     process.env.NODE_ENV = 'production';
     const res = await send('POST', '/purchases', accessToken, { packageId: 'pkg_basic' });
     expect(res.status).toBe(503);
-    expect(((await res.json()) as any).error.code).toBe('PAYMENTS_UNAVAILABLE');
+    // Production security now fails closed before payment routing when its database is absent.
+    expect(((await res.json()) as any).error.code).toBe('DATABASE_REQUIRED');
   });
 });

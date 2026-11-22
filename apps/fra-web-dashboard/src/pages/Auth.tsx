@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { safeReturnPath } from '@/lib/return-path';
+import { clearPendingReturn, pendingReturn, rememberReturn } from '@/lib/pending-return';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
@@ -18,6 +19,7 @@ import { checkoutPath, getPackage } from '@/data/packages';
 
 
 const signInSchema = z.object({
+  totpCode: z.string().optional(),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
@@ -86,10 +88,12 @@ export default function Auth() {
   const chosenPackage = getPackage(searchParams.get('package') ?? '');
   // Back to the page that asked for sign-in, if it is a page on this site
   const returnTo = safeReturnPath(searchParams.get('returnTo'));
-  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? '/dashboard';
+  // A new account is confirmed from a link in an email, which no longer carries returnTo: use the remembered one
+  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? pendingReturn() ?? '/dashboard';
 
   useEffect(() => {
     if (user) {
+      clearPendingReturn();
       navigate(afterAuthPath);
     }
   }, [user, navigate, afterAuthPath]);
@@ -198,10 +202,12 @@ export default function Auth() {
 
   const handleSignIn = async (data: SignInFormData) => {
     setIsLoading(true);
-    const { error } = await signIn(data.email, data.password);
+    const { error } = await (data.totpCode ? signIn(data.email, data.password, data.totpCode) : signIn(data.email, data.password));
     
     if (error) {
-      if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
+      if (error instanceof ApiError && error.code === 'MFA_REQUIRED') {
+        toast.error('Enter your current six-digit authenticator code.');
+      } else if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
         toast.error('Invalid email or password');
       } else if (error instanceof ApiError && error.code === 'ACCOUNT_LOCKED') {
         toast.error('Account temporarily locked. Please try again later.');
@@ -233,6 +239,7 @@ export default function Auth() {
         ? 'Please check your details and try again.'
         : 'Registration failed. Please try again.');
     } else {
+      rememberReturn(returnTo);
       // The same reply comes back for an address that already has an account, which is told by email
       setPendingEmail(data.email);
       setMode('check-email');
@@ -354,6 +361,9 @@ export default function Auth() {
                             </FormItem>
                           )}
                         />
+                        <label className="block text-sm">Authenticator code (if enabled)
+                          <Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} {...signInForm.register('totpCode')} />
+                        </label>
                         <Button type="submit" className="w-full" disabled={isLoading} aria-busy={isLoading}>
                           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                           Sign In

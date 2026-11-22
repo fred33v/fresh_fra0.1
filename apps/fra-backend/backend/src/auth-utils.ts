@@ -10,10 +10,11 @@ import { refreshTokenAllowlist } from './stores.js';
  * When running without a database the refresh token is added to the
  * in-memory allowlist automatically.
  */
-export function issueTokens(user: User) {
+export function issueTokens(user: User, security: {mfaVersion?: number; mfaAt?: number} = {}) {
   const accessToken = jwt.sign(
     {
       sub: user.id,
+      ...security,
       email: user.email,
       role: user.role,
       organisationId: user.organisationId,
@@ -25,6 +26,7 @@ export function issueTokens(user: User) {
   const refreshToken = jwt.sign(
     {
       sub: user.id,
+      ...security,
       type: 'refresh',
       jti: crypto.randomUUID(),
     },

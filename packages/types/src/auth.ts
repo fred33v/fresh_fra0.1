@@ -68,6 +68,8 @@ export interface AuthTokenPayload {
 
 /** Credentials required for email/password authentication. */
 export interface LoginCredentials {
+  /** Required once an authenticator has been enrolled. */
+  totpCode?: string;
   email: string;
   password: string;
 }

@@ -34,6 +34,7 @@ function SiteFooter() {
           <Link to="/privacy" className="underline hover:text-foreground">Privacy notice</Link>
           <Link to="/terms" className="underline hover:text-foreground">Terms of service</Link>
           <Link to="/accessibility" className="underline hover:text-foreground">Accessibility statement</Link>
+          <Link to="/become-a-provider" className="underline hover:text-foreground">Become a provider</Link>
         </nav>
         <p>
           Help: <a href={`mailto:${LEGAL.supportEmail}`} className="underline hover:text-foreground">{LEGAL.supportEmail}</a>

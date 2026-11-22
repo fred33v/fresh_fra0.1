@@ -27,8 +27,13 @@ const Resources = lazy(() => import("./pages/Resources"));
 const Certificate = lazy(() => import("./pages/Certificate"));
 const ActionPlan = lazy(() => import("./pages/ActionPlan"));
 const BudgetHolder = lazy(() => import("./pages/BudgetHolder"));
+const Security = lazy(() => import("./pages/Security"));
+const Finance = lazy(() => import("./pages/Finance"));
+const ServiceDelivery = lazy(() => import("./pages/ServiceDelivery"));
+const ProfessionalTraining = lazy(() => import("./pages/ProfessionalTraining"));
 const ProviderReview = lazy(() => import("./pages/ProviderReview"));
 const ProviderApplication = lazy(() => import("./pages/ProviderApplication"));
+const BecomeProvider = lazy(() => import("./pages/BecomeProvider"));
 const Facilitator = lazy(() => import("./pages/Facilitator"));
 const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
@@ -79,6 +84,8 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/join" element={<Join />} />
+                <Route path="/become-a-provider" element={<BecomeProvider />} />
+                <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/workshop" element={<ProtectedRoute><PackageGate feature="training"><Workshop /></PackageGate></ProtectedRoute>} />
                 <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
@@ -106,6 +113,9 @@ const App = () => (
                 <Route path="/compliance" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Compliance /></PackageGate></ProtectedRoute>} />
                 <Route path="/integrations" element={<ProtectedRoute requiredUserRole={['employer', 'admin']}><PackageGate feature="compliance"><Integrations /></PackageGate></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
+                <Route path="/service-delivery" element={<ProtectedRoute><ServiceDelivery /></ProtectedRoute>} />
+                <Route path="/professional-training" element={<ProtectedRoute><ProfessionalTraining /></ProtectedRoute>} />
                 <Route path="/provider-review" element={<ProtectedRoute><ProviderReview /></ProtectedRoute>} />
                 <Route path="/provider-application" element={<ProtectedRoute><ProviderApplication /></ProtectedRoute>} />
                 {/* Public speak-up pages: no sign-in, reporters may be anonymous */}

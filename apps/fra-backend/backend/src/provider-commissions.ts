@@ -1,3 +1,4 @@
+import {providerIdentifiersActive} from './relationship-identifiers.js';
 import { totalWithVat } from './stripe.js';
 import type { DbExecutor } from './db/transaction.js';
 import type { AuthContext } from './helpers.js';
@@ -26,7 +27,7 @@ export async function attributeProviderSale(db: DbExecutor, auth: AuthContext, p
   const { rows: [provider] } = await db.query(`SELECT a.* FROM public.provider_applications a
     JOIN public.users u ON u.id=a.applicant_id AND u.organisation_id=a.organisation_id AND u.email_verified_at IS NOT NULL
     WHERE a.provider_code=$1 FOR UPDATE OF a`,[code]);
-  if (!provider || provider.status !== 'approved' || provider.service_interest === 'training')
+  if (!provider || provider.status !== 'approved' || provider.service_interest === 'training' || !(await providerIdentifiersActive(db,provider.id)))
     throw new RecruitmentError(400,'Provider reference is unavailable for sales');
   if (provider.applicant_id === auth.userId || provider.organisation_id === auth.organisationId)
     throw new RecruitmentError(400,'Self-referrals are not eligible for commission');
@@ -106,9 +107,9 @@ export async function verifyConcurrently(
 export async function refreshProviderPayments(auth: AuthContext, id: string, overrides: PaymentVerificationOptions = {}) {
   const options = { ...PAYMENT_VERIFICATION, ...overrides };
   const { withTransaction } = await import('./db/transaction.js');
-  const { recruitmentIdentity } = await import('./provider-recruitment.js');
+  const { financeReviewer } = await import('./finance-controls.js');
   await withTransaction(async db => {
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT applicant_id FROM public.provider_applications WHERE id=$1',[id]);
     if(!a)throw new RecruitmentError(404,'Application not found');
     if(a.applicant_id===auth.userId)throw new RecruitmentError(403,'You cannot authorise your own payout');

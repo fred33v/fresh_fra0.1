@@ -1,3 +1,4 @@
+import { verifyMfa, privileged } from '../mfa.js';
 import { Hono, type Context } from 'hono';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -297,7 +298,19 @@ auth.post('/auth/login', async (c) => {
     return jsonError(c, 403, 'EMAIL_NOT_VERIFIED', 'Please confirm your email address first. We have sent you a new link.');
   }
 
-  const { accessToken, refreshToken } = issueTokens(user);
+  let security = {};
+  if (hasDatabase()) {
+    const state = (await getDbPool().query('SELECT enabled FROM public.user_mfa WHERE user_id=$1',[user.id])).rows[0];
+    if (state?.enabled) {
+      const verified = await withTransaction(db => verifyMfa(db,user.id,parsed.data.totpCode));
+      if (!verified) {
+        await auditLog({eventType:'auth.mfa_failed',actorId:user.id,organisationId:user.organisationId,ipAddress:getClientIp(c)});
+        return jsonError(c,401,'MFA_REQUIRED','Enter a valid authenticator code');
+      }
+      security = verified;
+    }
+  }
+  const { accessToken, refreshToken } = issueTokens(user, security);
   if (hasDatabase()) {
     await dbUpsertRefreshToken(refreshToken, user.id);
   }
@@ -370,6 +383,9 @@ auth.get('/auth/me', async (c) => {
   if (!user) return jsonError(c, 401, 'UNAUTHORIZED', 'User not found');
 
   const pool = getDbPool();
+  const mfaState=(await pool.query('SELECT enabled,version FROM public.user_mfa WHERE user_id=$1',[user.id])).rows[0];
+  if(mfaState?.enabled && (authCtx.mfaVersion!==mfaState.version || !authCtx.mfaAt))
+    return jsonError(c,401,'MFA_REQUIRED','Sign in with your authenticator');
   const [profileRes, rolesRes] = await Promise.all([
     pool.query('SELECT * FROM workshop_profiles WHERE user_id = $1 LIMIT 1', [user.id]),
     pool.query('SELECT role FROM workshop_roles WHERE user_id = $1', [user.id]),
@@ -379,6 +395,7 @@ auth.get('/auth/me', async (c) => {
     success: true,
     data: {
       ...publicUser(user),
+      mfaEnrollmentRequired: (await privileged(pool,user.id) || mfaState?.version>1) && !mfaState?.enabled,
       profile: profileRes.rows[0] ?? await accountProfile(user),
       workshopRoles: rolesRes.rows.map((r: { role: string }) => r.role),
     },
@@ -428,7 +445,12 @@ auth.post('/auth/refresh', async (c) => {
   if (!hasDatabase() && !refreshTokenAllowlist.delete(refreshToken)) {
     return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
   }
-  const tokens = issueTokens(user);
+  if (hasDatabase()) {
+    const state=(await getDbPool().query('SELECT enabled,version FROM public.user_mfa WHERE user_id=$1',[user.id])).rows[0];
+    if(state?.enabled && (payload.mfaVersion!==state.version || typeof payload.mfaAt!=='number'))
+      return jsonError(c,401,'MFA_REQUIRED','Sign in again with your authenticator');
+  }
+  const tokens = issueTokens(user,{mfaVersion:payload.mfaVersion,mfaAt:payload.mfaAt});
   if (hasDatabase() && !(await dbRotateRefreshToken(refreshToken, tokens.refreshToken, user.id))) {
     return jsonError(c, 401, 'REFRESH_REVOKED', 'Refresh token is revoked');
   }

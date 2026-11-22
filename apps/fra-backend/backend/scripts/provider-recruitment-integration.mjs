@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import { Hono } from 'hono';
+import { addVerifiedEvidence } from './lib/verified-evidence.mjs';
 if (process.env.PROVIDER_TEST_DATABASE !== '1' || process.env.NODE_ENV === 'production' ||
     !['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.DATABASE_URL ?? 'https://invalid').hostname))
   throw new Error('Requires PROVIDER_TEST_DATABASE=1 and a disposable local DATABASE_URL');
@@ -27,7 +28,11 @@ async function actor(role, org = randomUUID(), verified = true) {
   await db.query(`INSERT INTO public.organisations(id,name,created_by_user_id) VALUES($1,'Provider test',$2) ON CONFLICT(id) DO NOTHING`,[org,a.id]);
   await db.query('COMMIT');
   } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
-  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: org }, jwtSecret);
+  if(role==='admin' && org===operatorOrg){
+    await pool.query("INSERT INTO public.user_mfa(user_id,secret,enabled) VALUES($1,'{}',true)",[a.id]);
+    await pool.query("INSERT INTO public.user_security_roles(user_id,role,granted_by,reason) VALUES($1,'finance',$1,'Synthetic finance fixture grant')",[a.id]);
+  }
+  a.token = jwt.sign({ sub: a.id, email: a.email, role, organisationId: org,mfaVersion:1,mfaAt:Math.floor(Date.now()/1000) }, jwtSecret);
   return a;
 }
 async function call(actor, path, body, expected = 200, method = body ? 'POST' : 'GET') {
@@ -79,7 +84,25 @@ try {
   assert((await call(admin, '/review')).some(a => a.id === application.id));
   const review = { revision:0,status:'approved',reason:'Reviewed qualifications and demonstration',qualificationEvidence:'Professional register checked and demo observed' };
   await call(applicant, `/${application.id}/review`, review,403);
-  await call(admin, `/${application.id}/review`, review,400);
+  // Approval needs checked evidence. A valid, applicant-signed agreement is not enough without it, and neither
+  // pending nor rejected documents count; only a document a reviewer verified does.
+  const gateAgreement = await agreement(applicant);
+  const gate = { ...review, agreementDocumentId: gateAgreement };
+  const insertEvidence = (status) => pool.query(`INSERT INTO public.provider_application_documents
+    (application_id,application_revision,kind,filename,mime_type,content,sha256,uploaded_by,status,decided_by,decided_at,decision_reason)
+    SELECT id,revision,'identity','gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),applicant_id,$3,
+      CASE WHEN $3='pending' THEN NULL ELSE $4::uuid END, CASE WHEN $3='pending' THEN NULL ELSE now() END,
+      CASE WHEN $3='rejected' THEN 'Document is not legible enough' END
+    FROM public.provider_applications WHERE id=$1`, [application.id, Buffer.from('%PDF-1.7\ngate\n'), status, admin.id]);
+  await call(admin, `/${application.id}/review`, gate, 400);
+  await insertEvidence('pending');
+  await call(admin, `/${application.id}/review`, gate, 400);
+  await insertEvidence('rejected');
+  await call(admin, `/${application.id}/review`, gate, 400);
+  assert.deepEqual((await pool.query('SELECT status, provider_code FROM public.provider_applications WHERE id=$1', [application.id])).rows[0],
+    { status: 'submitted', provider_code: null });
+  await addVerifiedEvidence(pool, application.id, admin.id);
+  await call(admin, `/${application.id}/review`, review,400); // verified evidence, but no agreement yet
   const wrong = await agreement(other);
   await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:wrong },400);
   // A completed, retained, applicant-signed document is not enough: it must be the provider agreement, signed only by the applicant.
@@ -135,6 +158,7 @@ try {
   await call(applicant,`/me/assignments/${cancelled.id}/decision`,{status:'accepted'},409);
   const seller = await call(other,'/me',{companyName:'Sales company',serviceInterest:'sales'},201);
   const sellerDoc = await agreement(other);
+  await addVerifiedEvidence(pool, seller.id, admin.id);
   await call(admin,`/${seller.id}/review`,{revision:0,status:'approved',reason:'Sales references and agreement reviewed',agreementDocumentId:sellerDoc});
   await call(admin,`/${seller.id}/assignments`,{...offer,reference:randomUUID()},409);
   const declinedUser = await actor('employer');
@@ -183,7 +207,7 @@ try {
   statement=await call(applicant,'/me/statement');assert.equal(statement.balances[0].earned,8500);
   // A provider with more sales than the full-check limit skips sales verified moments ago. A stale sale is
   // still checked, a Stripe failure is reported rather than hidden, and a spent time budget asks for a retry.
-  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin'};
+  const adminAuth={userId:admin.id,organisationId:operatorOrg,email:admin.email,role:'admin',mfaVersion:1,mfaAt:Math.floor(Date.now()/1000)};
   provider.state.unavailable=true;
   await refreshProviderPayments(adminAuth,application.id,{fullCheckLimit:0}); // verified seconds ago: Stripe is not called
   await pool.query("UPDATE public.purchases SET payment_reconciled_at=now()-interval '10 minutes' WHERE id=$1",[sale.id]);

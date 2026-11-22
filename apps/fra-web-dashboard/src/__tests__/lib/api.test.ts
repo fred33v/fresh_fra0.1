@@ -90,3 +90,14 @@ describe('api.get', () => {
     await expect(api.get('/api/v1/test')).rejects.toThrow('Invalid input');
   });
 });
+
+describe('api.upload',()=>{
+ beforeEach(()=>{localStorageMock.clear();vi.clearAllMocks()});
+ it('lets the browser set the multipart boundary and keeps the access token',async()=>{
+ const {api,setTokens}=await import('@/lib/api');setTokens('upload-access','upload-refresh');
+ mockFetch.mockResolvedValueOnce({status:200,json:async()=>({success:true,data:{id:'evidence'}})});
+ const form=new FormData();form.set('revision','3');form.set('file',new File(['evidence'],'proof.pdf',{type:'application/pdf'}));
+ await expect(api.upload('/api/v1/service-delivery/delivery/files',form)).resolves.toEqual({id:'evidence'});
+ expect(mockFetch).toHaveBeenCalledWith('http://test-api:3000/api/v1/service-delivery/delivery/files',expect.objectContaining({method:'POST',body:form,headers:{Authorization:'Bearer upload-access'}}));
+ });
+});

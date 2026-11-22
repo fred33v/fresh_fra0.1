@@ -414,6 +414,7 @@ export const signupSchema = z.object({
 });
 
 export const loginSchema = z.object({
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
   email: z.string().email(),
   password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 });

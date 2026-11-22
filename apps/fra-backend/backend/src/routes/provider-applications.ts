@@ -1,3 +1,6 @@
+import {financeReviewer,commissionPaymentProfile} from '../finance-controls.js';
+import {providerIdentifiersActive} from '../relationship-identifiers.js';
+import {validProfessionalScope} from '../professional-authority.js';
 import { providerProfileSchema } from '../provider-candidate.js';
 import { recordCandidateRevision, candidateDossier } from '../provider-candidate-dossier.js';
 import { providerBalance, refreshProviderPayments } from '../provider-commissions.js';
@@ -112,6 +115,7 @@ const reviewSchema = z.strictObject({
 const assignmentSchema = z.strictObject({
   packageId: z.string().min(1).max(100), reference: z.string().trim().min(2).max(160),
   service: z.enum(['sales', 'training']),
+  scopeId: z.uuid().optional(),
 });
 
 routes.get('/review', async (c) => {
@@ -147,7 +151,7 @@ routes.get('/me/assignments', async (c) => {
   return recruitmentResponse(c, () => withTransaction(async (db) => {
     await recruitmentIdentity(db, auth);
     return (await db.query(`SELECT s.id,s.package_id AS "packageId",p.name AS "packageName",s.reference,
-      s.service,s.status,s.created_at AS "createdAt" FROM public.provider_assignments s
+      s.service,s.status,s.professional_scope_id AS "scopeId",s.professional_scope_revision AS "scopeRevision",s.created_at AS "createdAt" FROM public.provider_assignments s
       JOIN public.provider_applications a ON a.id=s.application_id
       JOIN public.packages p ON p.id=s.package_id
       WHERE a.applicant_id=$1 AND a.organisation_id=$2 ORDER BY s.created_at DESC LIMIT 200`,
@@ -166,13 +170,19 @@ routes.post('/:id/assignments', async (c) => {
     const { rows: [a] } = await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE', [c.req.param('id')]);
     if (!a) throw new RecruitmentError(404, 'Application not found');
     if (a.applicant_id === auth.userId) throw new RecruitmentError(403, 'You cannot assign work to yourself');
-    if (a.status !== 'approved' || (a.service_interest !== 'both' && a.service_interest !== parsed.data.service))
+    if (a.status !== 'approved' || !(await providerIdentifiersActive(db,a.id)) || (a.service_interest !== 'both' && a.service_interest !== parsed.data.service))
       throw new RecruitmentError(409, 'Provider is not approved for this service');
+    let scopeRevision:number|null=null;
+    if(parsed.data.scopeId){
+      const scope=await validProfessionalScope(db,parsed.data.scopeId,'deliver',true);
+      if(parsed.data.service!=='training'||scope.application.id!==a.id)throw new RecruitmentError(403,'Scope must belong to this provider and training service');
+      scopeRevision=scope.scope.revision;
+    }
     const { rows: [saved] } = await db.query(`INSERT INTO public.provider_assignments
-      (application_id,package_id,reference,service,assigned_by)
-      SELECT $1,id,$3,$4,$5 FROM public.packages WHERE id=$2 AND is_active
+      (application_id,package_id,reference,service,assigned_by,professional_scope_id,professional_scope_revision)
+      SELECT $1,id,$3,$4,$5,$6,$7 FROM public.packages WHERE id=$2 AND is_active
       ON CONFLICT(application_id,reference) DO NOTHING RETURNING id,status`,
-    [a.id, parsed.data.packageId, parsed.data.reference, parsed.data.service, auth.userId]);
+    [a.id, parsed.data.packageId, parsed.data.reference, parsed.data.service, auth.userId,parsed.data.scopeId??null,scopeRevision]);
     if (!saved) throw new RecruitmentError(409, 'Package unavailable or assignment reference already used');
     await recruitmentAudit(db, a.id, auth.userId, 'assignment.offered', { ...parsed.data, id: saved.id });
     return saved;
@@ -190,7 +200,7 @@ routes.post('/me/assignments/:id/decision', async (c) => {
     // Lock application before assignment, the same order as suspension and assignment creation.
     const { rows: [a] } = await db.query(`SELECT * FROM public.provider_applications
       WHERE applicant_id=$1 AND organisation_id=$2 FOR UPDATE`, [auth.userId, auth.organisationId]);
-    if (!a || a.status !== 'approved') throw new RecruitmentError(403, 'An approved provider account is required');
+    if (!a || a.status !== 'approved' || (parsed.data.status==='accepted' && !(await providerIdentifiersActive(db,a.id)))) throw new RecruitmentError(403, 'An approved provider account is required');
     const { rows: [saved] } = await db.query(`UPDATE public.provider_assignments SET status=$3,decided_at=now()
       WHERE id=$1 AND application_id=$2 AND status='offered' RETURNING id,status`,
     [c.req.param('id'), a.id, parsed.data.status]);
@@ -228,7 +238,7 @@ routes.get('/:id/assignments', async (c) => {
     return jsonError(c, 400, 'VALIDATION_ERROR', 'Invalid application');
   return recruitmentResponse(c, () => withTransaction(async (db) => {
     await recruitmentIdentity(db, auth, true);
-    return (await db.query(`SELECT s.id,s.reference,s.service,s.status,p.name AS "packageName"
+    return (await db.query(`SELECT s.id,s.reference,s.service,s.status,s.professional_scope_id AS "scopeId",s.professional_scope_revision AS "scopeRevision",p.name AS "packageName"
       FROM public.provider_assignments s JOIN public.packages p ON p.id=s.package_id
       WHERE s.application_id=$1 ORDER BY s.created_at DESC LIMIT 200`,[c.req.param('id')])).rows;
   }));
@@ -247,6 +257,13 @@ routes.post('/:id/assignments/:assignmentId/close', async (c) => {
     const { rows: [a] } = await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
     if (!a) throw new RecruitmentError(404,'Application not found');
     if (a.applicant_id === auth.userId) throw new RecruitmentError(403,'You cannot close your own work assignment');
+    if(input.data.status==='completed'){
+      const assignment=(await db.query('SELECT * FROM public.provider_assignments WHERE id=$1 AND application_id=$2 FOR UPDATE',[c.req.param('assignmentId'),a.id])).rows[0];
+      if(assignment?.service==='training'&&assignment.professional_scope_id){
+        const states=(await db.query('SELECT status FROM public.service_deliveries WHERE assignment_id=$1',[assignment.id])).rows;
+        if(!states.some(d=>d.status==='accepted')||states.some(d=>!['accepted','cancelled'].includes(d.status)))throw new RecruitmentError(409,'Scoped training closure requires customer-accepted delivery; unfinished, refused or disputed work needs review');
+      }
+    }
     const { rows: [saved] } = await db.query(`UPDATE public.provider_assignments SET status=$3,decided_at=now()
       WHERE id=$1 AND application_id=$2 AND
       ((status='accepted' AND $3='completed' AND $4='approved') OR (status IN ('offered','accepted') AND $3='cancelled'))
@@ -272,7 +289,7 @@ async function commissionStatement(db: Parameters<typeof providerBalance>[0], id
   for (const {currency} of currencies) balances.push({currency,...await providerBalance(db,id,currency)});
   const entries = (await db.query(`SELECT id,delta_cents AS "deltaCents",target_cents AS "targetCents",currency,reason,created_at AS "createdAt"
     FROM public.provider_commission_entries WHERE application_id=$1 ORDER BY id DESC LIMIT 200`,[id])).rows;
-  const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",
+  const payouts = (await db.query(`SELECT id,amount_cents AS "amountCents",currency,status,settlement_reference AS "settlementReference",instruction_reference AS "instructionReference",confirmation_reference AS "confirmationReference",payment_profile_id AS "paymentProfileId",beneficiary_source AS "beneficiarySource",(SELECT last4 FROM public.finance_payment_profiles fp WHERE fp.id=payment_profile_id) AS "beneficiaryLast4",
     created_at AS "createdAt",prepared_by AS "preparedBy",approved_by AS "approvedBy" FROM public.provider_payouts WHERE application_id=$1 ORDER BY created_at DESC LIMIT 200`,[id])).rows;
   // Operator staff identifiers are internal: only reviewers see who prepared or approved a payout.
   if (!forReviewer) for (const payout of payouts) { delete payout.preparedBy; delete payout.approvedBy; }
@@ -296,7 +313,7 @@ routes.get('/:id/statement', async c => {
   if(!z.string().uuid().safeParse(c.req.param('id')).success) return jsonError(c,400,'VALIDATION_ERROR','Invalid provider');
   return recruitmentResponse(c,()=>withTransaction(async db=>{
     await snapshotRead(db);
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT id FROM public.provider_applications WHERE id=$1',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
     return commissionStatement(db,a.id,true);
@@ -313,7 +330,7 @@ routes.post('/:id/payouts', async c => {
   return recruitmentResponse(c,async()=>{
     await refreshProviderPayments(auth,c.req.param('id'));
     return withTransaction(async db=>{
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[c.req.param('id')]);
     if(!a) throw new RecruitmentError(404,'Application not found');
     if(a.applicant_id===auth.userId) throw new RecruitmentError(403,'You cannot prepare your own payout');
@@ -324,10 +341,11 @@ routes.post('/:id/payouts', async c => {
       return {id:previous.id,status:previous.status};
     }
     if(a.status!=='approved') throw new RecruitmentError(409,'Provider approval is required');
+    const paymentProfileId=await commissionPaymentProfile(db,a.id);
     const b=await providerBalance(db,a.id,parsed.data.currency);
     if(parsed.data.amountCents>b.available) throw new RecruitmentError(409,'Amount exceeds the unreserved commission balance');
-    const {rows:[p]}=await db.query(`INSERT INTO public.provider_payouts(application_id,currency,amount_cents,request_key,prepared_by,reason)
-      VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`,[a.id,parsed.data.currency,parsed.data.amountCents,parsed.data.requestKey,auth.userId,parsed.data.reason]);
+    const {rows:[p]}=await db.query(`INSERT INTO public.provider_payouts(application_id,currency,amount_cents,request_key,prepared_by,reason,payment_profile_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,status`,[a.id,parsed.data.currency,parsed.data.amountCents,parsed.data.requestKey,auth.userId,parsed.data.reason,paymentProfileId]);
     await recruitmentAudit(db,a.id,auth.userId,'payout.prepared',{...parsed.data,id:p.id});
     return p;
     });
@@ -344,14 +362,14 @@ routes.post('/payouts/:id/action', async c => {
   return recruitmentResponse(c,async()=>{
     if(parsed.data.action!=='cancel') {
       const lookup=await withTransaction(async db=>{
-        await recruitmentIdentity(db,auth,true);
+        await financeReviewer(db,auth);
         return (await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')])).rows[0];
       });
       if(!lookup)throw new RecruitmentError(404,'Payout not found');
       await refreshProviderPayments(auth,lookup.application_id);
     }
     return withTransaction(async db=>{
-    await recruitmentIdentity(db,auth,true);
+    await financeReviewer(db,auth);
     const {rows:[lookup]}=await db.query('SELECT application_id FROM public.provider_payouts WHERE id=$1',[c.req.param('id')]);
     if(!lookup)throw new RecruitmentError(404,'Payout not found');
     const {rows:[a]}=await db.query('SELECT * FROM public.provider_applications WHERE id=$1 FOR UPDATE',[lookup.application_id]);
@@ -364,6 +382,7 @@ routes.post('/payouts/:id/action', async c => {
       await db.query("UPDATE public.provider_payouts SET status='cancelled' WHERE id=$1",[p.id]);
     }else{
       if(a.status!=='approved')throw new RecruitmentError(409,'Provider approval is required');
+      await commissionPaymentProfile(db,a.id,p.payment_profile_id);
       if(p.prepared_by===auth.userId)throw new RecruitmentError(403,'A second reviewer must approve and record settlement');
       if((await providerBalance(db,a.id,p.currency)).available<0)throw new RecruitmentError(409,'Refunds or disputes reduced this balance; cancel and prepare a corrected payout');
       if(action==='approve'){
