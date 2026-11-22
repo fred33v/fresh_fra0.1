@@ -107,6 +107,8 @@ it('submits an approval with concurrency revision, agreement and qualification e
   fireEvent.change(await screen.findByLabelText('Decision reason (visible to applicant)'), {
     target: { value: 'Checked references and agreement' },
   });
+  // Reviewers are told, before they try, that approval needs a verified evidence document
+  expect(screen.getByText(/needs at least one evidence document you have verified/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Completed signing document UUID'), {
     target: { value: 'agreement-id' },
   });

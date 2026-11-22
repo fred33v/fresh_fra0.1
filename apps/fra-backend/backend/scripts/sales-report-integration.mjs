@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import { Hono } from 'hono';
+import { addVerifiedEvidence } from './lib/verified-evidence.mjs';
 const url = new URL(process.env.DATABASE_URL ?? 'https://invalid');
 assert(
   process.env.SALES_REPORT_TEST_DATABASE === '1' &&
@@ -124,6 +125,7 @@ try {
     201
   );
   const doc = await agreement(provider, reviewer.org);
+  await addVerifiedEvidence(pool, application.id, reviewer.id);
   const approved = await call(reviewer, '/providers/' + application.id + '/review', {
     revision: 0,
     status: 'approved',
