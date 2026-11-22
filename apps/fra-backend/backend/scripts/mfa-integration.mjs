@@ -30,6 +30,15 @@ const { withTransaction } = await import('../src/db/transaction.ts');
 const { closeDbPool } = await import('../src/db.ts');
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const app = new Hono();
+// Stands in for apiKeyMiddleware, which has already verified a key and attributes it to its creator.
+app.use('/api/v1/*', async (c, next) => {
+  const key = c.req.header('x-test-api-key');
+  if (key) {
+    const [userId, organisationId] = key.split(',');
+    c.set('apiKeyAuth', { userId, email: 'api-key:test', role: 'employer', organisationId });
+  }
+  return next();
+});
 app.use('/api/v1/*', mfaGuard);
 app.route('/api/v1', auth);
 app.route('/api/v1/security', security);
@@ -58,6 +67,15 @@ async function request(path, token, body, status = 200) {
   assert.equal(r.status, status, JSON.stringify(json));
   count++;
   return json.data;
+}
+async function apiKeyRequest(creator, status) {
+  const r = await app.request('http://localhost/api/v1/sensitive', {
+    headers: { 'x-test-api-key': `${creator.id},${creator.org}` },
+  });
+  const json = await r.json();
+  assert.equal(r.status, status, JSON.stringify(json));
+  count++;
+  return json;
 }
 async function actor(role, org = randomUUID()) {
   const u = { id: randomUUID(), org, email: randomUUID() + '@example.test' };
@@ -133,6 +151,13 @@ try {
     totpCode: totp(raw, step + 1),
   });
   await request('/sensitive', login.accessToken);
+  // API keys cannot present an authenticator code, so the per-session claim check does not apply to them,
+  // but they must not become a way around enrolment or around the check for an ordinary session.
+  await apiKeyRequest(admin, 200); // the creator has MFA enabled: the key is accepted
+  await request('/sensitive', admin.token, undefined, 403); // the same user's session without the claim is still refused
+  const unenrolledAdmin = await actor('admin');
+  assert.equal((await apiKeyRequest(unenrolledAdmin, 403)).error.code, 'MFA_ENROLLMENT_REQUIRED'); // privileged and not enrolled
+  await apiKeyRequest(await actor('employee'), 200); // an ordinary creator without MFA: unchanged
   await request('/security/mfa/enrol', login.accessToken, { password }, 409);
   await request(
     '/security/roles/finance',
