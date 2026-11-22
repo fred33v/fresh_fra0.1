@@ -163,6 +163,8 @@ jobs:
       - name: Start backend
         working-directory: apps/fra-backend/backend
         run: |
+          # Privileged accounts need an authenticator, and its secret is sealed with this key. A throwaway key for this CI backend only.
+          export FINANCE_VAULT_KEYS="$(node -e 'console.log(JSON.stringify({activeKeyId:"ci",keys:{ci:require("crypto").randomBytes(32).toString("base64")}}))')"
           pnpm exec tsx src/index.ts > backend.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:3000/health | grep -q '"database":"ok"' && exit 0

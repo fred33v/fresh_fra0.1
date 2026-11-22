@@ -8,6 +8,8 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { enrolAndSignIn } from './lib/mfa-test-user.mjs';
 
 const connectionString = process.env.DATABASE_URL;
 if (process.env.TRANSACTION_TEST_DATABASE !== '1' || !connectionString || process.env.NODE_ENV === 'production') {
@@ -27,7 +29,10 @@ const hash = (v) => crypto.createHash('sha256').update(v).digest('hex');
 const backend = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
   cwd: fileURLToPath(new URL('..', import.meta.url)),
   env: { ...process.env, NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(port),
-    JWT_SECRET: secret, JWT_REFRESH_SECRET: refreshSecret, INBOUND_WEBHOOK_SECRET: inboundSecret,
+    JWT_SECRET: secret, JWT_REFRESH_SECRET: refreshSecret,
+    // The key that seals authenticator secrets; a throwaway key for this disposable backend only.
+    FINANCE_VAULT_KEYS: JSON.stringify({ activeKeyId: 'test', keys: { test: crypto.randomBytes(32).toString('base64') } }),
+    FINANCE_VAULT_KEYS_FILE: '', INBOUND_WEBHOOK_SECRET: inboundSecret,
     UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', STRIPE_SECRET_KEY: '',
     STRIPE_WEBHOOK_SECRET: '', SMTP_HOST: '', DB_POOL_MAX: '4', CORS_ORIGINS: 'http://localhost:8080' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -164,7 +169,10 @@ try {
   const employeeToken=jwt.sign({sub:a.userId,email:a.email,role:'employee',organisationId:a.organisationId},secret,{algorithm:'HS256',expiresIn:'1h'});
   assert.equal((await call('POST','/workshop/sessions',{title:'Employee delivery'},employeeToken)).status,403);
   await pool.query("INSERT INTO public.workshop_roles (user_id,role) VALUES ($1,'facilitator')",[a.userId]);
-  assert.equal((await call('POST','/workshop/sessions',{title:'Authorised delivery'},a.accessToken)).status,201);
+  // A facilitator is privileged: the fixture account needs a real password and an authenticator to be served.
+  await pool.query('UPDATE public.users SET password_hash=$2 WHERE id=$1',[a.userId,await bcrypt.hash(password,4)]);
+  const facilitatorToken=await enrolAndSignIn(call,{email:a.email,password,accessToken:a.accessToken});
+  assert.equal((await call('POST','/workshop/sessions',{title:'Authorised delivery'},facilitatorToken)).status,201);
   pass('paid employer/employee cannot self-appoint; server-assigned facilitator can create sessions');
 
   const assessmentId=crypto.randomUUID();
