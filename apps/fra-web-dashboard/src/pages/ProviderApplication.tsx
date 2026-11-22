@@ -2,6 +2,7 @@ import RelationshipIdentifiers from '@/components/providers/RelationshipIdentifi
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
 import ProviderCandidateEditor from '@/components/providers/ProviderCandidateEditor';
 import ProviderCandidateDossier from '@/components/providers/ProviderCandidateDossier';
+import { ApplicantEvidence } from '@/components/providers/ProviderEvidence';
 import {
   independentForm,
   independentDeclarationsReady,
@@ -136,6 +137,7 @@ export default function ProviderApplication() {
         {application.data && (
           <ProviderCandidateDossier base={endpoint} profile={application.data.candidateProfile} />
         )}
+        {application.data && <ApplicantEvidence base={endpoint} status={application.data.status} />}
         {application.data &&
           !editing &&
           ['submitted', 'declined'].includes(application.data.status) && (

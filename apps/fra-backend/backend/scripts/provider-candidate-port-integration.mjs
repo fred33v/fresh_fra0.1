@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import { Hono } from 'hono';
+import { addVerifiedEvidence } from './lib/verified-evidence.mjs';
 const url = new URL(process.env.DATABASE_URL ?? 'https://invalid');
 assert(
   process.env.PROVIDER_TEST_DATABASE === '1' &&
@@ -199,6 +200,7 @@ try {
     ])
   );
   // Preserve #86 approval binding and qualification rules: this is not a substitute agreement.
+  await addVerifiedEvidence(pool, initial.id, reviewer.id); // so it is the missing agreement that is refused
   await request(
     reviewer,
     `/${initial.id}/review`,

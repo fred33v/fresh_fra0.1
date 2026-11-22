@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import { Hono } from 'hono';
+import { addVerifiedEvidence } from './lib/verified-evidence.mjs';
 if (process.env.PROVIDER_TEST_DATABASE !== '1' || process.env.NODE_ENV === 'production' ||
     !['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.DATABASE_URL ?? 'https://invalid').hostname))
   throw new Error('Requires PROVIDER_TEST_DATABASE=1 and a disposable local DATABASE_URL');
@@ -83,7 +84,25 @@ try {
   assert((await call(admin, '/review')).some(a => a.id === application.id));
   const review = { revision:0,status:'approved',reason:'Reviewed qualifications and demonstration',qualificationEvidence:'Professional register checked and demo observed' };
   await call(applicant, `/${application.id}/review`, review,403);
-  await call(admin, `/${application.id}/review`, review,400);
+  // Approval needs checked evidence. A valid, applicant-signed agreement is not enough without it, and neither
+  // pending nor rejected documents count; only a document a reviewer verified does.
+  const gateAgreement = await agreement(applicant);
+  const gate = { ...review, agreementDocumentId: gateAgreement };
+  const insertEvidence = (status) => pool.query(`INSERT INTO public.provider_application_documents
+    (application_id,application_revision,kind,filename,mime_type,content,sha256,uploaded_by,status,decided_by,decided_at,decision_reason)
+    SELECT id,revision,'identity','gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),applicant_id,$3,
+      CASE WHEN $3='pending' THEN NULL ELSE $4::uuid END, CASE WHEN $3='pending' THEN NULL ELSE now() END,
+      CASE WHEN $3='rejected' THEN 'Document is not legible enough' END
+    FROM public.provider_applications WHERE id=$1`, [application.id, Buffer.from('%PDF-1.7\ngate\n'), status, admin.id]);
+  await call(admin, `/${application.id}/review`, gate, 400);
+  await insertEvidence('pending');
+  await call(admin, `/${application.id}/review`, gate, 400);
+  await insertEvidence('rejected');
+  await call(admin, `/${application.id}/review`, gate, 400);
+  assert.deepEqual((await pool.query('SELECT status, provider_code FROM public.provider_applications WHERE id=$1', [application.id])).rows[0],
+    { status: 'submitted', provider_code: null });
+  await addVerifiedEvidence(pool, application.id, admin.id);
+  await call(admin, `/${application.id}/review`, review,400); // verified evidence, but no agreement yet
   const wrong = await agreement(other);
   await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:wrong },400);
   // A completed, retained, applicant-signed document is not enough: it must be the provider agreement, signed only by the applicant.
@@ -139,6 +158,7 @@ try {
   await call(applicant,`/me/assignments/${cancelled.id}/decision`,{status:'accepted'},409);
   const seller = await call(other,'/me',{companyName:'Sales company',serviceInterest:'sales'},201);
   const sellerDoc = await agreement(other);
+  await addVerifiedEvidence(pool, seller.id, admin.id);
   await call(admin,`/${seller.id}/review`,{revision:0,status:'approved',reason:'Sales references and agreement reviewed',agreementDocumentId:sellerDoc});
   await call(admin,`/${seller.id}/assignments`,{...offer,reference:randomUUID()},409);
   const declinedUser = await actor('employer');

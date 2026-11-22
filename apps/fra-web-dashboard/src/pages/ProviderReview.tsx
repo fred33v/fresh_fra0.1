@@ -4,6 +4,7 @@ import RelationshipIdentifiers, {EmployeeIdentifierRegistry} from '@/components/
 import ProfessionalScopes from '@/components/professional/ProfessionalScopes';
 import type { ProfessionalScope } from '@/lib/professional';
 import ProviderCandidateDossier from '@/components/providers/ProviderCandidateDossier';
+import { ReviewerEvidence } from '@/components/providers/ProviderEvidence';
 import type { CandidateProfile } from '@/lib/providerCandidate';
 import { ProviderStatement } from '@/components/ProviderStatement';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -198,6 +199,9 @@ function Review({ application: a }: { application: Application }) {
         />
         {status === 'approved' && (
           <>
+            <p className="text-sm">
+              Approval needs at least one evidence document you have verified (see Evidence documents below), as well as the signed agreement.
+            </p>
             <Label htmlFor={`${a.id}-agreement`}>Completed signing document UUID</Label>
             <Input
               id={`${a.id}-agreement`}
@@ -331,6 +335,7 @@ function Review({ application: a }: { application: Application }) {
       <ServiceDeliveries applicationId={a.id} review/>
       <RelationshipIdentifiers applicationId={a.id}/>
       <ProviderCandidateDossier base={`${endpoint}/${a.id}`} profile={a.candidateProfile} />
+      <ReviewerEvidence applicationId={a.id} />
       <ProviderStatement applicationId={a.id} />
       {audit.isError && <p role="alert">Could not load the decision history.</p>}
       <details>

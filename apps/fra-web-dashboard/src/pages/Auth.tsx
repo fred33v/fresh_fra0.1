@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { safeReturnPath } from '@/lib/return-path';
+import { clearPendingReturn, pendingReturn, rememberReturn } from '@/lib/pending-return';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
@@ -87,10 +88,12 @@ export default function Auth() {
   const chosenPackage = getPackage(searchParams.get('package') ?? '');
   // Back to the page that asked for sign-in, if it is a page on this site
   const returnTo = safeReturnPath(searchParams.get('returnTo'));
-  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? '/dashboard';
+  // A new account is confirmed from a link in an email, which no longer carries returnTo: use the remembered one
+  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? pendingReturn() ?? '/dashboard';
 
   useEffect(() => {
     if (user) {
+      clearPendingReturn();
       navigate(afterAuthPath);
     }
   }, [user, navigate, afterAuthPath]);
@@ -236,6 +239,7 @@ export default function Auth() {
         ? 'Please check your details and try again.'
         : 'Registration failed. Please try again.');
     } else {
+      rememberReturn(returnTo);
       // The same reply comes back for an address that already has an account, which is told by email
       setPendingEmail(data.email);
       setMode('check-email');

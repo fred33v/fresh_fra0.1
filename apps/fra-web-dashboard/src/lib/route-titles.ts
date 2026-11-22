@@ -4,6 +4,7 @@ const SITE = 'Risk Aware';
 const TITLES: [RegExp, string][] = [
   [/^\/auth\b/, 'Sign in or create an account'],
   [/^\/join\b/, 'Join your organisation'],
+  [/^\/become-a-provider\b/, 'Become a provider'],
   [/^\/dashboard\b/, 'Your dashboard'],
   [/^\/workshop\b/, 'Workshop'],
   [/^\/service-delivery\b/, 'Service delivery'],
