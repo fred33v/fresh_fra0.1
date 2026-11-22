@@ -712,7 +712,7 @@ EXPO_PUBLIC_API_URL=https://api.stopfra.com
 ### Documentation Files
 
 - **[CLAUDE.MD](CLAUDE.MD)** - Complete project documentation
-- **[BACKEND-SPECIFICATION.md](fraud-risk-app-main/docs/BACKEND-SPECIFICATION.md)** - API specification
+- **[BACKEND-SPECIFICATION.md](../../apps/fra-mobile-app/docs/BACKEND-SPECIFICATION.md)** - API specification
 - **[FRA_n8n_workflow_v2.json](FRA_n8n_workflow_v2.json)** - n8n automation workflow
 
 ### Key Features
