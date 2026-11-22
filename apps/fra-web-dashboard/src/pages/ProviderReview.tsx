@@ -199,6 +199,9 @@ function Review({ application: a }: { application: Application }) {
         />
         {status === 'approved' && (
           <>
+            <p className="text-sm">
+              Approval needs at least one evidence document you have verified (see Evidence documents below), as well as the signed agreement.
+            </p>
             <Label htmlFor={`${a.id}-agreement`}>Completed signing document UUID</Label>
             <Input
               id={`${a.id}-agreement`}
