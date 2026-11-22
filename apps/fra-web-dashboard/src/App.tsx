@@ -33,6 +33,7 @@ const ServiceDelivery = lazy(() => import("./pages/ServiceDelivery"));
 const ProfessionalTraining = lazy(() => import("./pages/ProfessionalTraining"));
 const ProviderReview = lazy(() => import("./pages/ProviderReview"));
 const ProviderApplication = lazy(() => import("./pages/ProviderApplication"));
+const BecomeProvider = lazy(() => import("./pages/BecomeProvider"));
 const Facilitator = lazy(() => import("./pages/Facilitator"));
 const PackageStarter = lazy(() => import("./pages/PackageStarter"));
 const PackageProfessional = lazy(() => import("./pages/PackageProfessional"));
@@ -83,6 +84,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/join" element={<Join />} />
+                <Route path="/become-a-provider" element={<BecomeProvider />} />
                 <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/workshop" element={<ProtectedRoute><PackageGate feature="training"><Workshop /></PackageGate></ProtectedRoute>} />
