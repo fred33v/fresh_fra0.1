@@ -1,0 +1,145 @@
+{
+  "before": 196,
+  "deleted": 33,
+  "after": 163,
+  "reference_files_updated": [
+    "docs/markdown/QUICK_START.md",
+    "docs/markdown/SETUP_COMPLETE.md"
+  ],
+  "removed": [
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/backend-architect.md",
+      "redirect": ".claude/agents/backend-architect.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/compliance-agent.md",
+      "redirect": ".claude/agents/compliance-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/devops-agent.md",
+      "redirect": ".claude/agents/devops-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/documentation-agent.md",
+      "redirect": ".claude/agents/documentation-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/frontend-engineer.md",
+      "redirect": ".claude/agents/frontend-engineer.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/qa-testing-agent.md",
+      "redirect": ".claude/agents/qa-testing-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/risk-scoring-agent.md",
+      "redirect": ".claude/agents/risk-scoring-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/security-auditor-agent.md",
+      "redirect": ".claude/agents/security-auditor-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/system-architect.md",
+      "redirect": ".claude/agents/system-architect.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/.claude/agents/workflow-automation-agent.md",
+      "redirect": ".claude/agents/workflow-automation-agent.md"
+    },
+    {
+      "path": "apps/fra-budget-guide/AGENTS_MASTER.md",
+      "redirect": "AGENTS_MASTER.md"
+    },
+    {
+      "path": "docs/guides/Fraud-Risk-Management_Guide.md",
+      "redirect": "docs/guides/Fraud-Risk-Management_Guide.pdf"
+    },
+    {
+      "path": "docs/markdown/BACKEND-SPECIFICATION.md",
+      "redirect": "apps/fra-mobile-app/docs/BACKEND-SPECIFICATION.md"
+    },
+    {
+      "path": "docs/markdown/Budget-Holder Fraud Risk Guidance.md",
+      "redirect": "docs/training/Budget-Holder Fraud Risk Guidance.md"
+    },
+    {
+      "path": "docs/markdown/FRAUD RISK 1,1 (FRA).md",
+      "redirect": "docs/markdown/FRAUD RIS. part 1(FRA).md"
+    },
+    {
+      "path": "docs/markdown/Fraud Prevention Implementation Dashboard.md",
+      "redirect": "docs/training/Fraud Prevention Implementation Dashboard.md"
+    },
+    {
+      "path": "docs/markdown/Fraud Risk Awareness: Interactive Workshop**.md",
+      "redirect": "docs/training/Fraud Risk Awareness: Interactive Workshop**.md"
+    },
+    {
+      "path": "docs/markdown/Fraud-Risk-Management_Guide.md",
+      "redirect": "docs/guides/Fraud-Risk-Management_Guide.pdf"
+    },
+    {
+      "path": "docs/markdown/Her-Majesties-Treasury-Managing-the-Risk-of-Fraud-Guide-for-Managers-2003.md",
+      "redirect": "docs/guides/Her-Majesties-Treasury-Managing-the-Risk-of-Fraud-Guide-for-Managers-2003.md"
+    },
+    {
+      "path": "docs/markdown/RADIOOPT ION_TEST_ATTEMPTS.md",
+      "redirect": "apps/fra-mobile-app/RADIOOPT ION_TEST_ATTEMPTS.md"
+    },
+    {
+      "path": "docs/markdown/README.md",
+      "redirect": "apps/fra-web-dashboard/README.md"
+    },
+    {
+      "path": "docs/markdown/TESTING.md",
+      "redirect": "apps/fra-mobile-app/TESTING.md"
+    },
+    {
+      "path": "docs/markdown/TESTING_GUIDE.md",
+      "redirect": "apps/fra-mobile-app/TESTING_GUIDE.md"
+    },
+    {
+      "path": "docs/markdown/TEST_CONFIGURATION_ISSUE.md",
+      "redirect": "apps/fra-mobile-app/TEST_CONFIGURATION_ISSUE.md"
+    },
+    {
+      "path": "docs/markdown/TEST_FIX_SUMMARY.md",
+      "redirect": "apps/fra-mobile-app/TEST_FIX_SUMMARY.md"
+    },
+    {
+      "path": "docs/markdown/TEST_STATUS_SUMMARY.md",
+      "redirect": "apps/fra-mobile-app/TEST_STATUS_SUMMARY.md"
+    },
+    {
+      "path": "docs/markdown/backend-architect.md",
+      "redirect": ".claude/agents/backend-architect.md"
+    },
+    {
+      "path": "docs/markdown/devops-agent.md",
+      "redirect": ".claude/agents/devops-agent.md"
+    },
+    {
+      "path": "docs/markdown/documentation-agent.md",
+      "redirect": ".claude/agents/documentation-agent.md"
+    },
+    {
+      "path": "docs/markdown/frontend-engineer.md",
+      "redirect": ".claude/agents/frontend-engineer.md"
+    },
+    {
+      "path": "docs/markdown/managing the business risk of fraude a pratical guide.md",
+      "redirect": "docs/guides/managing the business risk of fraude a pratical guide.md"
+    },
+    {
+      "path": "docs/markdown/qa-testing-agent.md",
+      "redirect": ".claude/agents/qa-testing-agent.md"
+    },
+    {
+      "path": "docs/markdown/system-architect.md",
+      "redirect": ".claude/agents/system-architect.md"
+    }
+  ],
+  "date": "2026-11-22",
+  "method": "Remove whitespace-empty Markdown and SHA-256-identical copies; retain canonical content. Similar but different files are preserved."
+}

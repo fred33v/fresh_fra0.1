@@ -270,7 +270,7 @@ curl -X POST http://localhost:3000/api/v1/auth/signup \
 ## Support
 
 **Documentation**:
-- [Backend README](README.md)
+- [Application README](../../apps/fra-web-dashboard/README.md)
 - [Backend Implementation Summary](../BACKEND_IMPLEMENTATION_SUMMARY.md)
 - [Project Documentation](../CLAUDE.MD)
 
