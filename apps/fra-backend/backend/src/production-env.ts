@@ -80,7 +80,24 @@ export function checkProductionEnv(
     errors.push('Payout recording requires PROVIDER_REVIEW_ORGANISATION_ID');
   }
 
+  // Evidence documents (identity and company papers). Wrong values here would quietly change where personal data lives.
+  if (env.PROVIDER_DOCUMENT_STORE && !['database', 's3'].includes(env.PROVIDER_DOCUMENT_STORE)) {
+    errors.push('PROVIDER_DOCUMENT_STORE must be database or s3');
+  }
+  if (env.PROVIDER_DOCUMENT_SCAN && env.PROVIDER_DOCUMENT_SCAN !== 'clamd') {
+    errors.push('PROVIDER_DOCUMENT_SCAN must be clamd (or unset)');
+  }
+  if (env.PROVIDER_DOCUMENT_STORE === 's3' && (!env.S3_BUCKET || !(env.S3_REGION || env.AWS_REGION))) {
+    errors.push('PROVIDER_DOCUMENT_STORE=s3 needs S3_BUCKET and S3_REGION (or AWS_REGION); uploads would be refused');
+  }
+  if (env.PROVIDER_DOCUMENT_REQUIRE_SCAN === '1' && env.PROVIDER_DOCUMENT_SCAN !== 'clamd') {
+    errors.push('PROVIDER_DOCUMENT_REQUIRE_SCAN=1 needs PROVIDER_DOCUMENT_SCAN=clamd, or no document could be verified');
+  }
+
   // Recommended (warn)
+  if (env.PROVIDER_DOCUMENT_STORE === 's3' && env.PROVIDER_DOCUMENT_SCAN !== 'clamd') {
+    warnings.push('Evidence documents are stored in S3 without virus scanning — set PROVIDER_DOCUMENT_SCAN=clamd');
+  }
   if (!env.S3_BUCKET) {
     warnings.push('S3_BUCKET is not set — file uploads will be unavailable');
   }

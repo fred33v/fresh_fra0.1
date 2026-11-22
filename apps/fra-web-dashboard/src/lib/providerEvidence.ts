@@ -18,6 +18,7 @@ export type EvidenceDocument = {
   decisionReason: string | null;
   decidedAt: string | null;
   // Reviewer view only
+  scanStatus?: 'not_scanned' | 'clean';
   applicationRevision?: number;
   uploadedBy?: string;
   decidedBy?: string | null;
@@ -32,10 +33,26 @@ export const evidenceKinds: Array<{ value: EvidenceKind; label: string }> = [
 ];
 export const evidenceKindLabel = (kind: EvidenceKind) =>
   evidenceKinds.find((k) => k.value === kind)?.label ?? kind;
-export const evidenceLimits = { minBytes: 8, maxBytes: 524288, maxFiles: 10 };
+/** What the server allows. These are the defaults until it answers; the server's own answer is what applies. */
+export type EvidenceLimits = { minBytes: number; maxBytes: number; maxFiles: number; scanning: boolean };
+export const evidenceLimits: EvidenceLimits = { minBytes: 8, maxBytes: 524288, maxFiles: 10, scanning: false };
+/** Anything that is not a well-formed answer (an error, an old server) leaves the defaults in force. */
+export function readEvidenceLimits(value: unknown): EvidenceLimits {
+  const v = value as Partial<EvidenceLimits> | null;
+  const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n > 0;
+  if (!v || typeof v !== 'object' || !whole(v.minBytes) || !whole(v.maxBytes) || !whole(v.maxFiles)) return evidenceLimits;
+  return { minBytes: v.minBytes as number, maxBytes: v.maxBytes as number, maxFiles: v.maxFiles as number, scanning: v.scanning === true };
+}
 export const evidenceStatusLabel: Record<EvidenceStatus, string> = {
   pending: 'Awaiting review',
   verified: 'Verified',
   rejected: 'Not accepted',
 };
-export const kibibytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} KiB`;
+export function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${Number((bytes / (1024 * 1024)).toFixed(1))} MiB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KiB`;
+}
+export const scanStatusLabel: Record<NonNullable<EvidenceDocument['scanStatus']>, string> = {
+  clean: 'Virus scan: clean',
+  not_scanned: 'Not virus-scanned',
+};

@@ -40,10 +40,10 @@ Reviewers are current administrators of the operator organisation (`PROVIDER_REV
 
 ## Limits you should know about
 
-- **No malware scanning.** Files are checked by signature and size only, and are handed to reviewers as downloads. Reviewers should open them on a managed device. Scanning or quarantine would need a scanner and object storage, which this change does not add.
+- **Malware scanning and larger files are optional.** By default files are checked by signature and size only and handed to reviewers as downloads. See `docs/PROVIDER_DOCUMENT_STORAGE.md` for S3 storage (up to 10 MiB) and ClamAV scanning.
 - **"Verified" is a reviewer's decision, not an identity check.** It records that a named reviewer looked at the document and accepted it. It does not establish identity through a trusted service.
 - **Approval requires verified evidence.** A provider cannot be approved (or re-approved after suspension) unless at least one document on the application has been verified by a reviewer. Pending and rejected documents do not count, and a verified document stays on record across amendments. This is checked inside `reviewProvider`, after the status checks and before the signed-agreement check, and is refused with `400 Verify at least one evidence document before approving`. The rule is deliberately the plain one the owner chose: any one verified document, of any type. Requiring a specific type (say, an identity document for everyone and a registration document for companies) would be a small tightening of the same query.
-- 512 KiB suits scans and photos at reasonable resolution. Larger files would need object storage with the existing S3 configuration.
+- 512 KiB is the default limit (database storage); S3 storage raises it to 10 MiB. Beyond that would need direct-to-S3 uploads.
 - Not covered: a public (signed-out) application page. Applicants still need a verified account.
 
 ## Activation

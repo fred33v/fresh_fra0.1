@@ -5,6 +5,7 @@ import { jsonError } from './helpers.js';
 import { createLogger } from './logger.js';
 import { getRedis } from './redis.js';
 import { MAX_BODY_BYTES, CSRF_SAFE_METHODS } from './types.js';
+import { documentUploadLimitBytes } from './provider-document-storage.js';
 import type { RateLimitConfig } from './types.js';
 import { rateLimitBuckets } from './stores.js';
 
@@ -211,13 +212,29 @@ export function applyGlobalMiddleware(app: Hono) {
 
 // ── API-level middleware (body-size, sanitization, CSRF, rate-limit) ──
 
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
+/**
+ * The most a request may carry. Everything is held to MAX_BODY_BYTES except evidence uploads, which may carry a file
+ * up to the configured document size (more than the default only when documents are kept in S3), plus the form framing.
+ */
+export function requestBodyLimit(method: string, path: string): number {
+  if (method === 'POST' && /\/provider-applications\/me\/documents$/.test(path)) {
+    return Math.max(MAX_BODY_BYTES, documentUploadLimitBytes() + MULTIPART_OVERHEAD_BYTES);
+  }
+  return MAX_BODY_BYTES;
+}
+
 export function applyApiMiddleware(api: Hono, allowedOrigins: string[]) {
   // Request body size limit. bodyLimit counts the bytes actually received, so a chunked
   // request with no Content-Length header cannot slip past it.
-  api.use('*', bodyLimit({
-    maxSize: MAX_BODY_BYTES,
-    onError: (c) => jsonError(c, 413, 'PAYLOAD_TOO_LARGE', `Request body exceeds ${MAX_BODY_BYTES} bytes`),
-  }));
+  api.use('*', (c, next) => {
+    const maxSize = requestBodyLimit(c.req.method, c.req.path);
+    return bodyLimit({
+      maxSize,
+      onError: (ctx) => jsonError(ctx, 413, 'PAYLOAD_TOO_LARGE', `Request body exceeds ${maxSize} bytes`),
+    })(c, next);
+  });
 
   // JSON sanitisation (proto pollution + XSS)
   api.use('*', async (c, next) => {

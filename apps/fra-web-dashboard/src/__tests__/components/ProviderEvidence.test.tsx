@@ -78,6 +78,49 @@ describe('applicant evidence', () => {
     expect(mocked.upload).not.toHaveBeenCalled();
   });
 
+  describe('upload limits come from the server', () => {
+    const answer = (limits: unknown) =>
+      mocked.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/documents/limits') ? limits : []) as never);
+
+    it('uses the larger limit and the scanning notice when the server reports them', async () => {
+      answer({ minBytes: 8, maxBytes: 10485760, maxFiles: 10, scanning: true });
+      show(<ApplicantEvidence base={base} status="submitted" />);
+      expect(await screen.findByText(/up to 10 MiB each and 10 files in total/)).toBeInTheDocument();
+      expect(screen.getByText(/checked for viruses before it is stored/)).toBeInTheDocument();
+      expect(mocked.get).toHaveBeenCalledWith(`${base}/documents/limits`);
+      // 600 KiB is over the old limit but within this one: it is sent to the server, not refused here
+      mocked.upload.mockResolvedValue(doc());
+      const user = userEvent.setup();
+      await user.selectOptions(screen.getByLabelText('Document type'), 'identity');
+      await user.upload(screen.getByLabelText('File'), pdf(600 * 1024));
+      await user.click(screen.getByRole('button', { name: 'Upload document' }));
+      await waitFor(() => expect(mocked.upload).toHaveBeenCalledTimes(1));
+    });
+
+    it('refuses a file over the server limit with that limit in the message', async () => {
+      answer({ minBytes: 8, maxBytes: 10485760, maxFiles: 10, scanning: false });
+      show(<ApplicantEvidence base={base} status="submitted" />);
+      const user = userEvent.setup();
+      await screen.findByText(/up to 10 MiB each/);
+      await user.selectOptions(screen.getByLabelText('Document type'), 'identity');
+      await user.upload(screen.getByLabelText('File'), pdf(10 * 1024 * 1024 + 1));
+      await user.click(screen.getByRole('button', { name: 'Upload document' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('between 8 bytes and 10 MiB');
+      expect(mocked.upload).not.toHaveBeenCalled();
+      expect(screen.queryByText(/checked for viruses/)).not.toBeInTheDocument();
+    });
+
+    it.each([['an error', () => Promise.reject(new Error('down'))], ['a malformed answer', () => Promise.resolve({ maxBytes: 'lots' })], ['an old server', () => Promise.resolve([])]])(
+      'keeps the 512 KiB default after %s',
+      async (_name, respond) => {
+        mocked.get.mockImplementation(((path: string) => (path.endsWith('/documents/limits') ? respond() : Promise.resolve([]))) as never);
+        show(<ApplicantEvidence base={base} status="submitted" />);
+        expect(await screen.findByText(/up to 512 KiB each and 10 files in total/)).toBeInTheDocument();
+        expect(screen.queryByText(/checked for viruses/)).not.toBeInTheDocument();
+      }
+    );
+  });
+
   it('shows a server refusal instead of pretending the file was added', async () => {
     mocked.upload.mockRejectedValue(new Error('Only PDF, PNG and JPEG evidence is accepted'));
     show(<ApplicantEvidence base={base} status="submitted" />);
@@ -115,6 +158,18 @@ describe('applicant evidence', () => {
 describe('reviewer evidence', () => {
   const reviewBase = '/api/v1/provider-applications/app-1';
   const reviewerDoc = (over: Partial<EvidenceDocument> = {}) => doc({ applicationRevision: 3, uploadedBy: 'applicant', ...over });
+
+  it('shows whether each file was virus-scanned, and sizes in MiB for large files', async () => {
+    mocked.get.mockResolvedValue([
+      reviewerDoc({ id: 'a', filename: 'scanned.pdf', scanStatus: 'clean', sizeBytes: 3 * 1024 * 1024 }),
+      reviewerDoc({ id: 'b', filename: 'old.pdf', scanStatus: 'not_scanned' }),
+    ]);
+    show(<ReviewerEvidence applicationId="app-1" />);
+    expect(await screen.findByText('Virus scan: clean')).toBeInTheDocument();
+    expect(screen.getByText('Not virus-scanned')).toBeInTheDocument();
+    expect(screen.getByText(/3 MiB/)).toBeInTheDocument();
+    expect(screen.getByText(/20 KiB/)).toBeInTheDocument();
+  });
 
   it('shows the hash and revision and downloads the file', async () => {
     mocked.get.mockResolvedValue([reviewerDoc()]);
