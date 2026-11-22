@@ -27,8 +27,16 @@ export const mfaGuard: MiddlewareHandler = async (c, next) => {
   ).rows[0];
   if (!state?.id || !state.email_verified_at)
     return jsonError(c, 401, 'UNAUTHORIZED', 'A current verified account is required');
+  // An API key is attributed to the user who created it, but it is a separate credential that the key middleware
+  // has already verified (read-only, reporting endpoints, Enterprise only), and it cannot present an authenticator
+  // code. So the per-session check below, which compares the session's MFA claims, cannot apply to it: it would
+  // refuse every key made by a user who has MFA. Everything else still applies to a key request, including the
+  // enrolment requirement for a privileged creator on the next check, and creating or revoking a key still needs
+  // a personal, MFA-backed session.
+  const apiKeyRequest = Boolean(c.get('apiKeyAuth' as never));
   if (
     state &&
+    !apiKeyRequest &&
     (state.enabled || state.version > 1) &&
     (auth.mfaVersion !== state.version || !auth.mfaAt)
   )
