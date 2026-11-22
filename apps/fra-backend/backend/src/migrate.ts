@@ -57,6 +57,9 @@ async function main() {
       applied.rows.map((r: { version: string }) => r.version),
     );
 
+    const legacyColumns = await client.query(`SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='provider_applications' AND column_name='user_id'`);
+    if (legacyColumns.rowCount) throw new Error('PR94 provider schema detected. Do not apply canonical 037–039 over it. Inspect scripts/reconcile-pr94-local.mjs and back up/reconcile the dedicated local database first.');
+
     for (const file of files) {
       if (appliedSet.has(file)) {
         logger.info(`Skipping already-applied migration ${file}`);

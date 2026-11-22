@@ -67,3 +67,7 @@ pnpm providers:check
 `providers:check` only reads migration versions and counts current verified administrators in the configured operator organisation. It requires one for recruitment or two when payout recording is enabled, and checks Stripe configuration for financial reviews. It prints no database secrets and does not grant roles or send funds. Run it in the target environment where `DATABASE_URL` and `PROVIDER_REVIEW_ORGANISATION_ID` are already configured. Migration execution is a separate write operation; the preflight never runs migrations automatically.
 
 Production migration execution and configuration cannot be certified from fixture tests. They require the real deployment environment, its connection and the chosen operator organisation. Never paste connection secrets into an issue, PR or chat.
+
+## Candidate-only port from PR94 — migrations 040–041
+
+Main's #86 provider module and commission/settlement ledger remain canonical. The [candidate port and local reconciliation guide](PROVIDER_CANDIDATE_PORT.md) adds only optional independent declarations, retained applicant amendments and an agreement preparation dossier. It does not replace the existing signing/approval, assignment, attribution or payout controls. A local database that already ran PR94's competing 037/038 must use the guarded dry-run/reconciliation procedure before canonical migrations; do not run the old PR94 module alongside this module or falsify migration receipts.

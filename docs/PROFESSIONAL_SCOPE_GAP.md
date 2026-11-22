@@ -1,0 +1,28 @@
+# Professional subjects, scope and certificate authority — confirmed gap
+
+Source inspection on 21 November 2026, branch `feat/provider-candidate-port`, commit `3714874` (main #86 plus the scoped #95 candidate port). This is a finding and proposed follow-up, not an implemented authorisation model. The commission ledger and current certificate implementation are unchanged.
+
+## Findings
+
+| Claim | Finding | Source evidence |
+| --- | --- | --- |
+| No approval of training subjects or professional scopes | Confirmed. Provider approval is global for `sales`, `training` or `both`. `qualificationEvidence` is a free-text reviewer note, not a subject/course/scope grant. Training assignments bind a provider to a package/service; there is no separate subject approval/version/expiry decision. | `src/provider-recruitment.ts` (`reviewProvider`); `src/routes/provider-applications.ts` (assignment creation); migrations 037–038. |
+| No link between approved professional and certification | Confirmed for professional authority. Certificate records carry learner/user, organisation, session and course/version evidence, but no approved-professional/scope/issuer-authorisation reference. Session creation checks an admin/facilitator role rather than a provider's reviewed professional scope. | `src/certificates.ts` (`issueTrainingCertificate`); `src/workshop.ts` (`POST /sessions`); migration 032. |
+| “No unauthorised certification” is not modelled | Confirmed **for professional certification authority**, but too broad if applied to all existing certificates. Learner completion issuance already checks authenticated identity, session membership where supplied, completed sections/quizzes, passing score, current organisation and revocation rules. That does not prove a person's professional competence or authorise them to certify others. | `src/certificates.ts` lines 224 onwards; `src/workshop.ts` (`POST /certificates`); `__tests__/certificate-lifecycle.test.ts`. |
+
+Paths are relative to `apps/fra-backend/backend/`. Existing `training` and `assessment` certificate kinds record course completion or an assessment; they must not be described as professional accreditation or teaching/issuing authority.
+
+The candidate's declared expertise, reviewer notes, accepted package assignment, general facilitator role, signed agreement and learner certificate are distinct facts. None currently establishes a separately modelled professional subject/scope authorisation. Do not mark the expanded Hire, Sell & Earn onboarding/certification requirements complete on the basis of these features.
+
+## Follow-up model needed before closing this requirement
+
+- Versioned subject/course and professional-scope identifiers, with an explicitly defined meaning. Link scope requests to the existing provider application and evidence; record an authorised reviewer's decision, permitted actions, boundaries, effective/expiry dates and suspension/revocation history.
+- Separate **permission to deliver**, **permission to assess**, and any **permission to issue a defined credential**. Programme approval and a completion certificate must not automatically grant any of these. The authorised issuing body and credential criteria must be defined before promising professional accreditation.
+- Tie provider-delivered assignments/sessions to the actual approved scope and course version. Enforce current provider status, organisation, agreement/assignment and scope validity at the relevant server-side actions; reject a wrong subject, expired/revoked permission, stale authority or forbidden self-approval.
+- Reuse the existing certificate registry and immutable snapshots. For certificates arising from provider-delivered activity, retain the applicable trainer/scope and issuer-policy provenance. Verify learner completion separately from professional authority. Preserve existing legitimate self-study/internal facilitator workflows rather than requiring every learner or legacy facilitator to become a supplier.
+- Preserve historical certificates and decisions. A later scope suspension must not silently delete evidence, rewrite old snapshots or assert that every previously issued certificate is invalid. Define future issuance and any explicit certificate-revocation policy separately.
+- Test wrong-subject denial, absent/expired/revoked grants, unapproved/suspended provider, stale reviewer/issuer authority, cross-tenant access, prohibited self-approval and attempts to gain issuer rights from a paid package or a completion certificate. Also prove existing legitimate completion/assessment issuance still works.
+
+Implement this as a separate additive increment after the current numbered migrations, not as a second certificate subsystem or a change to the main commission ledger. #95 remains limited to the independent candidate declaration, amendments and preparation dossier. No runtime code, certificate record, professional approval or migration was changed for this finding.
+
+Verification for this check: the existing `certificate-lifecycle.test.ts` suite passed **6/6** in the in-memory test environment, including unrelated-session denial and controlled revocation. Those passes support the distinction above; they do not test a professional scope/issuer model, which does not yet exist. No external service or production database was used.

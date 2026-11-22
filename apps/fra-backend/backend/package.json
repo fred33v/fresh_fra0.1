@@ -16,7 +16,8 @@
     "db:check": "node --import tsx scripts/check-production-connection.mjs",
     "providers:check": "node dist/check-provider-setup.js",
     "esign:check": "node --import tsx scripts/check-esign.mjs",
-    "esign:demo": "node --import tsx scripts/esign-live-demo.mjs"
+    "esign:demo": "node --import tsx scripts/esign-live-demo.mjs",
+    "providers:reconcile-local": "node --import tsx scripts/reconcile-pr94-local.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1152.0",

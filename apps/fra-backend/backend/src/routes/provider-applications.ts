@@ -1,3 +1,5 @@
+import { providerProfileSchema } from '../provider-candidate.js';
+import { recordCandidateRevision, candidateDossier } from '../provider-candidate-dossier.js';
 import { providerBalance, refreshProviderPayments } from '../provider-commissions.js';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -14,15 +16,16 @@ const applicationSchema = z
     companyName: z.string().trim().min(2).max(160),
     serviceInterest: z.enum(['sales', 'training', 'both']),
     trainingExperience: z.string().trim().min(10).max(4000).optional(),
+    candidateProfile: providerProfileSchema.optional(),
   })
   .refine(
     (application) => application.serviceInterest === 'sales' || application.trainingExperience,
     { message: 'Describe your training experience', path: ['trainingExperience'] }
-  );
+  ).refine(a => !a.candidateProfile || a.candidateProfile.businessName === a.companyName, {message:'Candidate business name must match the application company name',path:['candidateProfile','businessName']});
 
 const applicantView = `id, company_name AS "companyName", service_interest AS "serviceInterest",
   training_experience AS "trainingExperience", status, revision, review_reason AS "reviewReason",
-  provider_code AS "providerCode", submitted_at AS "submittedAt"`;
+  provider_code AS "providerCode", submitted_at AS "submittedAt", candidate_profile AS "candidateProfile"`;
 
 async function applicant(c: Context) {
   c.header('Cache-Control', 'no-store');
@@ -81,21 +84,18 @@ routes.post('/me', async (c) => {
       parsed.error.issues[0]?.message ?? 'Invalid application'
     );
   }
-  const { companyName, serviceInterest, trainingExperience } = parsed.data;
-  const { rows } = await getDbPool().query(
-    `INSERT INTO public.provider_applications
-       (applicant_id, organisation_id, applicant_name, applicant_email, company_name,
-        service_interest, training_experience)
-     SELECT id, organisation_id, name, email, $3, $4, $5 FROM public.users
-     WHERE id = $1 AND organisation_id = $2 AND email_verified_at IS NOT NULL
-     ON CONFLICT (applicant_id, organisation_id) DO NOTHING
-     RETURNING ${applicantView}`,
-    [auth.userId, auth.organisationId, companyName, serviceInterest, trainingExperience ?? null]
-  );
-  if (!rows[0]) {
-    return jsonError(c, 409, 'CONFLICT', 'An application already exists or your account changed');
-  }
-  return c.json({ success: true, data: rows[0] }, 201);
+  const { companyName, serviceInterest, trainingExperience, candidateProfile } = parsed.data;
+  return recruitmentResponse(c,()=>withTransaction(async db=>{
+    await recruitmentIdentity(db,auth);
+    const {rows:[saved]}=await db.query(`INSERT INTO public.provider_applications
+      (applicant_id,organisation_id,applicant_name,applicant_email,company_name,service_interest,training_experience,candidate_profile)
+      SELECT id,organisation_id,name,email,$3,$4,$5,$6 FROM public.users WHERE id=$1 AND organisation_id=$2 AND email_verified_at IS NOT NULL
+      ON CONFLICT(applicant_id,organisation_id) DO NOTHING RETURNING *`,
+      [auth.userId,auth.organisationId,companyName,serviceInterest,trainingExperience??null,candidateProfile??null]);
+    if(!saved)throw new RecruitmentError(409,'An application already exists or your account changed');
+    await recordCandidateRevision(db,saved,auth.userId,'application.submitted');
+    return (await db.query(`SELECT ${applicantView} FROM public.provider_applications WHERE id=$1`,[saved.id])).rows[0];
+  }),201);
 });
 
 export default routes;
@@ -212,8 +212,8 @@ routes.get('/:id/audit', async (c) => {
   }));
 });
 
-async function recruitmentResponse(c: Context, action: () => Promise<unknown>) {
-  try { return c.json({ success: true, data: await action() }); }
+async function recruitmentResponse(c: Context, action: () => Promise<unknown>,status:200|201=200) {
+  try { return c.json({ success: true, data: await action() },status); }
   catch (error) {
     if (error instanceof RecruitmentError) return jsonError(c, error.status, 'RECRUITMENT_ERROR', error.message);
     throw error; // Global handler logs internal details and returns a safe error.
@@ -381,3 +381,49 @@ routes.post('/payouts/:id/action', async c => {
     });
   });
 });
+
+
+routes.post('/me/amend', async c=>{
+ const auth=await applicant(c);if(auth instanceof Response)return auth;
+ const raw=await c.req.json().catch(()=>null);
+ const revision=z.number().int().nonnegative().max(2147483646).safeParse(raw?.revision);
+ const input=applicationSchema.safeParse(raw && typeof raw==='object'?Object.fromEntries(Object.entries(raw).filter(([key])=>key!=='revision')):null);
+ if(!revision.success||!input.success)return jsonError(c,400,'VALIDATION_ERROR','Complete the amendment and its current revision');
+ return recruitmentResponse(c,()=>withTransaction(async db=>{
+  const current=await recruitmentIdentity(db,auth);
+  const row=(await db.query('SELECT * FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2 FOR UPDATE',[auth.userId,auth.organisationId])).rows[0];
+  if(!row)throw new RecruitmentError(404,'Application not found');
+  if(row.revision!==revision.data || !['submitted','declined'].includes(row.status))throw new RecruitmentError(409,'Reload: only submitted or declined applications can be amended');
+  if(row.candidate_profile && !input.data.candidateProfile)throw new RecruitmentError(400,'Keep and reaffirm the independent candidate declaration when amending this application');
+  await recordCandidateRevision(db,row,auth.userId,'application.baseline');
+  const p=input.data;
+  const saved=(await db.query(`UPDATE public.provider_applications SET company_name=$2,service_interest=$3,training_experience=$4,
+    candidate_profile=$5,applicant_name=$6,applicant_email=$7,status='submitted',revision=revision+1,
+    review_reason=NULL,qualification_evidence=NULL,agreement_document_id=NULL,reviewed_by=NULL,reviewed_at=NULL
+    WHERE id=$1 RETURNING *`,[row.id,p.companyName,p.serviceInterest,p.trainingExperience??null,p.candidateProfile??null,
+    (await db.query('SELECT name FROM public.users WHERE id=$1',[auth.userId])).rows[0].name,current.email])).rows[0];
+  await recordCandidateRevision(db,saved,auth.userId,'application.amended');
+  await recruitmentAudit(db,row.id,auth.userId,'application.amended',{revision:saved.revision,previousRevision:row.revision,previousStatus:row.status});
+  return (await db.query(`SELECT ${applicantView} FROM public.provider_applications WHERE id=$1`,[row.id])).rows[0];
+ }));
+});
+async function candidateFile(c:Context,reviewer:boolean,dossier:boolean){
+ const auth=await applicant(c);if(auth instanceof Response)return auth;
+ if(reviewer && !z.string().uuid().safeParse(c.req.param('id')).success)return jsonError(c,404,'NOT_FOUND','Application not found');
+ return withTransaction(async db=>{
+  try {
+   await recruitmentIdentity(db,auth,reviewer);
+   const row=(await db.query(reviewer?'SELECT * FROM public.provider_applications WHERE id=$1':'SELECT * FROM public.provider_applications WHERE applicant_id=$1 AND organisation_id=$2',reviewer?[c.req.param('id')]:[auth.userId,auth.organisationId])).rows[0];
+   if(!row)throw new RecruitmentError(404,'Application not found');
+   const history=(await db.query('SELECT revision,snapshot,event,recorded_at FROM public.provider_application_revisions WHERE application_id=$1 AND revision<=$2 ORDER BY revision',[row.id,row.revision])).rows;
+   if(!dossier)return c.json({success:true,data:history.map(h=>({revision:h.revision,profile:h.snapshot.candidate_profile,companyName:h.snapshot.company_name,serviceInterest:h.snapshot.service_interest,trainingExperience:h.snapshot.training_experience,event:h.event,recordedAt:h.recorded_at}))});
+   c.header('Content-Type','text/plain; charset=utf-8');c.header('Content-Disposition',`attachment; filename="provider-${row.id}-revision-${row.revision}-dossier.txt"`);
+   const safeHistory=history.map(h=>({...h,snapshot:Object.fromEntries(['applicant_name','applicant_email','company_name','service_interest','training_experience','candidate_profile','status','revision','review_reason','submitted_at'].map(key=>[key,h.snapshot[key]]))}));
+   return c.body(candidateDossier(row,safeHistory));
+  }catch(error){if(error instanceof RecruitmentError)return jsonError(c,error.status,'RECRUITMENT_ERROR',error.message);throw error;}
+ });
+}
+routes.get('/me/revisions',c=>candidateFile(c,false,false));
+routes.get('/:id/revisions',c=>candidateFile(c,true,false));
+routes.get('/me/dossier',c=>candidateFile(c,false,true));
+routes.get('/:id/dossier',c=>candidateFile(c,true,true));
