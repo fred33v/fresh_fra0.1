@@ -31,6 +31,13 @@ describe('BecomeProvider (public)', () => {
     expect(screen.queryByRole('link', { name: 'Create an account and apply' })).toBeNull();
   });
 
+  it('leaves the main landmark to Layout, so the page has no second main or duplicate id', () => {
+    as(null);
+    const { container } = renderPage();
+    expect(container.querySelector('main')).toBeNull();
+    expect(container.querySelector('#main-content')).toBeNull();
+  });
+
   it('explains the process and has a single h1', () => {
     as(null);
     renderPage();

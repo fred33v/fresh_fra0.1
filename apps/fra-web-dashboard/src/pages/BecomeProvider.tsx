@@ -21,7 +21,8 @@ export default function BecomeProvider() {
 
   return (
     <Layout>
-      <main id="main-content" className="mx-auto w-full max-w-3xl px-4 py-10">
+      {/* Layout supplies the page's <main id="main-content">; a second one would duplicate the id and nest landmarks */}
+      <div className="mx-auto w-full max-w-3xl px-4 py-10">
         <h1 className="text-3xl font-bold text-[#0b0c0c]">Become a provider</h1>
         <p className="mt-3 text-lg text-[#0b0c0c]">
           Sell FRAUD-RISK.CO.UK packages to organisations, deliver training, or do both. Applications are open to
@@ -75,7 +76,7 @@ export default function BecomeProvider() {
             .
           </li>
         </ul>
-      </main>
+      </div>
     </Layout>
   );
 }

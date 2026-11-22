@@ -79,6 +79,24 @@ describe('Auth: applying to become a provider', () => {
     expect(clearPendingReturn).toHaveBeenCalled();
   });
 
+  it('stays on the remembered page when the sign-in page renders again after clearing it', () => {
+    // Storage that really clears: the first read finds the path, every later read finds nothing. A page that
+    // recomputed its destination on each render would then send the user on to the dashboard.
+    let stored: string | null = '/provider-application';
+    vi.mocked(pendingReturn).mockImplementation(() => stored);
+    vi.mocked(clearPendingReturn).mockImplementation(() => {
+      stored = null;
+    });
+    auth({ user: signedIn });
+    const view = renderAuth('/auth?mode=verify&token=abc');
+    expect(mockNavigate).toHaveBeenCalledWith('/provider-application');
+    view.rerender(<MemoryRouter initialEntries={['/auth?mode=verify&token=abc']}><Auth /></MemoryRouter>);
+    auth({ user: { ...signedIn, name: 'A (refreshed)' } }); // the account refreshes while the page is still mounted
+    view.rerender(<MemoryRouter initialEntries={['/auth?mode=verify&token=abc']}><Auth /></MemoryRouter>);
+    expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard');
+    expect(mockNavigate.mock.calls.every(([path]) => path === '/provider-application')).toBe(true);
+  });
+
   it('an explicit returnTo wins over the remembered one, and nothing remembered means the dashboard', () => {
     vi.mocked(pendingReturn).mockReturnValue('/provider-application');
     auth({ user: signedIn });

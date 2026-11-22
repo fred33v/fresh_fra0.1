@@ -88,8 +88,11 @@ export default function Auth() {
   const chosenPackage = getPackage(searchParams.get('package') ?? '');
   // Back to the page that asked for sign-in, if it is a page on this site
   const returnTo = safeReturnPath(searchParams.get('returnTo'));
-  // A new account is confirmed from a link in an email, which no longer carries returnTo: use the remembered one
-  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? pendingReturn() ?? '/dashboard';
+  // A new account is confirmed from a link in an email, which no longer carries returnTo: use the remembered one.
+  // Read once, when the page opens. It is cleared as the user is sent on, and a value recomputed on the next render
+  // would then be empty and send them to the dashboard instead.
+  const [remembered] = useState(() => pendingReturn());
+  const afterAuthPath = chosenPackage ? checkoutPath(chosenPackage) : returnTo ?? remembered ?? '/dashboard';
 
   useEffect(() => {
     if (user) {
