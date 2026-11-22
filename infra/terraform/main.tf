@@ -21,7 +21,7 @@ terraform {
   backend "s3" {
     bucket         = "stopfra-terraform-state"
     key            = "production/terraform.tfstate"
-    region         = "eu-west-2"
+    region         = "eu-north-1"
     encrypt        = true
     dynamodb_table = "stopfra-terraform-locks"
   }
@@ -250,6 +250,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
   rule {
     id     = "cleanup-incomplete-uploads"
     status = "Enabled"
+    filter {}
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 7

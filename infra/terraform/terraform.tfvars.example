@@ -4,7 +4,7 @@
 # NEVER commit terraform.tfvars to version control
 # ============================================================
 
-aws_region   = "eu-west-2"
+aws_region   = "eu-north-1"
 environment  = "production"
 project_name = "stopfra"
 

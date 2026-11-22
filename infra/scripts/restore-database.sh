@@ -15,7 +15,7 @@
 # ============================================================
 set -euo pipefail
 
-AWS_REGION="eu-west-2"
+AWS_REGION="eu-north-1"
 BACKUP_BUCKET="${BACKUP_BUCKET:-stopfra-backups-production}"
 
 list_backups() {

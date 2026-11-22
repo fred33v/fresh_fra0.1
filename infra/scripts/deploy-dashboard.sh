@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DASHBOARD_DIR="$PROJECT_ROOT/apps/fra-web-dashboard"
-AWS_REGION="eu-west-2"
+AWS_REGION="eu-north-1"
 
 # Get bucket and distribution from Terraform outputs
 S3_BUCKET=$(terraform -chdir="$SCRIPT_DIR/../terraform" output -raw s3_dashboard_bucket 2>/dev/null || echo "stopfra-dashboard-production")
