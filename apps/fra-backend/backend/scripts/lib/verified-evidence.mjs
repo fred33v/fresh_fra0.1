@@ -6,10 +6,10 @@ const PDF = Buffer.from('%PDF-1.7\n1 0 obj<<>>endobj\n%%EOF\n');
 export async function addVerifiedEvidence(pool, applicationId, reviewerId, kind = 'identity') {
   const { rowCount } = await pool.query(
     `INSERT INTO public.provider_application_documents
-       (application_id, application_revision, kind, filename, mime_type, content, sha256, uploaded_by,
+       (application_id, application_revision, kind, filename, mime_type, content, sha256, size_bytes, uploaded_by,
         status, decided_by, decided_at, decision_reason)
      SELECT id, revision, $3, 'fixture.pdf', 'application/pdf', $4::bytea, encode(sha256($4::bytea), 'hex'),
-            applicant_id, 'verified', $2, now(), 'Fixture document checked by reviewer'
+            octet_length($4::bytea), applicant_id, 'verified', $2, now(), 'Fixture document checked by reviewer'
      FROM public.provider_applications WHERE id = $1`,
     [applicationId, reviewerId, kind, PDF]
   );

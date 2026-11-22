@@ -122,3 +122,25 @@ it('rejects malformed recruitment configuration without printing its value', () 
 it('accepts explicit disabled payout recording and a valid operator organisation', () => {
   expect(check({ PROVIDER_PAYOUTS_ENABLED: 'false', PROVIDER_REVIEW_ORGANISATION_ID: '451e8db1-9a29-4b44-bfaf-3a7f039d1234' }).errors).toEqual([]);
 });
+describe('evidence document storage settings', () => {
+  it('accepts the defaults and a complete S3 plus scanner setup', () => {
+    expect(check({ PROVIDER_DOCUMENT_STORE: 'database' })).toEqual({ errors: [], warnings: [] });
+    expect(
+      check({ PROVIDER_DOCUMENT_STORE: 's3', S3_REGION: 'eu-west-2', PROVIDER_DOCUMENT_SCAN: 'clamd', PROVIDER_DOCUMENT_REQUIRE_SCAN: '1' })
+    ).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('refuses values that would quietly change where personal data lives or how it is checked', () => {
+    expect(check({ PROVIDER_DOCUMENT_STORE: 'bucket' }).errors.join('\n')).toContain('PROVIDER_DOCUMENT_STORE must be database or s3');
+    expect(check({ PROVIDER_DOCUMENT_SCAN: 'yes' }).errors.join('\n')).toContain('PROVIDER_DOCUMENT_SCAN must be clamd');
+    expect(check({ PROVIDER_DOCUMENT_STORE: 's3', S3_BUCKET: undefined }).errors.join('\n')).toContain('needs S3_BUCKET');
+    expect(check({ PROVIDER_DOCUMENT_STORE: 's3' }).errors.join('\n')).toContain('S3_REGION'); // bucket but no region
+    expect(check({ PROVIDER_DOCUMENT_REQUIRE_SCAN: '1' }).errors.join('\n')).toContain('no document could be verified');
+  });
+
+  it('warns, without refusing to start, about S3 storage with no virus scanning', () => {
+    const result = check({ PROVIDER_DOCUMENT_STORE: 's3', S3_REGION: 'eu-west-2' });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.join('\n')).toContain('without virus scanning');
+  });
+});

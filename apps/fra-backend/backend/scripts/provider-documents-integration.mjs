@@ -184,12 +184,12 @@ try {
   await refuses("UPDATE public.provider_application_documents SET status='verified', decided_by=$2, decided_at=now() WHERE id=$1", [first.id, reviewer.id], /already be decided|cannot be decided again/);
   await refuses('DELETE FROM public.provider_application_documents WHERE id=$1', [first.id], /retained/);
   await refuses('TRUNCATE public.provider_application_documents', [], /retained/);
-  const insertDocument = `INSERT INTO public.provider_application_documents(application_id,application_revision,kind,filename,mime_type,content,sha256,uploaded_by)
-    VALUES($1,0,'other','x.pdf','application/pdf',$2,$3,$4)`;
+  const insertDocument = `INSERT INTO public.provider_application_documents(application_id,application_revision,kind,filename,mime_type,content,sha256,size_bytes,uploaded_by)
+    VALUES($1,0,'other','x.pdf','application/pdf',$2,$3,octet_length($2::bytea),$4)`;
   // Positive control first: the very same row with the correct hash is accepted, so the refusal below is the hash.
   await sql(insertDocument, [application.id, pdf('control'), createHash('sha256').update(pdf('control')).digest('hex'), applicant.id]);
   await refuses(insertDocument, [application.id, pdf(), 'f'.repeat(64), applicant.id], /violates check constraint/);
-  await refuses("INSERT INTO public.provider_application_documents(application_id,application_revision,kind,filename,mime_type,content,sha256,uploaded_by,status) VALUES($1,0,'other','x.pdf','application/pdf',$2,encode(sha256($2),'hex'),$3,'rejected')",
+  await refuses("INSERT INTO public.provider_application_documents(application_id,application_revision,kind,filename,mime_type,content,sha256,size_bytes,uploaded_by,status) VALUES($1,0,'other','x.pdf','application/pdf',$2,encode(sha256($2),'hex'),octet_length($2::bytea),$3,'rejected')",
     [application.id, pdf(), applicant.id], /violates check constraint/);
   await refuses('DELETE FROM public.provider_applications WHERE id=$1', [application.id], /foreign key|violates/);
   checks += 9;

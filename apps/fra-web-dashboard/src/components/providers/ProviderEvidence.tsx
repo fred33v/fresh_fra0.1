@@ -8,9 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   evidenceKindLabel,
   evidenceKinds,
-  evidenceLimits,
   evidenceStatusLabel,
-  kibibytes,
+  formatSize,
+  readEvidenceLimits,
+  scanStatusLabel,
   type EvidenceDocument,
   type EvidenceKind,
 } from '@/lib/providerEvidence';
@@ -28,6 +29,18 @@ function useEvidence(base: string) {
   return { key, query };
 }
 
+/** The server's upload limits (the file size depends on where documents are kept), with the defaults until it answers. */
+function useEvidenceLimits(base: string) {
+  const { user } = useAuth();
+  const query = useQuery({
+    queryKey: ['provider-evidence-limits', user?.userId, user?.organisationId, base],
+    queryFn: () => api.get<unknown>(`${base}/documents/limits`),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  return readEvidenceLimits(query.data);
+}
+
 function Status({ document }: { document: EvidenceDocument }) {
   return (
     <span className={`rounded px-2 py-0.5 text-xs font-medium ${chip[document.status]}`}>
@@ -40,13 +53,14 @@ function Status({ document }: { document: EvidenceDocument }) {
 export function ApplicantEvidence({ base, status }: { base: string; status: string }) {
   const client = useQueryClient();
   const { key, query } = useEvidence(base);
+  const limits = useEvidenceLimits(base);
   const [kind, setKind] = useState<EvidenceKind | ''>('');
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
   const [error, setError] = useState('');
   const documents = Array.isArray(query.data) ? query.data : [];
   const canUpload = ['submitted', 'declined'].includes(status);
-  const full = documents.length >= evidenceLimits.maxFiles;
+  const full = documents.length >= limits.maxFiles;
 
   const upload = useMutation({
     mutationFn: () => {
@@ -67,8 +81,8 @@ export function ApplicantEvidence({ base, status }: { base: string; status: stri
     setError('');
     if (!kind) return setError('Choose what kind of document this is');
     if (!file) return setError('Choose a file to upload');
-    if (file.size < evidenceLimits.minBytes || file.size > evidenceLimits.maxBytes)
-      return setError('Files must be between 8 bytes and 512 KiB');
+    if (file.size < limits.minBytes || file.size > limits.maxBytes)
+      return setError(`Files must be between ${limits.minBytes} bytes and ${formatSize(limits.maxBytes)}`);
     upload.mutate();
   }
 
@@ -77,8 +91,9 @@ export function ApplicantEvidence({ base, status }: { base: string; status: stri
       <h2 id="evidence-heading" className="text-xl font-semibold">Supporting documents</h2>
       <p className="text-sm text-muted-foreground">
         Add documents a reviewer needs to consider your application, such as identity, company
-        registration or qualifications. PDF, PNG or JPEG, up to 512 KiB each and 10 files in total.
+        registration or qualifications. PDF, PNG or JPEG, up to {formatSize(limits.maxBytes)} each and {limits.maxFiles} files in total.
         Reviewers open them as downloads, and each decision is recorded.
+        {limits.scanning && ' Every file is checked for viruses before it is stored, and one that fails is not kept.'}
       </p>
       {query.isPending && <p role="status">Loading your documents…</p>}
       {query.isError && <p role="alert">{query.error.message}</p>}
@@ -91,7 +106,7 @@ export function ApplicantEvidence({ base, status }: { base: string; status: stri
               <Status document={d} />
             </div>
             <p className="text-muted-foreground">
-              {evidenceKindLabel(d.kind)} · {kibibytes(d.sizeBytes)} · added{' '}
+              {evidenceKindLabel(d.kind)} · {formatSize(d.sizeBytes)} · added{' '}
               {new Date(d.uploadedAt).toLocaleDateString('en-GB')}
             </p>
             {d.status === 'rejected' && d.decisionReason && (
@@ -137,7 +152,7 @@ export function ApplicantEvidence({ base, status }: { base: string; status: stri
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </div>
-          {full && <p className="text-sm">You have added the maximum of 10 documents.</p>}
+          {full && <p className="text-sm">You have added the maximum of {limits.maxFiles} documents.</p>}
           {(error || upload.isError) && <p role="alert">{error || (upload.error as Error).message}</p>}
           <Button disabled={full || upload.isPending} onClick={submit}>
             {upload.isPending ? 'Uploading…' : 'Upload document'}
@@ -185,10 +200,15 @@ export function ReviewerEvidence({ applicationId }: { applicationId: string }) {
                 <Status document={d} />
               </div>
               <p className="text-muted-foreground">
-                {evidenceKindLabel(d.kind)} · {kibibytes(d.sizeBytes)} · revision {d.applicationRevision} · added{' '}
+                {evidenceKindLabel(d.kind)} · {formatSize(d.sizeBytes)} · revision {d.applicationRevision} · added{' '}
                 {new Date(d.uploadedAt).toLocaleDateString('en-GB')}
               </p>
               <p className="break-all font-mono text-xs text-muted-foreground">SHA-256 {d.sha256}</p>
+              {d.scanStatus && (
+                <p className={d.scanStatus === 'clean' ? 'text-xs text-muted-foreground' : 'text-xs font-medium text-amber-800'}>
+                  {scanStatusLabel[d.scanStatus]}
+                </p>
+              )}
               {d.decisionReason && <p className="break-words">Reason given to the applicant: {d.decisionReason}</p>}
               <Button
                 variant="outline"

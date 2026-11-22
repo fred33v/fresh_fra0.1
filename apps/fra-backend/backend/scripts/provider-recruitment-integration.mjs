@@ -89,8 +89,8 @@ try {
   const gateAgreement = await agreement(applicant);
   const gate = { ...review, agreementDocumentId: gateAgreement };
   const insertEvidence = (status) => pool.query(`INSERT INTO public.provider_application_documents
-    (application_id,application_revision,kind,filename,mime_type,content,sha256,uploaded_by,status,decided_by,decided_at,decision_reason)
-    SELECT id,revision,'identity','gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),applicant_id,$3,
+    (application_id,application_revision,kind,filename,mime_type,content,sha256,size_bytes,uploaded_by,status,decided_by,decided_at,decision_reason)
+    SELECT id,revision,'identity','gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),octet_length($2::bytea),applicant_id,$3,
       CASE WHEN $3='pending' THEN NULL ELSE $4::uuid END, CASE WHEN $3='pending' THEN NULL ELSE now() END,
       CASE WHEN $3='rejected' THEN 'Document is not legible enough' END
     FROM public.provider_applications WHERE id=$1`, [application.id, Buffer.from('%PDF-1.7\ngate\n'), status, admin.id]);
