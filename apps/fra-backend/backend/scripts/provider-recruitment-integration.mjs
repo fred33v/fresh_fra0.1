@@ -84,25 +84,37 @@ try {
   assert((await call(admin, '/review')).some(a => a.id === application.id));
   const review = { revision:0,status:'approved',reason:'Reviewed qualifications and demonstration',qualificationEvidence:'Professional register checked and demo observed' };
   await call(applicant, `/${application.id}/review`, review,403);
-  // Approval needs checked evidence. A valid, applicant-signed agreement is not enough without it, and neither
-  // pending nor rejected documents count; only a document a reviewer verified does.
+  // Approval needs a checked identity document. A valid, applicant-signed agreement is not enough without it; pending
+  // and rejected documents do not count, and neither does a verified document of any other kind.
   const gateAgreement = await agreement(applicant);
   const gate = { ...review, agreementDocumentId: gateAgreement };
-  const insertEvidence = (status) => pool.query(`INSERT INTO public.provider_application_documents
+  const insertEvidence = (status, kind = 'identity') => pool.query(`INSERT INTO public.provider_application_documents
     (application_id,application_revision,kind,filename,mime_type,content,sha256,size_bytes,uploaded_by,status,decided_by,decided_at,decision_reason)
-    SELECT id,revision,'identity','gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),octet_length($2::bytea),applicant_id,$3,
+    SELECT id,revision,$5,'gate.pdf','application/pdf',$2::bytea,encode(sha256($2::bytea),'hex'),octet_length($2::bytea),applicant_id,$3,
       CASE WHEN $3='pending' THEN NULL ELSE $4::uuid END, CASE WHEN $3='pending' THEN NULL ELSE now() END,
       CASE WHEN $3='rejected' THEN 'Document is not legible enough' END
-    FROM public.provider_applications WHERE id=$1`, [application.id, Buffer.from('%PDF-1.7\ngate\n'), status, admin.id]);
-  await call(admin, `/${application.id}/review`, gate, 400);
+    FROM public.provider_applications WHERE id=$1`, [application.id, Buffer.from('%PDF-1.7\ngate\n'), status, admin.id, kind]);
+  const refusedForIdentity = async () => {
+    const response = await app.request(`http://localhost/api/v1/provider-applications/${application.id}/review`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin.token}` }, body: JSON.stringify(gate),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.match(body.error.message, /identity document/);
+    checks++;
+  };
+  await refusedForIdentity();
   await insertEvidence('pending');
-  await call(admin, `/${application.id}/review`, gate, 400);
+  await refusedForIdentity();
   await insertEvidence('rejected');
-  await call(admin, `/${application.id}/review`, gate, 400);
+  await refusedForIdentity();
+  for (const kind of ['qualification', 'company_registration', 'insurance', 'training_demonstration', 'other'])
+    await insertEvidence('verified', kind);
+  await refusedForIdentity(); // five verified documents, none of them an identity document
   assert.deepEqual((await pool.query('SELECT status, provider_code FROM public.provider_applications WHERE id=$1', [application.id])).rows[0],
     { status: 'submitted', provider_code: null });
-  await addVerifiedEvidence(pool, application.id, admin.id);
-  await call(admin, `/${application.id}/review`, review,400); // verified evidence, but no agreement yet
+  await addVerifiedEvidence(pool, application.id, admin.id); // the identity document, verified
+  await call(admin, `/${application.id}/review`, review,400); // verified identity document, but no agreement yet
   const wrong = await agreement(other);
   await call(admin, `/${application.id}/review`, { ...review,agreementDocumentId:wrong },400);
   // A completed, retained, applicant-signed document is not enough: it must be the provider agreement, signed only by the applicant.

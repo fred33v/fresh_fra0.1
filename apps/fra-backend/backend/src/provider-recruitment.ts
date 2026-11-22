@@ -53,11 +53,14 @@ export async function reviewProvider(db: PoolClient, auth: AuthContext, id: stri
   if (decision.status === 'approved') {
     if (application.service_interest !== 'sales' && !decision.qualificationEvidence)
       throw new RecruitmentError(400, 'Record qualification and training demonstration checks');
-    // Approval rests on evidence a reviewer has actually checked: at least one uploaded document must be verified.
-    // Pending and rejected documents do not count, and a document stays on record across amendments and suspension.
+    // Approval rests on an identity document a reviewer has actually checked: at least one document of kind 'identity'
+    // must be verified. Pending and rejected documents do not count, nor do verified documents of other kinds
+    // (a qualification or an insurance certificate does not say who the applicant is). A document stays on record
+    // across amendments and suspension.
     const { rows: [evidence] } = await db.query(
-      `SELECT 1 AS ok FROM public.provider_application_documents WHERE application_id=$1 AND status='verified' LIMIT 1`, [id]);
-    if (!evidence) throw new RecruitmentError(400, 'Verify at least one evidence document before approving');
+      `SELECT 1 AS ok FROM public.provider_application_documents
+       WHERE application_id=$1 AND kind='identity' AND status='verified' LIMIT 1`, [id]);
+    if (!evidence) throw new RecruitmentError(400, 'Verify an identity document before approving');
     // The agreement is retained by our operator organisation and signed by this applicant.
     // Match the current account as well as the submitted snapshot: changed email needs a new agreement.
     const { rows: [agreement] } = await db.query(`SELECT d.id FROM public.esign_documents d
