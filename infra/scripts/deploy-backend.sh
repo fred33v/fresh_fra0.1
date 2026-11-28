@@ -4,9 +4,46 @@
 # Builds, packages, and deploys the backend to EC2.
 #
 # Usage: ./infra/scripts/deploy-backend.sh [EC2_HOST]
+# Upgrade an existing AL2023 host before deployment (run in a maintenance window):
+#   ./infra/scripts/deploy-backend.sh --upgrade-node-only ec2-user@HOST
 # Example: ./infra/scripts/deploy-backend.sh ec2-user@3.10.x.x
 # ============================================================
 set -euo pipefail
+
+if [[ "${1:-}" == "--upgrade-node-only" ]]; then
+  if [[ $# -ne 2 || -z "${2:-}" || "$2" == -* ]]; then
+    echo "Usage: $0 --upgrade-node-only ec2-user@HOST" >&2
+    exit 2
+  fi
+
+  ssh -o StrictHostKeyChecking=yes "$2" bash -s << 'UPGRADE_SCRIPT'
+set -euo pipefail
+. /etc/os-release
+if [[ "$ID" != amzn || "$VERSION_ID" != 2023 ]]; then
+  echo "This upgrade requires Amazon Linux 2023." >&2
+  exit 1
+fi
+
+echo "Previous Node executable: $(readlink -f /usr/bin/node || true)"
+sudo alternatives --display node || true
+sudo dnf install -y nodejs22 nodejs22-npm
+sudo -u stopfra /usr/bin/node-22 -e '
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  if (major !== 22 || minor < 12) {
+    console.error("Expected Node 22.12+ within Node 22, found " + process.version);
+    process.exit(1);
+  }
+'
+sudo alternatives --set node /usr/bin/node-22
+if [[ "$(readlink -f /usr/bin/node)" != "$(readlink -f /usr/bin/node-22)" ]]; then
+  echo "/usr/bin/node did not switch to Node 22." >&2
+  exit 1
+fi
+echo "Service user Node version: $(sudo -u stopfra /usr/bin/node --version)"
+echo "The backend will use this runtime on its next restart. Continue with the normal deployment when ready."
+UPGRADE_SCRIPT
+  exit 0
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -54,6 +91,15 @@ set -euo pipefail
 
 REMOTE_DIR="/opt/stopfra/backend"
 BACKUP_DIR="/opt/stopfra/backup-$(date +%Y%m%d-%H%M%S)"
+
+# Check the exact binary used by start.sh before changing the deployment.
+if ! sudo -u stopfra /usr/bin/node -e '
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1);
+'; then
+  echo "The backend requires /usr/bin/node >=22.12.0. Run the --upgrade-node-only command for this host first." >&2
+  exit 1
+fi
 
 # Backup current deployment
 if [ -d "$REMOTE_DIR/dist" ]; then
